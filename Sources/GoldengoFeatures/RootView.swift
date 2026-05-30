@@ -16,9 +16,18 @@ public struct RootView: View {
                 .tag(1)
         }
         .onOpenURL { url in
-            if url.scheme == "goldengo", url.host == "quickadd" {
-                selectedTab = 0
-            }
+            if let tab = Self.tab(forDeepLink: url) { selectedTab = tab }
+        }
+    }
+
+    /// Maps a `goldengo://` deep link to a tab index (extracted so routing is unit-testable
+    /// and can't silently regress). `quickadd` -> Add (0), `recent` -> Recent (1).
+    public static func tab(forDeepLink url: URL) -> Int? {
+        guard url.scheme == "goldengo" else { return nil }
+        switch url.host {
+        case "quickadd": return 0
+        case "recent":   return 1
+        default:         return nil
         }
     }
 }

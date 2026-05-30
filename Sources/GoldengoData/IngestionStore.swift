@@ -66,7 +66,10 @@ public actor IngestionStore {
         return try modelContext.fetch(fd).map(makeSnapshot)
     }
 
-    /// Sum of today's expense-kind amounts in one currency (avoids mixing currencies).
+    /// Sum of today's expense-kind amounts in ONE currency. Note: `.all` is the ISO 4217
+    /// code for the Albanian lek ("ALL") — the user's primary currency — NOT a wildcard.
+    /// This method is single-currency by design; a true cross-currency total would need
+    /// FX conversion (spec §6 ExchangeRate) and is out of scope for the MVP.
     public func todayTotal(in currency: CurrencyCode = .all) throws -> Decimal {
         let start = Calendar.current.startOfDay(for: .now)
         let expenseRaw = TransactionKind.expense.rawValue
