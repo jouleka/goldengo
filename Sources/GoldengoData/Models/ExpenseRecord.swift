@@ -1,0 +1,35 @@
+import Foundation
+import SwiftData
+import GoldengoCore
+
+@Model
+public final class ExpenseRecord {
+    public var amount: Decimal = 0
+    public var currencyCode: String = "ALL"
+    public var date: Date = Date.now
+    public var merchantName: String?
+    public var note: String?
+    public var kindRaw: String = TransactionKind.expense.rawValue
+    public var sourceRaw: String = ExpenseSource.manual.rawValue
+    public var dedupeKey: String = ""
+    public var isArchived: Bool = false          // soft-delete tombstone (CloudKit-friendly)
+    public var createdAt: Date = Date.now
+    public var updatedAt: Date = Date.now
+    public var category: CategoryRecord?
+    public var account: AccountRecord?
+
+    public init(amount: Decimal = 0, currencyCode: String = "ALL", date: Date = .now,
+                merchantName: String? = nil, note: String? = nil,
+                kind: TransactionKind = .expense, source: ExpenseSource = .manual,
+                dedupeKey: String = "", category: CategoryRecord? = nil,
+                account: AccountRecord? = nil) {
+        self.amount = amount; self.currencyCode = currencyCode; self.date = date
+        self.merchantName = merchantName; self.note = note
+        self.kindRaw = kind.rawValue; self.sourceRaw = source.rawValue
+        self.dedupeKey = dedupeKey; self.category = category; self.account = account
+    }
+
+    public var kind: TransactionKind { TransactionKind(rawValue: kindRaw) ?? .expense }
+    public var source: ExpenseSource { ExpenseSource(rawValue: sourceRaw) ?? .manual }
+    public var money: Money { Money(amount: amount, currency: CurrencyCode(currencyCode)) }
+}
