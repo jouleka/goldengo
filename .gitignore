@@ -1,0 +1,22 @@
+# Brainstorm/visual-companion artifacts
+.superpowers/
+
+# macOS
+.DS_Store
+
+# Xcode / Swift
+build/
+DerivedData/
+*.xcuserstate
+*.xcscmblueprint
+xcuserdata/
+.swiftpm/
+Package.resolved
+
+# Secrets — never commit
+*.token
+secrets/
+*.xcconfig.local
+
+# Misc
+*.log
