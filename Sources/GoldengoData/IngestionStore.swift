@@ -58,6 +58,33 @@ public actor IngestionStore {
                                categoryName: r.category?.name)
     }
 
+    /// Logs a user-entered expense. Always a distinct insert (unique key) so identical
+    /// same-day purchases are never collapsed. Returns the new record's dedupeKey.
+    @discardableResult
+    public func logManual(amount: Decimal, currency: CurrencyCode,
+                          merchant: String?, categoryName: String?) throws -> String {
+        let key = "manual:\(UUID().uuidString)"
+        let rec = ExpenseRecord(amount: amount, currencyCode: currency.rawValue, date: .now,
+                                merchantName: merchant, kind: .expense, source: .manual, dedupeKey: key)
+        if let categoryName, !categoryName.isEmpty {
+            rec.category = try findOrCreateCategory(named: categoryName)
+        } else {
+            rec.category = try defaultCategory(forMerchant: merchant)
+        }
+        modelContext.insert(rec)
+        try modelContext.save()
+        return key
+    }
+
+    private func findOrCreateCategory(named name: String) throws -> CategoryRecord {
+        var fd = FetchDescriptor<CategoryRecord>(predicate: #Predicate { $0.name == name })
+        fd.fetchLimit = 1
+        if let existing = try modelContext.fetch(fd).first { return existing }
+        let c = CategoryRecord(name: name)
+        modelContext.insert(c)
+        return c
+    }
+
     /// Remembered default category for a merchant (matched by normalized name), bumping
     /// its usage stats. Returns nil for empty/unknown merchants — the empty guard avoids
     /// matching a merchant row that happens to have an empty normalized name.
