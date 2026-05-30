@@ -21,6 +21,7 @@ struct GoldengoWidgetView: View {
         VStack(alignment: .leading) {
             Text("Today").font(.caption).foregroundStyle(.secondary)
             Text(entry.totalText).font(.title2.bold()).minimumScaleFactor(0.6)
+                .privacySensitive()   // auto-redacted on the Lock Screen (spec §11)
             Spacer()
             Label("Add", systemImage: "plus.circle.fill").font(.caption)
         }
