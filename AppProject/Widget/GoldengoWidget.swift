@@ -1,6 +1,7 @@
 import WidgetKit
 import SwiftUI
 import GoldengoData
+import GoldengoIntents
 
 struct GoldengoEntry: TimelineEntry { let date: Date; let totalText: String }
 
@@ -32,7 +33,10 @@ struct GoldengoWidgetView: View {
 
 @main
 struct GoldengoWidgetBundle: WidgetBundle {
-    var body: some Widget { GoldengoWidget() }
+    var body: some Widget {
+        GoldengoWidget()
+        if #available(iOS 18.0, *) { GoldengoControl() }
+    }
 }
 
 struct GoldengoWidget: Widget {

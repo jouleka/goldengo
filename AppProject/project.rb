@@ -54,11 +54,13 @@ widget_target.build_configurations.each do |config|
   config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '17.0'
 end
 
-# SPM dependency: GoldengoData (SharedSummary lives there)
-widget_dep = project.new(Xcodeproj::Project::Object::XCSwiftPackageProductDependency)
-widget_dep.product_name = 'GoldengoData'
-widget_dep.package = ref
-widget_target.package_product_dependencies << widget_dep
+# SPM dependencies for widget extension
+%w[GoldengoData GoldengoIntents].each do |product|
+  widget_dep = project.new(Xcodeproj::Project::Object::XCSwiftPackageProductDependency)
+  widget_dep.product_name = product
+  widget_dep.package = ref
+  widget_target.package_product_dependencies << widget_dep
+end
 
 # App Group entitlements ── write entitlement files
 app_group_id = 'group.com.goldengo.app'
