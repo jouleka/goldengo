@@ -9,17 +9,21 @@ public struct Money: Hashable, Sendable {
         self.currency = currency
     }
 
-    /// Deterministic formatting (explicit separators) so it is locale-independent and testable.
+    /// Display-only formatting: locale-independent (explicit separators), with the
+    /// magnitude formatted and the sign placed before the symbol (e.g. "-L 1,500").
+    /// Rounding is explicit and lossy — never use this output for serialization or keys.
     public func formatted() -> String {
         let f = NumberFormatter()
         f.numberStyle = .decimal
         f.groupingSeparator = ","
         f.decimalSeparator = "."
         f.usesGroupingSeparator = true
+        f.roundingMode = .halfUp
         f.minimumFractionDigits = currency.fractionDigits
         f.maximumFractionDigits = currency.fractionDigits
-        let number = NSDecimalNumber(decimal: amount)
-        let body = f.string(from: number) ?? "\(amount)"
-        return "\(currency.symbol) \(body)"
+        let magnitude = NSDecimalNumber(decimal: abs(amount))
+        let body = f.string(from: magnitude) ?? "\(abs(amount))"
+        let sign = amount < 0 ? "-" : ""
+        return "\(sign)\(currency.symbol) \(body)"
     }
 }
