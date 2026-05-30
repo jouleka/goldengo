@@ -10,6 +10,7 @@ let package = Package(
         .library(name: "GoldengoConnectors", targets: ["GoldengoConnectors"]),
         .library(name: "GoldengoDesignSystem", targets: ["GoldengoDesignSystem"]),
         .library(name: "GoldengoFeatures", targets: ["GoldengoFeatures"]),
+        .library(name: "GoldengoIntents", targets: ["GoldengoIntents"]),
     ],
     targets: [
         .target(name: "GoldengoCore"),
@@ -22,5 +23,7 @@ let package = Package(
         .testTarget(name: "GoldengoDesignSystemTests", dependencies: ["GoldengoDesignSystem"]),
         .target(name: "GoldengoFeatures", dependencies: ["GoldengoCore", "GoldengoData", "GoldengoConnectors", "GoldengoDesignSystem"]),
         .testTarget(name: "GoldengoFeaturesTests", dependencies: ["GoldengoFeatures"]),
+        .target(name: "GoldengoIntents", dependencies: ["GoldengoCore", "GoldengoData"]),
+        .testTarget(name: "GoldengoIntentsTests", dependencies: ["GoldengoIntents"]),
     ]
 )
