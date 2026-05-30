@@ -6,9 +6,15 @@ let package = Package(
     platforms: [.iOS(.v17), .macOS(.v14)],
     products: [
         .library(name: "GoldengoCore", targets: ["GoldengoCore"]),
+        .library(name: "GoldengoData", targets: ["GoldengoData"]),
+        .library(name: "GoldengoConnectors", targets: ["GoldengoConnectors"]),
     ],
     targets: [
         .target(name: "GoldengoCore"),
         .testTarget(name: "GoldengoCoreTests", dependencies: ["GoldengoCore"]),
+        .target(name: "GoldengoConnectors", dependencies: ["GoldengoCore"]),
+        .testTarget(name: "GoldengoConnectorsTests", dependencies: ["GoldengoConnectors"]),
+        .target(name: "GoldengoData", dependencies: ["GoldengoCore"]),
+        .testTarget(name: "GoldengoDataTests", dependencies: ["GoldengoData"]),
     ]
 )
