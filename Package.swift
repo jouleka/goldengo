@@ -8,6 +8,7 @@ let package = Package(
         .library(name: "GoldengoCore", targets: ["GoldengoCore"]),
         .library(name: "GoldengoData", targets: ["GoldengoData"]),
         .library(name: "GoldengoConnectors", targets: ["GoldengoConnectors"]),
+        .library(name: "GoldengoDesignSystem", targets: ["GoldengoDesignSystem"]),
     ],
     targets: [
         .target(name: "GoldengoCore"),
@@ -16,5 +17,7 @@ let package = Package(
         .testTarget(name: "GoldengoConnectorsTests", dependencies: ["GoldengoConnectors"]),
         .target(name: "GoldengoData", dependencies: ["GoldengoCore"]),
         .testTarget(name: "GoldengoDataTests", dependencies: ["GoldengoData"]),
+        .target(name: "GoldengoDesignSystem"),
+        .testTarget(name: "GoldengoDesignSystemTests", dependencies: ["GoldengoDesignSystem"]),
     ]
 )
