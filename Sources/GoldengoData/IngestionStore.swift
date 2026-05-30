@@ -98,6 +98,8 @@ public actor IngestionStore {
         }
         modelContext.insert(rec)
         try modelContext.save()
+        let total = try todayTotal()
+        SharedSummary().write(todayTotalText: Money(amount: total, currency: currency).formatted(), redacted: false)
         return key
     }
 
