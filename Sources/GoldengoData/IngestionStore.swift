@@ -66,13 +66,13 @@ public actor IngestionStore {
         return try modelContext.fetch(fd).map(makeSnapshot)
     }
 
-    /// Sum of today's expense-kind amounts. NOTE: assumes the primary currency
-    /// (mixed-currency totals are a future concern; see spec §6 ExchangeRate).
-    public func todayTotal() throws -> Decimal {
+    /// Sum of today's expense-kind amounts in one currency (avoids mixing currencies).
+    public func todayTotal(in currency: CurrencyCode = .all) throws -> Decimal {
         let start = Calendar.current.startOfDay(for: .now)
         let expenseRaw = TransactionKind.expense.rawValue
+        let code = currency.rawValue
         let fd = FetchDescriptor<ExpenseRecord>(predicate: #Predicate {
-            $0.isArchived == false && $0.kindRaw == expenseRaw && $0.date >= start
+            $0.isArchived == false && $0.kindRaw == expenseRaw && $0.date >= start && $0.currencyCode == code
         })
         return try modelContext.fetch(fd).reduce(Decimal(0)) { $0 + $1.amount }
     }
@@ -98,7 +98,7 @@ public actor IngestionStore {
         }
         modelContext.insert(rec)
         try modelContext.save()
-        let total = try todayTotal()
+        let total = try todayTotal(in: currency)
         SharedSummary().write(todayTotalText: Money(amount: total, currency: currency).formatted(), redacted: false)
         return key
     }

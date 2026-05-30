@@ -50,4 +50,18 @@ final class ReadMethodsTests: XCTestCase {
         let total = try await store.todayTotal()
         XCTAssertEqual(total, 100)  // excludes yesterday and income
     }
+
+    func test_todayTotal_filtersToRequestedCurrency() async throws {
+        let container = try ModelContainer.goldengoInMemory()
+        let ctx = ModelContext(container)
+        let today = Date.now
+        ctx.insert(ExpenseRecord(amount: 100, currencyCode: "ALL", date: today, kind: .expense, source: .manual, dedupeKey: "x"))
+        ctx.insert(ExpenseRecord(amount: 50, currencyCode: "EUR", date: today, kind: .expense, source: .manual, dedupeKey: "y"))
+        try ctx.save()
+        let store = IngestionStore(modelContainer: container)
+        let lek = try await store.todayTotal(in: .all)
+        let eur = try await store.todayTotal(in: .eur)
+        XCTAssertEqual(lek, 100)
+        XCTAssertEqual(eur, 50)
+    }
 }

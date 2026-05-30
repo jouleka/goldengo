@@ -22,7 +22,6 @@ public final class QuickAddModel {
 
     public var amountDecimal: Decimal { Decimal(string: amountString) ?? 0 }
     public var canSave: Bool { amountDecimal > 0 }
-    public var formattedAmount: String { Money(amount: amountDecimal, currency: currency).formatted() }
 
     public func tap(_ digit: String) {
         guard amountString.count < 12 else { return }

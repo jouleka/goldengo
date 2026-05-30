@@ -17,7 +17,7 @@ public final class RecentExpensesModel {
 
     public func load() async {
         rows = (try? await store.recentExpenses(limit: 50)) ?? []
-        let total = (try? await store.todayTotal()) ?? 0
+        let total = (try? await store.todayTotal(in: currency)) ?? 0
         todayTotalText = Money(amount: total, currency: currency).formatted()
     }
 }
