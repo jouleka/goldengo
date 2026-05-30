@@ -14,10 +14,10 @@ end
 # Build settings
 target.build_configurations.each do |config|
   config.build_settings['PRODUCT_BUNDLE_IDENTIFIER'] = 'com.goldengo.app'
-  config.build_settings['GENERATE_INFOPLIST_FILE'] = 'YES'
+  config.build_settings['GENERATE_INFOPLIST_FILE'] = 'NO'
+  config.build_settings['INFOPLIST_FILE'] = 'Goldengo/Info.plist'
   config.build_settings['SWIFT_VERSION'] = '6.0'
   config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '17.0'
-  config.build_settings['INFOPLIST_KEY_UILaunchScreen_Generation'] = 'YES'
 end
 
 # Project-level settings (avoid a stale SWIFT_VERSION = 5.0 fallback)
@@ -48,12 +48,10 @@ end
 
 widget_target.build_configurations.each do |config|
   config.build_settings['PRODUCT_BUNDLE_IDENTIFIER'] = 'com.goldengo.app.widget'
-  config.build_settings['GENERATE_INFOPLIST_FILE'] = 'YES'
+  config.build_settings['GENERATE_INFOPLIST_FILE'] = 'NO'
+  config.build_settings['INFOPLIST_FILE'] = 'Widget/Info.plist'
   config.build_settings['SWIFT_VERSION'] = '6.0'
   config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '17.0'
-  config.build_settings['INFOPLIST_KEY_NSExtension_NSExtensionPointIdentifier'] = 'com.apple.widgetkit-extension'
-  # Info.plist NSExtension dict — inline via build settings
-  config.build_settings['INFOPLIST_KEY_NSExtensionPointIdentifier'] = 'com.apple.widgetkit-extension'
 end
 
 # SPM dependency: GoldengoData (SharedSummary lives there)
