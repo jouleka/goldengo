@@ -76,10 +76,13 @@ public actor IngestionStore {
         return key
     }
 
-    private func findOrCreateCategory(named name: String) throws -> CategoryRecord {
-        var fd = FetchDescriptor<CategoryRecord>(predicate: #Predicate { $0.name == name })
-        fd.fetchLimit = 1
-        if let existing = try modelContext.fetch(fd).first { return existing }
+    private func findOrCreateCategory(named rawName: String) throws -> CategoryRecord {
+        let name = rawName.trimmingCharacters(in: .whitespacesAndNewlines)
+        // Case-insensitive reuse so free-text from Siri/Shortcuts doesn't spawn "Coffee"/"coffee".
+        let all = try modelContext.fetch(FetchDescriptor<CategoryRecord>())
+        if let existing = all.first(where: { $0.name.caseInsensitiveCompare(name) == .orderedSame }) {
+            return existing
+        }
         let c = CategoryRecord(name: name)
         modelContext.insert(c)
         return c

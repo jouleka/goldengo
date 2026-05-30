@@ -26,7 +26,18 @@ public final class QuickAddModel {
 
     public func tap(_ digit: String) {
         guard amountString.count < 12 else { return }
-        if amountString.isEmpty && digit == "0" { return }
+        if digit == "." {
+            // No decimal point for currencies without a minor unit (e.g. lek), and only one.
+            guard currency.fractionDigits > 0, !amountString.contains(".") else { return }
+            amountString.append(amountString.isEmpty ? "0." : ".")
+            return
+        }
+        if amountString.isEmpty && digit == "0" { return }   // no leading zero
+        // Don't let the fractional part exceed the currency's digits (keeps display == saved value).
+        if let dot = amountString.firstIndex(of: "."),
+           amountString.distance(from: amountString.index(after: dot), to: amountString.endIndex) >= currency.fractionDigits {
+            return
+        }
         amountString.append(digit)
     }
 

@@ -18,4 +18,14 @@ final class LogManualTests: XCTestCase {
         let snap = try await store.snapshot(dedupeKey: key)
         XCTAssertEqual(snap?.categoryName, "Groceries")
     }
+
+    func test_logManual_reusesCategoryCaseInsensitively() async throws {
+        let container = try ModelContainer.goldengoInMemory()
+        let store = IngestionStore(modelContainer: container)
+        try await store.logManual(amount: 100, currency: .all, merchant: nil, categoryName: "Coffee")
+        try await store.logManual(amount: 200, currency: .all, merchant: nil, categoryName: "coffee ")
+        let ctx = ModelContext(container)
+        let cats = try ctx.fetch(FetchDescriptor<CategoryRecord>())
+        XCTAssertEqual(cats.count, 1)
+    }
 }

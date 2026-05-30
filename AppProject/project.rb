@@ -19,6 +19,11 @@ target.build_configurations.each do |config|
   config.build_settings['INFOPLIST_KEY_UILaunchScreen_Generation'] = 'YES'
 end
 
+# Project-level settings (avoid a stale SWIFT_VERSION = 5.0 fallback)
+project.build_configurations.each do |config|
+  config.build_settings['SWIFT_VERSION'] = '6.0'
+end
+
 # Local SPM package reference
 ref = project.new(Xcodeproj::Project::Object::XCLocalSwiftPackageReference)
 ref.relative_path = '..'
