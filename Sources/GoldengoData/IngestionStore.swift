@@ -10,6 +10,8 @@ public struct ExpenseSnapshot: Sendable, Equatable {
     public var currencyCode: String
     public var source: ExpenseSource
     public var categoryName: String?
+    public var date: Date
+    public var merchantName: String?
 }
 
 @ModelActor
@@ -53,9 +55,32 @@ public actor IngestionStore {
         var fd = FetchDescriptor<ExpenseRecord>(predicate: #Predicate { $0.dedupeKey == key && $0.isArchived == false })
         fd.fetchLimit = 1
         guard let r = try modelContext.fetch(fd).first else { return nil }
-        return ExpenseSnapshot(dedupeKey: r.dedupeKey, amount: r.amount,
-                               currencyCode: r.currencyCode, source: r.source,
-                               categoryName: r.category?.name)
+        return makeSnapshot(r)
+    }
+
+    public func recentExpenses(limit: Int = 20) throws -> [ExpenseSnapshot] {
+        var fd = FetchDescriptor<ExpenseRecord>(
+            predicate: #Predicate { $0.isArchived == false },
+            sortBy: [SortDescriptor(\.date, order: .reverse)])
+        fd.fetchLimit = limit
+        return try modelContext.fetch(fd).map(makeSnapshot)
+    }
+
+    /// Sum of today's expense-kind amounts. NOTE: assumes the primary currency
+    /// (mixed-currency totals are a future concern; see spec §6 ExchangeRate).
+    public func todayTotal() throws -> Decimal {
+        let start = Calendar.current.startOfDay(for: .now)
+        let expenseRaw = TransactionKind.expense.rawValue
+        let fd = FetchDescriptor<ExpenseRecord>(predicate: #Predicate {
+            $0.isArchived == false && $0.kindRaw == expenseRaw && $0.date >= start
+        })
+        return try modelContext.fetch(fd).reduce(Decimal(0)) { $0 + $1.amount }
+    }
+
+    private func makeSnapshot(_ r: ExpenseRecord) -> ExpenseSnapshot {
+        ExpenseSnapshot(dedupeKey: r.dedupeKey, amount: r.amount, currencyCode: r.currencyCode,
+                        source: r.source, categoryName: r.category?.name,
+                        date: r.date, merchantName: r.merchantName)
     }
 
     /// Logs a user-entered expense. Always a distinct insert (unique key) so identical
