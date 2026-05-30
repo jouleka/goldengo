@@ -30,6 +30,16 @@ public actor IngestionStore {
         let rec = ExpenseRecord(amount: tx.amount, currencyCode: tx.currency.rawValue,
                                 date: tx.date, merchantName: tx.rawMerchant,
                                 kind: tx.kind, source: source, dedupeKey: key)
+        if let raw = tx.rawMerchant {
+            let norm = MerchantNormalizer.normalize(raw)
+            var mf = FetchDescriptor<MerchantRecord>(predicate: #Predicate { $0.normalizedName == norm })
+            mf.fetchLimit = 1
+            if let merchant = try modelContext.fetch(mf).first {
+                rec.category = merchant.defaultCategory
+                merchant.useCount += 1
+                merchant.lastUsed = .now
+            }
+        }
         modelContext.insert(rec)
         try modelContext.save()
         return .inserted
