@@ -12,7 +12,7 @@ struct GoldengoApp: App {
     }
     var body: some Scene {
         WindowGroup {
-            QuickAddView(model: QuickAddModel(store: GoldengoStore.shared()))
+            RootView(store: GoldengoStore.shared())
         }
         .modelContainer(GoldengoStore.container)
     }
