@@ -13,9 +13,11 @@ final class RaiffeisenAlbaniaParserTests: XCTestCase {
     """
 
     func test_evilLine_doesNotHang() {
-        // A line starting with a date then thousands of spaces would backtrack catastrophically
-        // without the length guard. This must return instantly.
-        let evil = "01/01/01 " + String(repeating: " ", count: 5000)
+        // A date followed by a long NON-whitespace run. It survives whitespace-collapsing
+        // normalization as a single ~5000-char token (spaces would just collapse away), so it
+        // must hit the length guard rather than the regex — where the lazy `(.+?)` would
+        // otherwise backtrack catastrophically. This must return instantly.
+        let evil = "01/01/01 " + String(repeating: "1,", count: 2500)
         let txns = RaiffeisenAlbaniaParser().parse(evil, currency: .all)
         XCTAssertEqual(txns.count, 0)
     }
@@ -65,5 +67,41 @@ final class RaiffeisenAlbaniaParserTests: XCTestCase {
         XCTAssertEqual(txns[0].kind, .expense); XCTAssertEqual(txns[0].amount, 550)
         XCTAssertNil(txns[0].rawMerchant)                 // description was on another line
         XCTAssertEqual(txns[1].kind, .income);  XCTAssertEqual(txns[1].amount, 260000)
+    }
+
+    // PDFKit appends a NUL (U+0000) to the lone date line and sometimes injects zero-width
+    // spaces (U+200B) into tokens. These survive `.whitespaces` trimming and used to break the
+    // date-merge, silently dropping the row. Normalization must strip them. (Reproduces the
+    // exact failure seen on a real Raiffeisen Albania statement: date line was `25/05/26 ␀`.)
+    func test_parses_dateLine_withControlAndZeroWidthJunk() {
+        let text = """
+        NXJERRJE LLOGARIE DEBI KREDI PERSHKRIMI
+        Balanca e Fillimit 398,329.86
+        25/05/26 \u{0}
+        FAKE-REF\u{200B} TEST LOCATION 22/05/26 -20,000.00 378,329.86
+        Balanca ne Fund 378,329.86
+        """
+        let txns = RaiffeisenAlbaniaParser().parse(text, currency: .all)
+        XCTAssertEqual(txns.count, 1)
+        XCTAssertEqual(txns[0].kind, .expense)
+        XCTAssertEqual(txns[0].amount, 20000)
+        XCTAssertEqual(txns[0].rawMerchant, "FAKE-REF TEST LOCATION")
+    }
+
+    // PDFKit often puts the transaction date on its OWN line, with the rest on the next line.
+    // The parser merges the lone-date line with the following one before matching.
+    func test_parses_dateOnSeparateLine() {
+        let text = """
+        NXJERRJE LLOGARIE DEBI KREDI PERSHKRIMI
+        Balanca e Fillimit 9,999.00
+        25/05/26
+        ATM-REF FAKE LOCATION 22/05/26 -1,234.00 8,765.00
+        Numri i veprimeve ne debi 1 -1,234.00
+        """
+        let txns = RaiffeisenAlbaniaParser().parse(text, currency: .all)
+        XCTAssertEqual(txns.count, 1)
+        XCTAssertEqual(txns[0].kind, .expense)
+        XCTAssertEqual(txns[0].amount, 1234)
+        XCTAssertEqual(txns[0].rawMerchant, "ATM-REF FAKE LOCATION")
     }
 }
