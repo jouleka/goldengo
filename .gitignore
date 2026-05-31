@@ -14,6 +14,8 @@ DerivedData/
 xcuserdata/
 .swiftpm/
 Package.resolved
+# Generated Xcode project — run `ruby AppProject/project.rb` to create it (project.rb is the source of truth)
+AppProject/Goldengo.xcodeproj/
 
 # Secrets — never commit
 *.token
