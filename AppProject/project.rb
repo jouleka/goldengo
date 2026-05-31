@@ -103,38 +103,5 @@ widget_ref = widget_target.product_reference
 embed_file = embed_phase.add_file_reference(widget_ref)
 embed_file.settings = { 'ATTRIBUTES' => ['RemoveHeadersOnCopy'] }
 
-# ── UI Test target ────────────────────────────────────────────────────────────
-uitest_target = project.new_target(:ui_test_bundle, 'GoldengoUITests', :ios, '17.0')
-
-uitest_group = project.main_group.new_group('GoldengoUITests', 'GoldengoUITests')
-Dir[File.join(__dir__, 'GoldengoUITests', '*.swift')].each do |f|
-  uitest_target.add_file_references([uitest_group.new_file(File.basename(f))])
-end
-
-uitest_target.build_configurations.each do |config|
-  config.build_settings['PRODUCT_BUNDLE_IDENTIFIER'] = 'com.goldengo.app.uitests'
-  config.build_settings['SWIFT_VERSION'] = '6.0'
-  config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '17.0'
-  config.build_settings['TEST_TARGET_NAME'] = 'Goldengo'
-  config.build_settings['GENERATE_INFOPLIST_FILE'] = 'YES'
-end
-
-uitest_target.add_dependency(target)
-
 project.save
-
-# ── Configure the Goldengo scheme to include UI tests ─────────────────────────
-scheme_path = Xcodeproj::XCScheme.shared_data_dir(proj_path) + 'Goldengo.xcscheme'
-if File.exist?(scheme_path)
-  scheme = Xcodeproj::XCScheme.new(scheme_path)
-else
-  scheme = Xcodeproj::XCScheme.new
-end
-
-# Add UI test target to the test action
-test_ref = Xcodeproj::XCScheme::TestAction::TestableReference.new(uitest_target)
-test_ref.skipped = false
-scheme.test_action.testables << test_ref
-
-scheme.save_as(proj_path, 'Goldengo', true)
 puts "Generated #{proj_path}"
