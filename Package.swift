@@ -29,6 +29,7 @@ let package = Package(
         .testTarget(name: "GoldengoIntentsTests", dependencies: ["GoldengoIntents"]),
         .target(name: "GoldengoImport", dependencies: ["GoldengoCore"]),
         .testTarget(name: "GoldengoImportTests", dependencies: ["GoldengoImport"],
+                    exclude: ["Fixtures/make_fixture.py"],
                     resources: [.copy("Fixtures/synthetic-statement.pdf")]),
     ]
 )
