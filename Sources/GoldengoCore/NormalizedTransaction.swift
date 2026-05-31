@@ -31,7 +31,7 @@ public struct NormalizedTransaction: Hashable, Sendable {
         if let id = externalID, !id.isEmpty { return "ext:\(id)" }
         let day = Self.dayFormatter.string(from: date)
         let amt = NSDecimalNumber(decimal: amount).stringValue
-        return "cmp:\(day)|\(amt)|\(rawMerchant ?? "")|\(accountRef ?? "")"
+        return "cmp:\(day)|\(amt)|\(rawMerchant ?? "")|\(accountRef ?? "")|\(kind.rawValue)"
     }
 
     private static let dayFormatter: DateFormatter = {

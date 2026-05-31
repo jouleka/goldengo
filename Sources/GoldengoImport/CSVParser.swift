@@ -3,7 +3,10 @@ import Foundation
 public enum CSVParser {
     /// Parses CSV text into rows of fields. Handles quoted fields containing commas,
     /// escaped quotes (`""`), and newlines; trims unquoted field whitespace; skips blank lines.
-    public static func parse(_ text: String) -> [[String]] {
+    public static func parse(_ rawText: String) -> [[String]] {
+        let text = rawText
+            .replacingOccurrences(of: "\r\n", with: "\n")
+            .replacingOccurrences(of: "\r", with: "\n")
         var rows: [[String]] = []
         var field = ""
         var row: [String] = []
@@ -34,7 +37,6 @@ public enum CSVParser {
                 case "\"": inQuotes = true; wasQuoted = true
                 case ",": endField()
                 case "\n": endRow()
-                case "\r": break
                 default: field.append(c)
                 }
             }

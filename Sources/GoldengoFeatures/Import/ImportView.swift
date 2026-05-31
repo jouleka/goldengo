@@ -20,20 +20,22 @@ public struct ImportView: View {
                 }
             }
             .navigationTitle("Import")
-            .onOpenURL { url in
-                if url.scheme == "goldengo", url.host == "import",
-                   URLComponents(url: url, resolvingAgainstBaseURL: false)?
-                       .queryItems?.first(where: { $0.name == "sample" })?.value == "1" {
-                    Task { try? await model.importCSV(text: SampleStatement.csv, fileName: "sample.csv") }
-                }
-            }
             .fileImporter(isPresented: $showingPicker, allowedContentTypes: [.commaSeparatedText, .plainText]) { result in
                 guard case let .success(url) = result else { return }
                 Task {
                     let scoped = url.startAccessingSecurityScopedResource()
                     defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+                    if let size = try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize,
+                       size > 10_000_000 {
+                        model.setError("File too large (max 10 MB).")
+                        return
+                    }
                     if let text = try? String(contentsOf: url, encoding: .utf8) {
                         try? await model.importCSV(text: text, fileName: url.lastPathComponent)
+                    } else if let text = try? String(contentsOf: url, encoding: .isoLatin1) {
+                        try? await model.importCSV(text: text, fileName: url.lastPathComponent)
+                    } else {
+                        model.setError("Couldn't read the file (unsupported encoding).")
                     }
                 }
             }

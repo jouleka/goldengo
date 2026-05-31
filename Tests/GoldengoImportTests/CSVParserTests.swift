@@ -17,4 +17,11 @@ final class CSVParserTests: XCTestCase {
     func test_skips_blankLines() {
         XCTAssertEqual(CSVParser.parse("a,b\n\n c , d \n"), [["a","b"], ["c","d"]])
     }
+    func test_handles_crlfLineEndings() {
+        let rows = CSVParser.parse("a,b\r\n1,2\r\n")
+        XCTAssertEqual(rows, [["a","b"], ["1","2"]])
+    }
+    func test_empty_input_returnsEmpty() {
+        XCTAssertEqual(CSVParser.parse(""), [])
+    }
 }

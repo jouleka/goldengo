@@ -15,7 +15,15 @@ public final class ImportModel {
         self.store = store; self.currency = currency
     }
 
+    public func setError(_ message: String) {
+        resultText = message
+    }
+
     public func importCSV(text: String, fileName: String) async throws {
+        guard text.utf8.count <= 10_000_000 else {
+            resultText = "File too large (max 10 MB)."
+            return
+        }
         var rows = CSVParser.parse(text)
         guard let header = rows.first,
               let mapping = MappingDetector.detect(header: header, currency: currency) else {

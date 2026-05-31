@@ -12,6 +12,7 @@ public struct ExpenseSnapshot: Sendable, Equatable {
     public var categoryName: String?
     public var date: Date
     public var merchantName: String?
+    public var kind: TransactionKind
 }
 
 @ModelActor
@@ -83,7 +84,7 @@ public actor IngestionStore {
     private func makeSnapshot(_ r: ExpenseRecord) -> ExpenseSnapshot {
         ExpenseSnapshot(dedupeKey: r.dedupeKey, amount: r.amount, currencyCode: r.currencyCode,
                         source: r.source, categoryName: r.category?.name,
-                        date: r.date, merchantName: r.merchantName)
+                        date: r.date, merchantName: r.merchantName, kind: r.kind)
     }
 
     /// Logs a user-entered expense. Always a distinct insert (unique key) so identical

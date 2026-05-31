@@ -18,7 +18,12 @@ public struct RecentExpensesView: View {
                                 Text(r.categoryName ?? "Uncategorized").font(.caption).foregroundStyle(.secondary)
                             }
                             Spacer()
-                            Text(Money(amount: r.amount, currency: CurrencyCode(r.currencyCode)).formatted())
+                            if r.kind == .income {
+                                Text("+" + Money(amount: r.amount, currency: CurrencyCode(r.currencyCode)).formatted())
+                                    .foregroundStyle(.green)
+                            } else {
+                                Text(Money(amount: r.amount, currency: CurrencyCode(r.currencyCode)).formatted())
+                            }
                         }
                     }
                 }
