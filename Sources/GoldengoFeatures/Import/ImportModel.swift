@@ -24,15 +24,23 @@ public final class ImportModel {
             resultText = "File too large (max 10 MB)."
             return
         }
-        var rows = CSVParser.parse(text)
-        guard let header = rows.first,
-              let mapping = MappingDetector.detect(header: header, currency: currency) else {
-            resultText = "Couldn't recognize the statement columns."
+        try await ingest(StatementImporter.transactions(fromCSV: text, currency: currency), fileName)
+    }
+
+    public func importPDF(url: URL, fileName: String) async throws {
+        guard let text = PDFTextExtractor.text(from: url) else {
+            resultText = "Couldn't read the PDF."
             return
         }
-        rows.removeFirst()
-        let txns = rows.compactMap { StatementRowMapper.map(row: $0, using: mapping) }
-        let summary = try await store.importStatement(txns, fileName: fileName)
-        resultText = "Imported \(summary.imported), skipped \(summary.deduped) duplicates"
+        try await ingest(StatementImporter.transactions(fromPDFText: text, currency: currency), fileName)
+    }
+
+    private func ingest(_ txns: [NormalizedTransaction], _ fileName: String) async throws {
+        guard !txns.isEmpty else {
+            resultText = "No transactions recognized in \(fileName)."
+            return
+        }
+        let s = try await store.importStatement(txns, fileName: fileName)
+        resultText = "Imported \(s.imported), skipped \(s.deduped) duplicates"
     }
 }

@@ -1,4 +1,5 @@
 import SwiftUI
+import UniformTypeIdentifiers
 import GoldengoData
 
 public struct ImportView: View {
@@ -10,7 +11,7 @@ public struct ImportView: View {
         NavigationStack {
             Form {
                 Section("Import a statement") {
-                    Button("Choose CSV file…") { showingPicker = true }
+                    Button("Choose file (CSV or PDF)…") { showingPicker = true }
                     Button("Try a sample statement") {
                         Task { try? await model.importCSV(text: SampleStatement.csv, fileName: "sample.csv") }
                     }
@@ -20,17 +21,24 @@ public struct ImportView: View {
                 }
             }
             .navigationTitle("Import")
-            .fileImporter(isPresented: $showingPicker, allowedContentTypes: [.commaSeparatedText, .plainText]) { result in
+            .fileImporter(
+                isPresented: $showingPicker,
+                allowedContentTypes: [.pdf, .commaSeparatedText, .plainText]
+            ) { result in
                 guard case let .success(url) = result else { return }
                 Task {
                     let scoped = url.startAccessingSecurityScopedResource()
                     defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+
                     if let size = try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize,
                        size > 10_000_000 {
                         model.setError("File too large (max 10 MB).")
                         return
                     }
-                    if let text = try? String(contentsOf: url, encoding: .utf8) {
+
+                    if url.pathExtension.lowercased() == "pdf" {
+                        try? await model.importPDF(url: url, fileName: url.lastPathComponent)
+                    } else if let text = try? String(contentsOf: url, encoding: .utf8) {
                         try? await model.importCSV(text: text, fileName: url.lastPathComponent)
                     } else if let text = try? String(contentsOf: url, encoding: .isoLatin1) {
                         try? await model.importCSV(text: text, fileName: url.lastPathComponent)

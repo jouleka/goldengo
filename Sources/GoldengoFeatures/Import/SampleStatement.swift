@@ -1,9 +1,9 @@
 public enum SampleStatement {
     public static let csv = """
-    Date,Amount,Description,Reference
-    30.05.2026,"-1.500,00",SPAR TIRANA,s1
-    29.05.2026,"-250,00",COFFEE CORNER,s2
-    28.05.2026,"-3.200,00",CONAD MARKET,s3
-    27.05.2026,"45.000,00",SALARY,s4
+    Date,Description,Amount,Reference
+    2026-05-30,SPAR TIRANA,-1500.00,s1
+    2026-05-29,COFFEE CORNER,-250.00,s2
+    2026-05-28,CONAD MARKET,-3200.00,s3
+    2026-05-27,SALARY,45000.00,s4
     """
 }
