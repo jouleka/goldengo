@@ -7,33 +7,33 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		4E0E40951E425CB0C12314D2 /* GoldengoStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = FE4B91DCB48A4F2087AFDA3B /* GoldengoStore.swift */; };
-		5268ECB36EB65D29BB533174 /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 40425D7FCBD3A840CE84CCAF /* Foundation.framework */; };
-		9A569FAE33BE09DFC311F194 /* GoldengoWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 31A785E68FDB8F43306F29B1 /* GoldengoWidget.swift */; };
-		9ECED620EC0A1CC19F6673C1 /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 40425D7FCBD3A840CE84CCAF /* Foundation.framework */; };
-		B02BAE2D9DDF3A3B3AAD4DDE /* GoldengoControl.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7B501FBAA9B0B76B7A304BBC /* GoldengoControl.swift */; };
-		BBFA5C18A326E06A39B3E81A /* GoldengoWidgetExtension.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = 03E5A172BEE0C08487112EC2 /* GoldengoWidgetExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
-		E1079879545B1782DB09603A /* GoldengoApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00D1F61C101216CEB655A69F /* GoldengoApp.swift */; };
+		07E1A79326632C9A7DC635FB /* GoldengoApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 77E19B80C9B6379B9115F8B8 /* GoldengoApp.swift */; };
+		4F4A855F7169B5079D38F92E /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 7A1AC0B83E728A48AA21A765 /* Foundation.framework */; };
+		799BFCD4DAD5246BF0860593 /* GoldengoControl.swift in Sources */ = {isa = PBXBuildFile; fileRef = F74E08FD5B686ADDB311D9E9 /* GoldengoControl.swift */; };
+		7D182A972734F7DF3D70100F /* GoldengoStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0604352317EF9B12F6C924B3 /* GoldengoStore.swift */; };
+		EB4F0B0B0236FA5234EAE672 /* GoldengoWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A2E7D29A3F2B581840EB2B4 /* GoldengoWidget.swift */; };
+		EBAB908222746A37A1C26D46 /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 7A1AC0B83E728A48AA21A765 /* Foundation.framework */; };
+		F743B015CDE957D5C094FBFE /* GoldengoWidgetExtension.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = 34EE3CE743FB11252A92E651 /* GoldengoWidgetExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
-		9395E2582908264F22C5CB74 /* PBXContainerItemProxy */ = {
+		0B1FDBA292358D6F7FD9EFC4 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
-			containerPortal = 5053A014752F26C2A7CBD671 /* Project object */;
+			containerPortal = 074E7AB1126C227A3499A5F1 /* Project object */;
 			proxyType = 1;
-			remoteGlobalIDString = A092768E3999C8AFBADE6FD6;
+			remoteGlobalIDString = 208C47158A6562F49E490B22;
 			remoteInfo = GoldengoWidgetExtension;
 		};
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXCopyFilesBuildPhase section */
-		22C3B4B2E111B94F2040626E /* Embed App Extensions */ = {
+		EA3202FA2BB09C121201503F /* Embed App Extensions */ = {
 			isa = PBXCopyFilesBuildPhase;
 			buildActionMask = 2147483647;
 			dstPath = "";
 			dstSubfolderSpec = 13;
 			files = (
-				BBFA5C18A326E06A39B3E81A /* GoldengoWidgetExtension.appex in Embed App Extensions */,
+				F743B015CDE957D5C094FBFE /* GoldengoWidgetExtension.appex in Embed App Extensions */,
 			);
 			name = "Embed App Extensions";
 			runOnlyForDeploymentPostprocessing = 0;
@@ -41,100 +41,100 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
-		00D1F61C101216CEB655A69F /* GoldengoApp.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = GoldengoApp.swift; sourceTree = "<group>"; };
-		03E5A172BEE0C08487112EC2 /* GoldengoWidgetExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = GoldengoWidgetExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
-		31A785E68FDB8F43306F29B1 /* GoldengoWidget.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = GoldengoWidget.swift; sourceTree = "<group>"; };
-		40425D7FCBD3A840CE84CCAF /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS18.0.sdk/System/Library/Frameworks/Foundation.framework; sourceTree = DEVELOPER_DIR; };
-		523364F9653B03BEC327E4EA /* Goldengo.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Goldengo.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		7B501FBAA9B0B76B7A304BBC /* GoldengoControl.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = GoldengoControl.swift; sourceTree = "<group>"; };
-		FE4B91DCB48A4F2087AFDA3B /* GoldengoStore.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = GoldengoStore.swift; sourceTree = "<group>"; };
+		0604352317EF9B12F6C924B3 /* GoldengoStore.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = GoldengoStore.swift; sourceTree = "<group>"; };
+		34EE3CE743FB11252A92E651 /* GoldengoWidgetExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = GoldengoWidgetExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		5A2E7D29A3F2B581840EB2B4 /* GoldengoWidget.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = GoldengoWidget.swift; sourceTree = "<group>"; };
+		77E19B80C9B6379B9115F8B8 /* GoldengoApp.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = GoldengoApp.swift; sourceTree = "<group>"; };
+		7A1AC0B83E728A48AA21A765 /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS18.0.sdk/System/Library/Frameworks/Foundation.framework; sourceTree = DEVELOPER_DIR; };
+		B1C8B0F91CCD7F3D1B8D9A89 /* Goldengo.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Goldengo.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		F74E08FD5B686ADDB311D9E9 /* GoldengoControl.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = GoldengoControl.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
-		B6CC5C486C6C230F381B34E5 /* Frameworks */ = {
+		64DF6BBF794D6D6AD70A9569 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				9ECED620EC0A1CC19F6673C1 /* Foundation.framework in Frameworks */,
+				EBAB908222746A37A1C26D46 /* Foundation.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		D9293530993B668EBE4FDE47 /* Frameworks */ = {
+		C302114CDEB858294603A763 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				5268ECB36EB65D29BB533174 /* Foundation.framework in Frameworks */,
+				4F4A855F7169B5079D38F92E /* Foundation.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
-		080E1F956A1A57CB03883884 /* iOS */ = {
+		38E3567AF2F0E377058CB349 /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
-				40425D7FCBD3A840CE84CCAF /* Foundation.framework */,
-			);
-			name = iOS;
-			sourceTree = "<group>";
-		};
-		087439023A33A335BF572291 /* Widget */ = {
-			isa = PBXGroup;
-			children = (
-				7B501FBAA9B0B76B7A304BBC /* GoldengoControl.swift */,
-				31A785E68FDB8F43306F29B1 /* GoldengoWidget.swift */,
-			);
-			name = Widget;
-			path = Widget;
-			sourceTree = "<group>";
-		};
-		43A6CA206027CEA4F18BDDE9 /* Frameworks */ = {
-			isa = PBXGroup;
-			children = (
-				080E1F956A1A57CB03883884 /* iOS */,
+				E4EB3512B7E9F509EE39969D /* iOS */,
 			);
 			name = Frameworks;
 			sourceTree = "<group>";
 		};
-		4C30C108D68F5FCECB9DB458 /* Goldengo */ = {
+		94048E6AE69232EA79F21A8E /* Goldengo */ = {
 			isa = PBXGroup;
 			children = (
-				00D1F61C101216CEB655A69F /* GoldengoApp.swift */,
-				FE4B91DCB48A4F2087AFDA3B /* GoldengoStore.swift */,
+				77E19B80C9B6379B9115F8B8 /* GoldengoApp.swift */,
+				0604352317EF9B12F6C924B3 /* GoldengoStore.swift */,
 			);
 			name = Goldengo;
 			path = Goldengo;
 			sourceTree = "<group>";
 		};
-		7873CD5D7FABA043F49408F7 = {
+		BA9E23824DFAA7832F191EFC = {
 			isa = PBXGroup;
 			children = (
-				B249593FC43B9063ED75192B /* Products */,
-				43A6CA206027CEA4F18BDDE9 /* Frameworks */,
-				4C30C108D68F5FCECB9DB458 /* Goldengo */,
-				087439023A33A335BF572291 /* Widget */,
+				BDB3155690C73B7FB65229DB /* Products */,
+				38E3567AF2F0E377058CB349 /* Frameworks */,
+				94048E6AE69232EA79F21A8E /* Goldengo */,
+				EAF1CB8837E1D13738F1874E /* Widget */,
 			);
 			sourceTree = "<group>";
 		};
-		B249593FC43B9063ED75192B /* Products */ = {
+		BDB3155690C73B7FB65229DB /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				523364F9653B03BEC327E4EA /* Goldengo.app */,
-				03E5A172BEE0C08487112EC2 /* GoldengoWidgetExtension.appex */,
+				B1C8B0F91CCD7F3D1B8D9A89 /* Goldengo.app */,
+				34EE3CE743FB11252A92E651 /* GoldengoWidgetExtension.appex */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		E4EB3512B7E9F509EE39969D /* iOS */ = {
+			isa = PBXGroup;
+			children = (
+				7A1AC0B83E728A48AA21A765 /* Foundation.framework */,
+			);
+			name = iOS;
+			sourceTree = "<group>";
+		};
+		EAF1CB8837E1D13738F1874E /* Widget */ = {
+			isa = PBXGroup;
+			children = (
+				F74E08FD5B686ADDB311D9E9 /* GoldengoControl.swift */,
+				5A2E7D29A3F2B581840EB2B4 /* GoldengoWidget.swift */,
+			);
+			name = Widget;
+			path = Widget;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		A092768E3999C8AFBADE6FD6 /* GoldengoWidgetExtension */ = {
+		208C47158A6562F49E490B22 /* GoldengoWidgetExtension */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = EB19E7CD42B2E82CC594D816 /* Build configuration list for PBXNativeTarget "GoldengoWidgetExtension" */;
+			buildConfigurationList = 8E806582293EA24E82B6A142 /* Build configuration list for PBXNativeTarget "GoldengoWidgetExtension" */;
 			buildPhases = (
-				685612AE13DED11D13E7F7D8 /* Sources */,
-				D9293530993B668EBE4FDE47 /* Frameworks */,
-				678678C1749F37963C242AF6 /* Resources */,
+				BF99EA38C6955FA02499CC99 /* Sources */,
+				C302114CDEB858294603A763 /* Frameworks */,
+				76E2B2E83B718528D5799FC2 /* Resources */,
 			);
 			buildRules = (
 			);
@@ -142,48 +142,48 @@
 			);
 			name = GoldengoWidgetExtension;
 			packageProductDependencies = (
-				2C47979BF5CB0CA6784A8995 /* GoldengoData */,
-				AADF2709FD4A069CD09F8F6D /* GoldengoIntents */,
+				20099C9723D7EEFE630F0E39 /* GoldengoData */,
+				2C0CAF05847816B0FE53E8E4 /* GoldengoIntents */,
 			);
 			productName = GoldengoWidgetExtension;
-			productReference = 03E5A172BEE0C08487112EC2 /* GoldengoWidgetExtension.appex */;
+			productReference = 34EE3CE743FB11252A92E651 /* GoldengoWidgetExtension.appex */;
 			productType = "com.apple.product-type.app-extension";
 		};
-		A1F06E7AFD9DF35368E7749E /* Goldengo */ = {
+		2C7A28D5559F6ADC98017956 /* Goldengo */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = E5061D69E604627CC715365C /* Build configuration list for PBXNativeTarget "Goldengo" */;
+			buildConfigurationList = 61B4D2F2BC44EE6A0A1143BD /* Build configuration list for PBXNativeTarget "Goldengo" */;
 			buildPhases = (
-				ACD09DF6F3CF0A629D365948 /* Sources */,
-				B6CC5C486C6C230F381B34E5 /* Frameworks */,
-				611D868D9DB124528F39CCDB /* Resources */,
-				22C3B4B2E111B94F2040626E /* Embed App Extensions */,
+				B554BA2B6E05844502580BA0 /* Sources */,
+				64DF6BBF794D6D6AD70A9569 /* Frameworks */,
+				C31C09A7273636A44ADF182F /* Resources */,
+				EA3202FA2BB09C121201503F /* Embed App Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
-				5965935AEB685358632AE5A4 /* PBXTargetDependency */,
+				8D377206703EE4E6732AD6C5 /* PBXTargetDependency */,
 			);
 			name = Goldengo;
 			packageProductDependencies = (
-				48D357870315BA9D284D84FA /* GoldengoFeatures */,
-				6C99F1783D1D5CC9BAFC2D0B /* GoldengoData */,
-				5068653991BFE12032111F89 /* GoldengoIntents */,
-				7F59B1874CBFA78D1FABBDF8 /* GoldengoDesignSystem */,
+				550916569516A92CEEABDDCC /* GoldengoFeatures */,
+				2F0FD292DC73A7D1BBC69935 /* GoldengoData */,
+				F2EB037723965E3A2CEAC0BE /* GoldengoIntents */,
+				C58D71EE4CF9EC663FDB843C /* GoldengoDesignSystem */,
 			);
 			productName = Goldengo;
-			productReference = 523364F9653B03BEC327E4EA /* Goldengo.app */;
+			productReference = B1C8B0F91CCD7F3D1B8D9A89 /* Goldengo.app */;
 			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
-		5053A014752F26C2A7CBD671 /* Project object */ = {
+		074E7AB1126C227A3499A5F1 /* Project object */ = {
 			isa = PBXProject;
 			attributes = {
 				LastSwiftUpdateCheck = 1600;
 				LastUpgradeCheck = 1600;
 			};
-			buildConfigurationList = 7D93C9899450C6A333A27CF0 /* Build configuration list for PBXProject "Goldengo" */;
+			buildConfigurationList = 694B6D37871367327E4DD1C5 /* Build configuration list for PBXProject "Goldengo" */;
 			compatibilityVersion = "Xcode 3.2";
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
@@ -191,31 +191,31 @@
 				en,
 				Base,
 			);
-			mainGroup = 7873CD5D7FABA043F49408F7;
+			mainGroup = BA9E23824DFAA7832F191EFC;
 			minimizedProjectReferenceProxies = 0;
 			packageReferences = (
-				26BFBA9F631BD69F75A1B4D6 /* XCLocalSwiftPackageReference ".." */,
+				A49ADCFC978592196CA5CC8C /* XCLocalSwiftPackageReference ".." */,
 			);
 			preferredProjectObjectVersion = 77;
-			productRefGroup = B249593FC43B9063ED75192B /* Products */;
+			productRefGroup = BDB3155690C73B7FB65229DB /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
-				A1F06E7AFD9DF35368E7749E /* Goldengo */,
-				A092768E3999C8AFBADE6FD6 /* GoldengoWidgetExtension */,
+				2C7A28D5559F6ADC98017956 /* Goldengo */,
+				208C47158A6562F49E490B22 /* GoldengoWidgetExtension */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
-		611D868D9DB124528F39CCDB /* Resources */ = {
+		76E2B2E83B718528D5799FC2 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		678678C1749F37963C242AF6 /* Resources */ = {
+		C31C09A7273636A44ADF182F /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -225,66 +225,37 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
-		685612AE13DED11D13E7F7D8 /* Sources */ = {
+		B554BA2B6E05844502580BA0 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				B02BAE2D9DDF3A3B3AAD4DDE /* GoldengoControl.swift in Sources */,
-				9A569FAE33BE09DFC311F194 /* GoldengoWidget.swift in Sources */,
+				07E1A79326632C9A7DC635FB /* GoldengoApp.swift in Sources */,
+				7D182A972734F7DF3D70100F /* GoldengoStore.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		ACD09DF6F3CF0A629D365948 /* Sources */ = {
+		BF99EA38C6955FA02499CC99 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				E1079879545B1782DB09603A /* GoldengoApp.swift in Sources */,
-				4E0E40951E425CB0C12314D2 /* GoldengoStore.swift in Sources */,
+				799BFCD4DAD5246BF0860593 /* GoldengoControl.swift in Sources */,
+				EB4F0B0B0236FA5234EAE672 /* GoldengoWidget.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
-		5965935AEB685358632AE5A4 /* PBXTargetDependency */ = {
+		8D377206703EE4E6732AD6C5 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			name = GoldengoWidgetExtension;
-			target = A092768E3999C8AFBADE6FD6 /* GoldengoWidgetExtension */;
-			targetProxy = 9395E2582908264F22C5CB74 /* PBXContainerItemProxy */;
+			target = 208C47158A6562F49E490B22 /* GoldengoWidgetExtension */;
+			targetProxy = 0B1FDBA292358D6F7FD9EFC4 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
-		1E66C9DA799AC20D3621EB98 /* Release */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				CLANG_ENABLE_OBJC_WEAK = NO;
-				CODE_SIGN_ENTITLEMENTS = Widget/GoldengoWidgetExtension.entitlements;
-				GENERATE_INFOPLIST_FILE = NO;
-				INFOPLIST_FILE = Widget/Info.plist;
-				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.goldengo.app.widget;
-				SDKROOT = iphoneos;
-				SWIFT_VERSION = 6.0;
-				VALIDATE_PRODUCT = YES;
-			};
-			name = Release;
-		};
-		6BFE70D267E4088D9C401E89 /* Debug */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				CLANG_ENABLE_OBJC_WEAK = NO;
-				CODE_SIGN_ENTITLEMENTS = Widget/GoldengoWidgetExtension.entitlements;
-				GENERATE_INFOPLIST_FILE = NO;
-				INFOPLIST_FILE = Widget/Info.plist;
-				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.goldengo.app.widget;
-				SDKROOT = iphoneos;
-				SWIFT_VERSION = 6.0;
-			};
-			name = Debug;
-		};
-		A7352981FBEE07B7724DE7D9 /* Debug */ = {
+		21DE32E74F5DBF4BC5A49C00 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
@@ -302,7 +273,109 @@
 			};
 			name = Debug;
 		};
-		ADE29EA5EF80F8FE2319BA20 /* Debug */ = {
+		6BB33E8D1DD94CA4CE150C41 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CLANG_ENABLE_OBJC_WEAK = NO;
+				CODE_SIGN_ENTITLEMENTS = Goldengo/Goldengo.entitlements;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = Goldengo/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
+				PRODUCT_BUNDLE_IDENTIFIER = com.goldengo.app;
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+		7858DAD50783DE11444B0DE9 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CLANG_ENABLE_OBJC_WEAK = NO;
+				CODE_SIGN_ENTITLEMENTS = Widget/GoldengoWidgetExtension.entitlements;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = Widget/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.goldengo.app.widget;
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 6.0;
+			};
+			name = Debug;
+		};
+		A8C53503C7ECF7422BA86F74 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CLANG_ENABLE_OBJC_WEAK = NO;
+				CODE_SIGN_ENTITLEMENTS = Widget/GoldengoWidgetExtension.entitlements;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = Widget/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.goldengo.app.widget;
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 6.0;
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+		D83FCFECE6CC9EE7B6692D45 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 6.0;
+			};
+			name = Release;
+		};
+		E0079BCDCF0FC306140243AB /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
@@ -363,105 +436,32 @@
 			};
 			name = Debug;
 		};
-		C87DE5E774771B1B20995D19 /* Release */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CLANG_ENABLE_OBJC_WEAK = NO;
-				CODE_SIGN_ENTITLEMENTS = Goldengo/Goldengo.entitlements;
-				GENERATE_INFOPLIST_FILE = NO;
-				INFOPLIST_FILE = Goldengo/Info.plist;
-				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
-				PRODUCT_BUNDLE_IDENTIFIER = com.goldengo.app;
-				SDKROOT = iphoneos;
-				SWIFT_VERSION = 6.0;
-				TARGETED_DEVICE_FAMILY = "1,2";
-				VALIDATE_PRODUCT = YES;
-			};
-			name = Release;
-		};
-		F31E12ECAF8898EAE2B40A2F /* Release */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				ALWAYS_SEARCH_USER_PATHS = NO;
-				CLANG_ANALYZER_NONNULL = YES;
-				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
-				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
-				CLANG_CXX_LIBRARY = "libc++";
-				CLANG_ENABLE_MODULES = YES;
-				CLANG_ENABLE_OBJC_ARC = YES;
-				CLANG_ENABLE_OBJC_WEAK = YES;
-				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
-				CLANG_WARN_BOOL_CONVERSION = YES;
-				CLANG_WARN_COMMA = YES;
-				CLANG_WARN_CONSTANT_CONVERSION = YES;
-				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
-				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
-				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
-				CLANG_WARN_EMPTY_BODY = YES;
-				CLANG_WARN_ENUM_CONVERSION = YES;
-				CLANG_WARN_INFINITE_RECURSION = YES;
-				CLANG_WARN_INT_CONVERSION = YES;
-				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
-				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
-				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
-				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
-				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
-				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
-				CLANG_WARN_STRICT_PROTOTYPES = YES;
-				CLANG_WARN_SUSPICIOUS_MOVE = YES;
-				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
-				CLANG_WARN_UNREACHABLE_CODE = YES;
-				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
-				COPY_PHASE_STRIP = NO;
-				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
-				ENABLE_NS_ASSERTIONS = NO;
-				ENABLE_STRICT_OBJC_MSGSEND = YES;
-				GCC_C_LANGUAGE_STANDARD = gnu11;
-				GCC_NO_COMMON_BLOCKS = YES;
-				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
-				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
-				GCC_WARN_UNDECLARED_SELECTOR = YES;
-				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
-				GCC_WARN_UNUSED_FUNCTION = YES;
-				GCC_WARN_UNUSED_VARIABLE = YES;
-				MTL_ENABLE_DEBUG_INFO = NO;
-				MTL_FAST_MATH = YES;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				SWIFT_COMPILATION_MODE = wholemodule;
-				SWIFT_OPTIMIZATION_LEVEL = "-O";
-				SWIFT_VERSION = 6.0;
-			};
-			name = Release;
-		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		7D93C9899450C6A333A27CF0 /* Build configuration list for PBXProject "Goldengo" */ = {
+		61B4D2F2BC44EE6A0A1143BD /* Build configuration list for PBXNativeTarget "Goldengo" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
-				ADE29EA5EF80F8FE2319BA20 /* Debug */,
-				F31E12ECAF8898EAE2B40A2F /* Release */,
+				6BB33E8D1DD94CA4CE150C41 /* Release */,
+				21DE32E74F5DBF4BC5A49C00 /* Debug */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		E5061D69E604627CC715365C /* Build configuration list for PBXNativeTarget "Goldengo" */ = {
+		694B6D37871367327E4DD1C5 /* Build configuration list for PBXProject "Goldengo" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
-				C87DE5E774771B1B20995D19 /* Release */,
-				A7352981FBEE07B7724DE7D9 /* Debug */,
+				E0079BCDCF0FC306140243AB /* Debug */,
+				D83FCFECE6CC9EE7B6692D45 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		EB19E7CD42B2E82CC594D816 /* Build configuration list for PBXNativeTarget "GoldengoWidgetExtension" */ = {
+		8E806582293EA24E82B6A142 /* Build configuration list for PBXNativeTarget "GoldengoWidgetExtension" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
-				1E66C9DA799AC20D3621EB98 /* Release */,
-				6BFE70D267E4088D9C401E89 /* Debug */,
+				A8C53503C7ECF7422BA86F74 /* Release */,
+				7858DAD50783DE11444B0DE9 /* Debug */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
@@ -469,44 +469,44 @@
 /* End XCConfigurationList section */
 
 /* Begin XCLocalSwiftPackageReference section */
-		26BFBA9F631BD69F75A1B4D6 /* XCLocalSwiftPackageReference ".." */ = {
+		A49ADCFC978592196CA5CC8C /* XCLocalSwiftPackageReference ".." */ = {
 			isa = XCLocalSwiftPackageReference;
 			relativePath = ..;
 		};
 /* End XCLocalSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
-		2C47979BF5CB0CA6784A8995 /* GoldengoData */ = {
+		20099C9723D7EEFE630F0E39 /* GoldengoData */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = 26BFBA9F631BD69F75A1B4D6 /* XCLocalSwiftPackageReference ".." */;
+			package = A49ADCFC978592196CA5CC8C /* XCLocalSwiftPackageReference ".." */;
 			productName = GoldengoData;
 		};
-		48D357870315BA9D284D84FA /* GoldengoFeatures */ = {
+		2C0CAF05847816B0FE53E8E4 /* GoldengoIntents */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = 26BFBA9F631BD69F75A1B4D6 /* XCLocalSwiftPackageReference ".." */;
-			productName = GoldengoFeatures;
-		};
-		5068653991BFE12032111F89 /* GoldengoIntents */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 26BFBA9F631BD69F75A1B4D6 /* XCLocalSwiftPackageReference ".." */;
+			package = A49ADCFC978592196CA5CC8C /* XCLocalSwiftPackageReference ".." */;
 			productName = GoldengoIntents;
 		};
-		6C99F1783D1D5CC9BAFC2D0B /* GoldengoData */ = {
+		2F0FD292DC73A7D1BBC69935 /* GoldengoData */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = 26BFBA9F631BD69F75A1B4D6 /* XCLocalSwiftPackageReference ".." */;
+			package = A49ADCFC978592196CA5CC8C /* XCLocalSwiftPackageReference ".." */;
 			productName = GoldengoData;
 		};
-		7F59B1874CBFA78D1FABBDF8 /* GoldengoDesignSystem */ = {
+		550916569516A92CEEABDDCC /* GoldengoFeatures */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = 26BFBA9F631BD69F75A1B4D6 /* XCLocalSwiftPackageReference ".." */;
+			package = A49ADCFC978592196CA5CC8C /* XCLocalSwiftPackageReference ".." */;
+			productName = GoldengoFeatures;
+		};
+		C58D71EE4CF9EC663FDB843C /* GoldengoDesignSystem */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = A49ADCFC978592196CA5CC8C /* XCLocalSwiftPackageReference ".." */;
 			productName = GoldengoDesignSystem;
 		};
-		AADF2709FD4A069CD09F8F6D /* GoldengoIntents */ = {
+		F2EB037723965E3A2CEAC0BE /* GoldengoIntents */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = 26BFBA9F631BD69F75A1B4D6 /* XCLocalSwiftPackageReference ".." */;
+			package = A49ADCFC978592196CA5CC8C /* XCLocalSwiftPackageReference ".." */;
 			productName = GoldengoIntents;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};
-	rootObject = 5053A014752F26C2A7CBD671 /* Project object */;
+	rootObject = 074E7AB1126C227A3499A5F1 /* Project object */;
 }

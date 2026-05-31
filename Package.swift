@@ -22,7 +22,7 @@ let package = Package(
         .testTarget(name: "GoldengoDataTests", dependencies: ["GoldengoData"]),
         .target(name: "GoldengoDesignSystem"),
         .testTarget(name: "GoldengoDesignSystemTests", dependencies: ["GoldengoDesignSystem"]),
-        .target(name: "GoldengoFeatures", dependencies: ["GoldengoCore", "GoldengoData", "GoldengoConnectors", "GoldengoDesignSystem"]),
+        .target(name: "GoldengoFeatures", dependencies: ["GoldengoCore", "GoldengoData", "GoldengoConnectors", "GoldengoDesignSystem", "GoldengoImport"]),
         .testTarget(name: "GoldengoFeaturesTests", dependencies: ["GoldengoFeatures"]),
         .target(name: "GoldengoIntents", dependencies: ["GoldengoCore", "GoldengoData"]),
         .testTarget(name: "GoldengoIntentsTests", dependencies: ["GoldengoIntents"]),
