@@ -22,6 +22,7 @@ target.build_configurations.each do |config|
   config.build_settings['INFOPLIST_FILE'] = 'Goldengo/Info.plist'
   config.build_settings['SWIFT_VERSION'] = '6.0'
   config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '17.0'
+  config.build_settings['DEVELOPMENT_TEAM'] = 'C7WHJ3RN5S'
 end
 
 # Project-level settings (avoid a stale SWIFT_VERSION = 5.0 fallback)
@@ -60,6 +61,7 @@ widget_target.build_configurations.each do |config|
   config.build_settings['INFOPLIST_FILE'] = 'Widget/Info.plist'
   config.build_settings['SWIFT_VERSION'] = '6.0'
   config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '17.0'
+  config.build_settings['DEVELOPMENT_TEAM'] = 'C7WHJ3RN5S'
 end
 
 # SPM dependencies for widget extension
@@ -78,6 +80,16 @@ app_entitlements = <<~XML
   <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
   <plist version="1.0">
   <dict>
+    <key>aps-environment</key>
+    <string>development</string>
+    <key>com.apple.developer.icloud-container-identifiers</key>
+    <array>
+      <string>iCloud.com.goldengo.app</string>
+    </array>
+    <key>com.apple.developer.icloud-services</key>
+    <array>
+      <string>CloudKit</string>
+    </array>
     <key>com.apple.security.application-groups</key>
     <array>
       <string>#{app_group_id}</string>
