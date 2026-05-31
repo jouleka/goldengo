@@ -50,4 +50,20 @@ final class RaiffeisenAlbaniaParserTests: XCTestCase {
         XCTAssertEqual(credit.kind, .income)
         XCTAssertEqual(credit.amount, 5000)
     }
+
+    // Real Raiffeisen rows where the description is on a SEPARATE line, so the transaction
+    // line is `<txnDate> <valueDate> <amount> <balance>` with no inline description.
+    // These were silently dropped before the description became optional.
+    func test_parses_rowsWithNoInlineDescription() {
+        let noDesc = """
+        NXJERRJE LLOGARIE DEBI KREDI PERSHKRIMI
+        29/05/26 31/05/26 -550.00 309,709.86
+        29/05/26 29/05/26 260,000.00 569,709.86
+        """
+        let txns = RaiffeisenAlbaniaParser().parse(noDesc, currency: .all)
+        XCTAssertEqual(txns.count, 2)
+        XCTAssertEqual(txns[0].kind, .expense); XCTAssertEqual(txns[0].amount, 550)
+        XCTAssertNil(txns[0].rawMerchant)                 // description was on another line
+        XCTAssertEqual(txns[1].kind, .income);  XCTAssertEqual(txns[1].amount, 260000)
+    }
 }

@@ -11,10 +11,13 @@ public struct RaiffeisenAlbaniaParser: BankStatementParser {
     private static let datePattern = #"\d{2}/\d{2}/\d{2}"#
     private static let numPattern  = #"-?[\d,]+\.\d{2}"#
 
-    // A transaction line: <txnDate> <description...> <valueDate> <amount> <balance>
-    // Using a lazy (.+?) to capture the description between two dates.
+    // A transaction line: <txnDate> [description...] <valueDate> <amount> <balance>.
+    // The description (group 2) is OPTIONAL: real statements have rows — e.g. fixed-commission
+    // debits ("Komision Fiks") and some credits — where the description sits on a separate line,
+    // leaving just <txnDate> <valueDate> <amount> <balance>. Without the optional group those
+    // rows were silently dropped.
     private static let lineRegex: NSRegularExpression? = try? NSRegularExpression(
-        pattern: #"^(\d{2}/\d{2}/\d{2})\s+(.+?)\s+(\d{2}/\d{2}/\d{2})\s+(-?[\d,]+\.\d{2})\s+(-?[\d,]+\.\d{2})$"#
+        pattern: #"^(\d{2}/\d{2}/\d{2})\s+(?:(.+?)\s+)?(\d{2}/\d{2}/\d{2})\s+(-?[\d,]+\.\d{2})\s+(-?[\d,]+\.\d{2})$"#
     )
 
     public func canParse(_ text: String) -> Bool {
@@ -45,7 +48,6 @@ public struct RaiffeisenAlbaniaParser: BankStatementParser {
             let range = NSRange(line.startIndex..., in: line)
             guard let m = re.firstMatch(in: line, range: range),
                   let dateRange = Range(m.range(at: 1), in: line),
-                  let descRange = Range(m.range(at: 2), in: line),
                   let amtRange  = Range(m.range(at: 4), in: line)
             else { continue }
 
@@ -53,14 +55,18 @@ public struct RaiffeisenAlbaniaParser: BankStatementParser {
                   let amt  = Self.decimal(String(line[amtRange]))
             else { continue }
 
+            // Description (group 2) is optional — absent when it's on a separate line.
+            let merchant = Range(m.range(at: 2), in: line)
+                .map { String(line[$0]).trimmingCharacters(in: .whitespaces) }
+                .flatMap { $0.isEmpty ? nil : $0 }
+
             let kind: TransactionKind = amt < 0 ? .expense : .income
-            let merchant = String(line[descRange]).trimmingCharacters(in: .whitespaces)
             out.append(NormalizedTransaction(
                 externalID: nil,
                 amount: abs(amt),
                 currency: currency,
                 date: date,
-                rawMerchant: merchant.isEmpty ? nil : merchant,
+                rawMerchant: merchant,
                 kind: kind,
                 accountRef: "statement"))
         }
