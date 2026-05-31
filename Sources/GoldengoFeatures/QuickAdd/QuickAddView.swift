@@ -36,13 +36,21 @@ public struct QuickAddView: View {
             }.padding(.horizontal)
 
             Button {
-                Task { try? await model.save() }
+                Task { await model.save() }
             } label: {
                 Text("Add").font(.headline).frame(maxWidth: .infinity, minHeight: 52)
             }
             .background(model.canSave ? GoldengoTheme.accent : disabledBackground)
             .foregroundStyle(.black).clipShape(RoundedRectangle(cornerRadius: 14))
             .disabled(!model.canSave).padding(.horizontal).padding(.bottom, GoldengoTheme.Spacing.l)
+        }
+        .alert("Error", isPresented: Binding(
+            get: { model.errorText != nil },
+            set: { if !$0 { model.errorText = nil } }
+        )) {
+            Button("OK") { model.errorText = nil }
+        } message: {
+            Text(model.errorText ?? "")
         }
     }
 

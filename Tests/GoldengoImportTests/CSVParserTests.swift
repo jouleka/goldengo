@@ -24,4 +24,10 @@ final class CSVParserTests: XCTestCase {
     func test_empty_input_returnsEmpty() {
         XCTAssertEqual(CSVParser.parse(""), [])
     }
+
+    // T5 — unterminated quote flushes gracefully without crash
+    func test_unterminated_quote_gracefulEOF() {
+        let rows = CSVParser.parse("\"abc")
+        XCTAssertEqual(rows, [["abc"]])
+    }
 }

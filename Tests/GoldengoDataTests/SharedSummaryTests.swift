@@ -23,4 +23,14 @@ final class SharedSummaryTests: XCTestCase {
         s.writeTodayTotal("L 99")                          // logging must not clobber the pref
         XCTAssertTrue(s.read().revealOnLockScreen)
     }
+
+    // F5 — pendingTab round-trip
+    func test_pendingTab_roundTrip() {
+        let s = SharedSummary(suiteName: freshSuite())
+        XCTAssertNil(s.readPendingTab())                   // absent by default
+        s.setPendingTab(0)
+        XCTAssertEqual(s.readPendingTab(), 0)              // set to 0 → read 0
+        s.setPendingTab(nil)
+        XCTAssertNil(s.readPendingTab())                   // cleared → nil
+    }
 }

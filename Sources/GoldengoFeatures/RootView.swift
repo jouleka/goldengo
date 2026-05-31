@@ -4,7 +4,16 @@ import GoldengoData
 public struct RootView: View {
     private let store: IngestionStore
     @State private var selectedTab: Int = 0
+    @Environment(\.scenePhase) private var scenePhase
     public init(store: IngestionStore) { self.store = store }
+
+    private func applyPendingTab() {
+        let summary = SharedSummary()
+        if let tab = summary.readPendingTab() {
+            selectedTab = tab
+            summary.setPendingTab(nil)
+        }
+    }
 
     public var body: some View {
         TabView(selection: $selectedTab) {
@@ -20,6 +29,10 @@ public struct RootView: View {
             SettingsView()
                 .tabItem { Label("Settings", systemImage: "gearshape") }
                 .tag(2)
+        }
+        .onAppear { applyPendingTab() }
+        .onChange(of: scenePhase) { _, newPhase in
+            if newPhase == .active { applyPendingTab() }
         }
         .onOpenURL { url in
             if let tab = Self.tab(forDeepLink: url) { selectedTab = tab }

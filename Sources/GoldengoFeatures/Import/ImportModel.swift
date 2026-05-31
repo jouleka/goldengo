@@ -3,6 +3,9 @@ import Observation
 import GoldengoCore
 import GoldengoData
 import GoldengoImport
+#if canImport(WidgetKit)
+import WidgetKit
+#endif
 
 @MainActor
 @Observable
@@ -19,22 +22,30 @@ public final class ImportModel {
         resultText = message
     }
 
-    public func importCSV(text: String, fileName: String) async throws {
+    public func importCSV(text: String, fileName: String) async {
         guard text.utf8.count <= 10_000_000 else {
             resultText = "File too large (max 10 MB)."
             return
         }
-        try await ingest(StatementImporter.transactions(fromCSV: text, currency: currency), fileName)
+        do {
+            try await ingest(StatementImporter.transactions(fromCSV: text, currency: currency), fileName)
+        } catch {
+            resultText = "Import failed: \(error.localizedDescription)"
+        }
     }
 
-    public func importPDF(url: URL, fileName: String) async throws {
+    public func importPDF(url: URL, fileName: String) async {
         let size = (try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0
         guard size <= 10_000_000 else { resultText = "File too large (max 10 MB)."; return }
         guard let text = PDFTextExtractor.text(from: url) else {
             resultText = "Couldn't read the PDF."
             return
         }
-        try await ingest(StatementImporter.transactions(fromPDFText: text, currency: currency), fileName)
+        do {
+            try await ingest(StatementImporter.transactions(fromPDFText: text, currency: currency), fileName)
+        } catch {
+            resultText = "Import failed: \(error.localizedDescription)"
+        }
     }
 
     private func ingest(_ txns: [NormalizedTransaction], _ fileName: String) async throws {
@@ -44,5 +55,8 @@ public final class ImportModel {
         }
         let s = try await store.importStatement(txns, fileName: fileName)
         resultText = "Imported \(s.imported), skipped \(s.deduped) duplicates"
+#if canImport(WidgetKit)
+        WidgetCenter.shared.reloadAllTimelines()
+#endif
     }
 }

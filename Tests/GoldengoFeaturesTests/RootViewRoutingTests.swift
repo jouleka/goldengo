@@ -9,4 +9,9 @@ final class RootViewRoutingTests: XCTestCase {
         XCTAssertNil(RootView.tab(forDeepLink: URL(string: "goldengo://unknown")!))
         XCTAssertNil(RootView.tab(forDeepLink: URL(string: "https://quickadd")!))
     }
+
+    // T2 — import deep link routes to tag 3
+    func test_deepLink_importRoutesToTag3() {
+        XCTAssertEqual(RootView.tab(forDeepLink: URL(string: "goldengo://import")!), 3)
+    }
 }

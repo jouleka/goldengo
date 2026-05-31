@@ -28,5 +28,10 @@
       <key>CFBundleURLSchemes</key><array><string>goldengo</string></array>
     </dict>
   </array>
+  <key>NSAppTransportSecurity</key>
+  <dict>
+    <key>NSAllowsArbitraryLoads</key><false/>
+  </dict>
+  <key>ITSAppUsesNonExemptEncryption</key><false/>
 </dict>
 </plist>

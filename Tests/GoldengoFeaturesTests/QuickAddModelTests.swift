@@ -24,7 +24,7 @@ final class QuickAddModelTests: XCTestCase {
         let m = try makeModel()
         m.tap("2"); m.tap("5"); m.tap("0")
         m.selectedCategory = "Coffee"
-        try await m.save()
+        await m.save()
         let count = try await m.store.expenseCount()
         XCTAssertEqual(count, 1)
         XCTAssertEqual(m.amountString, "")          // resets for the next entry

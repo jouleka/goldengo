@@ -27,6 +27,24 @@ final class IngestionStoreTests: XCTestCase {
         XCTAssertEqual(count, 1)
     }
 
+    // T1 — merge preserves first-seen amount
+    func test_ingest_mergePreservesFirstSeenAmount() async throws {
+        let store = IngestionStore(modelContainer: try .goldengoInMemory())
+        _ = try await store.ingest(tx(ext: "k", amount: 500, merchant: "Spar"))
+        let second = try await store.ingest(tx(ext: "k", amount: 999, merchant: "Spar"))
+        XCTAssertEqual(second, .merged)
+        let snap = try await store.snapshot(dedupeKey: "ext:k")
+        XCTAssertEqual(snap?.amount, 500)
+    }
+
+    // F2 — EUR expense should not inflate the ALL (lek) total
+    func test_logManual_eurExpense_doesNotInflateAllTotal() async throws {
+        let store = IngestionStore(modelContainer: try .goldengoInMemory())
+        try await store.logManual(amount: 100, currency: .eur, merchant: nil, categoryName: nil)
+        let total = try await store.todayTotal(in: .all)
+        XCTAssertEqual(total, 0)
+    }
+
     func test_ingest_manualThenImport_mergesAndUpgradesSource() async throws {
         let store = IngestionStore(modelContainer: try .goldengoInMemory())
         // Manual entry with no externalID -> composite key

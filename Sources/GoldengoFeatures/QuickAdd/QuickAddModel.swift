@@ -2,6 +2,9 @@ import Foundation
 import Observation
 import GoldengoCore
 import GoldengoData
+#if canImport(WidgetKit)
+import WidgetKit
+#endif
 
 @MainActor
 @Observable
@@ -22,6 +25,7 @@ public final class QuickAddModel {
 
     public var amountDecimal: Decimal { Decimal(string: amountString) ?? 0 }
     public var canSave: Bool { amountDecimal > 0 }
+    public var errorText: String?
 
     public func tap(_ digit: String) {
         guard amountString.count < 12 else { return }
@@ -45,12 +49,19 @@ public final class QuickAddModel {
         amountString.removeLast()
     }
 
-    public func save() async throws {
+    public func save() async {
         guard canSave else { return }
-        try await store.logManual(amount: amountDecimal, currency: currency,
-                                  merchant: merchant.isEmpty ? nil : merchant,
-                                  categoryName: selectedCategory)
-        reset()
+        do {
+            try await store.logManual(amount: amountDecimal, currency: currency,
+                                      merchant: merchant.isEmpty ? nil : merchant,
+                                      categoryName: selectedCategory)
+            reset()
+#if canImport(WidgetKit)
+            WidgetCenter.shared.reloadAllTimelines()
+#endif
+        } catch {
+            errorText = error.localizedDescription
+        }
     }
 
     public func reset() {

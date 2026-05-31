@@ -9,7 +9,7 @@ final class ImportModelTests: XCTestCase {
         let store = IngestionStore(modelContainer: try .goldengoInMemory())
         let m = ImportModel(store: store, currency: .all)
         let bigText = String(repeating: "a,b\n", count: 3_000_000)
-        try await m.importCSV(text: bigText, fileName: "huge.csv")
+        await m.importCSV(text: bigText, fileName: "huge.csv")
         XCTAssertEqual(m.resultText, "File too large (max 10 MB).")
         let count = try await store.expenseCount()
         XCTAssertEqual(count, 0)
@@ -24,7 +24,7 @@ final class ImportModelTests: XCTestCase {
         2026-05-30,SPAR TIRANA,-1500.00,tx1
         2026-05-29,COFFEE,-250.00,tx2
         """
-        try await m.importCSV(text: csv, fileName: "sample.csv")
+        await m.importCSV(text: csv, fileName: "sample.csv")
         XCTAssertEqual(m.resultText, "Imported 2, skipped 0 duplicates")
         let count = try await store.expenseCount()
         XCTAssertEqual(count, 2)
@@ -38,7 +38,7 @@ final class ImportModelTests: XCTestCase {
         let junk = Data(count: 11_000_000)
         try junk.write(to: tmp)
         defer { try? FileManager.default.removeItem(at: tmp) }
-        try await m.importPDF(url: tmp, fileName: "huge.pdf")
+        await m.importPDF(url: tmp, fileName: "huge.pdf")
         XCTAssertTrue(m.resultText.contains("too large"), "Expected 'too large' in resultText, got: \(m.resultText)")
         let count = try await store.expenseCount()
         XCTAssertEqual(count, 0)
@@ -48,7 +48,7 @@ final class ImportModelTests: XCTestCase {
         let store = IngestionStore(modelContainer: try .goldengoInMemory())
         let m = ImportModel(store: store, currency: .all)
         let url = try XCTUnwrap(Bundle.module.url(forResource: "synthetic-statement", withExtension: "pdf"))
-        try await m.importPDF(url: url, fileName: "synthetic-statement.pdf")
+        await m.importPDF(url: url, fileName: "synthetic-statement.pdf")
         let count = try await store.expenseCount()
         XCTAssertGreaterThanOrEqual(count, 1)
     }

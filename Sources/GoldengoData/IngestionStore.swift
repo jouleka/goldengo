@@ -102,8 +102,8 @@ public actor IngestionStore {
         }
         modelContext.insert(rec)
         try modelContext.save()
-        let total = try todayTotal(in: currency)
-        SharedSummary().writeTodayTotal(Money(amount: total, currency: currency).formatted())
+        let total = try todayTotal(in: .all)
+        SharedSummary().writeTodayTotal(Money(amount: total, currency: .all).formatted())
         return key
     }
 
@@ -135,6 +135,8 @@ public actor IngestionStore {
         modelContext.insert(ImportBatch(fileName: fileName, rowCount: transactions.count,
                                         importedCount: imported, dedupedCount: deduped))
         try modelContext.save()
+        let total = try todayTotal(in: .all)
+        SharedSummary().writeTodayTotal(Money(amount: total, currency: .all).formatted())
         return ImportSummary(imported: imported, deduped: deduped)
     }
 

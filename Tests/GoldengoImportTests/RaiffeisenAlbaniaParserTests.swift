@@ -29,4 +29,25 @@ final class RaiffeisenAlbaniaParserTests: XCTestCase {
         XCTAssertEqual(txns[1].kind, .income);  XCTAssertEqual(txns[1].amount, 5000)
         XCTAssertEqual(txns[0].rawMerchant, "TEST MARKET TIRANA")
     }
+
+    // T4 — field-level assertions for debit and credit rows
+    func test_debitRow_fields() {
+        let txns = RaiffeisenAlbaniaParser().parse(text, currency: .all)
+        let debit = txns[0]
+        XCTAssertEqual(debit.amount, 100)
+        XCTAssertEqual(debit.kind, .expense)
+        // date: 01/05/26 in UTC → verify year/month/day
+        let cal = Calendar(identifier: .gregorian)
+        let comps = cal.dateComponents(in: TimeZone(identifier: "UTC")!, from: debit.date)
+        XCTAssertEqual(comps.year, 2026)
+        XCTAssertEqual(comps.month, 5)
+        XCTAssertEqual(comps.day, 1)
+    }
+
+    func test_creditRow_isIncome() {
+        let txns = RaiffeisenAlbaniaParser().parse(text, currency: .all)
+        let credit = txns[1]
+        XCTAssertEqual(credit.kind, .income)
+        XCTAssertEqual(credit.amount, 5000)
+    }
 }

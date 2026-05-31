@@ -13,7 +13,7 @@ public struct ImportView: View {
                 Section("Import a statement") {
                     Button("Choose file (CSV or PDF)…") { showingPicker = true }
                     Button("Try a sample statement") {
-                        Task { try? await model.importCSV(text: SampleStatement.csv, fileName: "sample.csv") }
+                        Task { await model.importCSV(text: SampleStatement.csv, fileName: "sample.csv") }
                     }
                 }
                 if !model.resultText.isEmpty {
@@ -37,11 +37,11 @@ public struct ImportView: View {
                     }
 
                     if url.pathExtension.lowercased() == "pdf" {
-                        try? await model.importPDF(url: url, fileName: url.lastPathComponent)
+                        await model.importPDF(url: url, fileName: url.lastPathComponent)
                     } else if let text = try? String(contentsOf: url, encoding: .utf8) {
-                        try? await model.importCSV(text: text, fileName: url.lastPathComponent)
+                        await model.importCSV(text: text, fileName: url.lastPathComponent)
                     } else if let text = try? String(contentsOf: url, encoding: .isoLatin1) {
-                        try? await model.importCSV(text: text, fileName: url.lastPathComponent)
+                        await model.importCSV(text: text, fileName: url.lastPathComponent)
                     } else {
                         model.setError("Couldn't read the file (unsupported encoding).")
                     }

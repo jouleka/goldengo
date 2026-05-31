@@ -11,6 +11,10 @@ Dir[File.join(__dir__, 'Goldengo', '*.swift')].each do |f|
   target.add_file_references([group.new_file(File.basename(f))])
 end
 
+# Privacy manifest
+privacy_ref = group.new_file('PrivacyInfo.xcprivacy')
+target.add_resources([privacy_ref])
+
 # Build settings
 target.build_configurations.each do |config|
   config.build_settings['PRODUCT_BUNDLE_IDENTIFIER'] = 'com.goldengo.app'
@@ -45,6 +49,10 @@ widget_group = project.main_group.new_group('Widget', 'Widget')
 Dir[File.join(__dir__, 'Widget', '*.swift')].each do |f|
   widget_target.add_file_references([widget_group.new_file(File.basename(f))])
 end
+
+# Privacy manifest
+widget_privacy_ref = widget_group.new_file('PrivacyInfo.xcprivacy')
+widget_target.add_resources([widget_privacy_ref])
 
 widget_target.build_configurations.each do |config|
   config.build_settings['PRODUCT_BUNDLE_IDENTIFIER'] = 'com.goldengo.app.widget'
