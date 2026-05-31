@@ -7,7 +7,8 @@ final class MappingDetectorTests: XCTestCase {
         let header = ["Date", "Amount", "Description", "Reference"]
         let m = try XCTUnwrap(MappingDetector.detect(header: header, currency: .all))
         XCTAssertEqual(m.dateIndex, 0)
-        XCTAssertEqual(m.amountIndex, 1)
+        // Amount column → signed(index: 1)
+        if case let .signed(idx) = m.amount { XCTAssertEqual(idx, 1) } else { XCTFail("expected signed amount") }
         XCTAssertEqual(m.merchantIndex, 2)
         XCTAssertEqual(m.externalIDIndex, 3)
     }

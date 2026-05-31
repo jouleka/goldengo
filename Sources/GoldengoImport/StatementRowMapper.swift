@@ -3,34 +3,50 @@ import GoldengoCore
 
 public enum StatementRowMapper {
     /// Maps one parsed CSV row to a NormalizedTransaction, or nil if the row is a header /
-    /// has an unparseable date or amount. Negative amount → expense (abs); positive → income.
+    /// has an unparseable date or amount. Handles both signed-amount and debit/credit columns.
     public static func map(row: [String], using m: ColumnMapping) -> NormalizedTransaction? {
         func field(_ i: Int?) -> String? {
             guard let i, i >= 0, i < row.count else { return nil }
             return row[i].trimmingCharacters(in: .whitespaces)
         }
-        guard let dateStr = field(m.dateIndex), let amountStr = field(m.amountIndex),
-              let date = Self.date(dateStr, format: m.dateFormat),
-              let signed = Self.decimal(amountStr, decimal: m.decimalSeparator, grouping: m.groupingSeparator)
+        guard let dateStr = field(m.dateIndex),
+              let date = Self.date(dateStr, formats: m.dateFormats)
         else { return nil }
 
-        let isExpense = signed < 0
-        let amount = abs(signed)
+        let amount: Decimal
+        let kind: TransactionKind
+        switch m.amount {
+        case .signed(let i):
+            guard let s = field(i),
+                  let v = Self.decimal(s, decimal: m.decimalSeparator, grouping: m.groupingSeparator)
+            else { return nil }
+            kind = v < 0 ? .expense : .income; amount = abs(v)
+        case .debitCredit(let di, let ci):
+            let d = field(di).flatMap { Self.decimal($0, decimal: m.decimalSeparator, grouping: m.groupingSeparator) }
+            let c = field(ci).flatMap { Self.decimal($0, decimal: m.decimalSeparator, grouping: m.groupingSeparator) }
+            if let d, d != 0 { kind = .expense; amount = abs(d) }
+            else if let c, c != 0 { kind = .income; amount = abs(c) }
+            else { return nil }
+        }
+
         let merchant = field(m.merchantIndex)
         let ext = field(m.externalIDIndex)
         return NormalizedTransaction(
             externalID: (ext?.isEmpty == false) ? ext : nil,
             amount: amount, currency: m.currency, date: date,
             rawMerchant: (merchant?.isEmpty == false) ? merchant : nil,
-            kind: isExpense ? .expense : .income, accountRef: "statement")
+            kind: kind, accountRef: "statement")
     }
 
-    static func date(_ s: String, format: String) -> Date? {
+    static func date(_ s: String, formats: [String]) -> Date? {
         let f = DateFormatter()
         f.locale = Locale(identifier: "en_US_POSIX")
         f.timeZone = TimeZone(identifier: "UTC")
-        f.dateFormat = format
-        return f.date(from: s)
+        for fmt in formats {
+            f.dateFormat = fmt
+            if let d = f.date(from: s) { return d }
+        }
+        return nil
     }
 
     static func decimal(_ s: String, decimal: String, grouping: String) -> Decimal? {

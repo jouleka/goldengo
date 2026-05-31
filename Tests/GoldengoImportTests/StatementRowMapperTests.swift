@@ -3,8 +3,8 @@ import GoldengoCore
 @testable import GoldengoImport
 
 final class StatementRowMapperTests: XCTestCase {
-    private let mapping = ColumnMapping(dateIndex: 0, amountIndex: 1, merchantIndex: 2,
-                                        externalIDIndex: 3, dateFormat: "dd.MM.yyyy",
+    private let mapping = ColumnMapping(dateIndex: 0, amount: .signed(index: 1), merchantIndex: 2,
+                                        externalIDIndex: 3, dateFormats: ["dd.MM.yyyy"],
                                         decimalSeparator: ",", groupingSeparator: ".",
                                         currency: .all)
 
@@ -24,5 +24,15 @@ final class StatementRowMapperTests: XCTestCase {
     func test_returnsNil_forUnparseableDateOrAmount() {
         XCTAssertNil(StatementRowMapper.map(row: ["Date","Amount","Desc","ID"], using: mapping)) // header
         XCTAssertNil(StatementRowMapper.map(row: ["x","y","z","w"], using: mapping))
+    }
+
+    func test_debitCreditColumns_mapDirectionCorrectly() throws {
+        let m = ColumnMapping(dateIndex: 0, amount: .debitCredit(debit: 3, credit: 4), merchantIndex: 1,
+                              externalIDIndex: nil, dateFormats: ["dd/MM/yy"], decimalSeparator: ".",
+                              groupingSeparator: ",", currency: .all)
+        let debit = try XCTUnwrap(StatementRowMapper.map(row: ["29/05/26","BASHKIA TIRANA","29/05/26","-500.00","",""], using: m))
+        XCTAssertEqual(debit.kind, .expense); XCTAssertEqual(debit.amount, 500)
+        let credit = try XCTUnwrap(StatementRowMapper.map(row: ["29/05/26","SALARY","29/05/26","","260,000.00",""], using: m))
+        XCTAssertEqual(credit.kind, .income); XCTAssertEqual(credit.amount, 260000)
     }
 }
