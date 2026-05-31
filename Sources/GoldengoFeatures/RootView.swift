@@ -14,6 +14,9 @@ public struct RootView: View {
             RecentExpensesView(model: RecentExpensesModel(store: store))
                 .tabItem { Label("Recent", systemImage: "list.bullet") }
                 .tag(1)
+            SettingsView()
+                .tabItem { Label("Settings", systemImage: "gearshape") }
+                .tag(2)
         }
         .onOpenURL { url in
             if let tab = Self.tab(forDeepLink: url) { selectedTab = tab }
@@ -27,6 +30,7 @@ public struct RootView: View {
         switch url.host {
         case "quickadd": return 0
         case "recent":   return 1
+        case "settings": return 2
         default:         return nil
         }
     }
