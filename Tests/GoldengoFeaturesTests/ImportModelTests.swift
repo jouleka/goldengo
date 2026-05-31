@@ -30,6 +30,20 @@ final class ImportModelTests: XCTestCase {
         XCTAssertEqual(count, 2)
     }
 
+    func test_importPDF_oversizedFile_setsErrorAndImportsNothing() async throws {
+        let store = IngestionStore(modelContainer: try .goldengoInMemory())
+        let m = ImportModel(store: store, currency: .all)
+        // Write an ~11 MB junk file to a temp .pdf URL
+        let tmp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".pdf")
+        let junk = Data(count: 11_000_000)
+        try junk.write(to: tmp)
+        defer { try? FileManager.default.removeItem(at: tmp) }
+        try await m.importPDF(url: tmp, fileName: "huge.pdf")
+        XCTAssertTrue(m.resultText.contains("too large"), "Expected 'too large' in resultText, got: \(m.resultText)")
+        let count = try await store.expenseCount()
+        XCTAssertEqual(count, 0)
+    }
+
     func test_importPDF_fromSyntheticFixture() async throws {
         let store = IngestionStore(modelContainer: try .goldengoInMemory())
         let m = ImportModel(store: store, currency: .all)

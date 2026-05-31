@@ -8,10 +8,6 @@ public struct RaiffeisenAlbaniaParser: BankStatementParser {
     public let id = "raiffeisen-al-pdf"
     public init() {}
 
-    private static let skipPhrases = [
-        "balanca", "numri i veprimeve", "limit overdraft", "ledger balance",
-        "dispo balance", "nxjerrje llogarie", "data e transaksionit"
-    ]
     private static let datePattern = #"\d{2}/\d{2}/\d{2}"#
     private static let numPattern  = #"-?[\d,]+\.\d{2}"#
 
@@ -35,11 +31,16 @@ public struct RaiffeisenAlbaniaParser: BankStatementParser {
         df.timeZone = TimeZone(identifier: "UTC")
         df.dateFormat = "dd/MM/yy"
 
-        for raw in text.split(whereSeparator: \.isNewline) {
-            let line = raw.trimmingCharacters(in: .whitespaces)
-            guard !line.isEmpty else { continue }
+        let skipKeywords = StatementProfile.raiffeisenAlbania.skipRowKeywords
+        for rawLine in text.split(whereSeparator: \.isNewline) {
+            let trimmed = rawLine.trimmingCharacters(in: .whitespaces)
+            guard !trimmed.isEmpty else { continue }
+            // Guard against absurdly long lines that cause regex backtracking
+            guard trimmed.count <= 400 else { continue }
+            // Collapse whitespace runs to single spaces to reduce backtracking
+            let line = trimmed.split(whereSeparator: { $0 == " " || $0 == "\t" }).joined(separator: " ")
             // Skip summary / header rows
-            if Self.skipPhrases.contains(where: { line.lowercased().contains($0) }) { continue }
+            if skipKeywords.contains(where: { line.lowercased().contains($0) }) { continue }
 
             let range = NSRange(line.startIndex..., in: line)
             guard let m = re.firstMatch(in: line, range: range),

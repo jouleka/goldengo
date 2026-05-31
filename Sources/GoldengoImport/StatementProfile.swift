@@ -20,13 +20,13 @@ public struct StatementProfile: Sendable {
         id: "raiffeisen-al",
         dateFormats: ["dd/MM/yy", "dd/MM/yyyy"],
         decimalSeparator: ".", groupingSeparator: ",",
-        dateKeywords: ["data e transaksionit", "data", "datë"],
+        dateKeywords: ["data e transaksionit", "datë"],
         descriptionKeywords: ["pershkrimi", "përshkrimi", "description"],
         debitKeywords: ["debi", "debit"],
         creditKeywords: ["kredi", "credit"],
         amountKeywords: [],
         idKeywords: ["referenca", "reference", "ref"],
-        skipRowKeywords: ["balanca", "numri i veprimeve", "limit overdraft", "ledger balance", "dispo balance"])
+        skipRowKeywords: ["balanca", "numri i veprimeve", "limit overdraft", "ledger balance", "dispo balance", "nxjerrje llogarie", "data e transaksionit"])
 
     public static let generic = StatementProfile(
         id: "generic",

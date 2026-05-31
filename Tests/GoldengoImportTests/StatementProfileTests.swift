@@ -8,6 +8,14 @@ final class StatementProfileTests: XCTestCase {
         if case .signed = m.amount {} else { XCTFail("expected signed") }
     }
 
+    func test_genericHeader_withBareData_doesNotMatchRaiffeisen() throws {
+        // A non-Albanian header containing bare "Data" must NOT pick Raiffeisen's dd/MM/yy format
+        let header = ["Data", "Description", "Debit", "Credit"]
+        let m = try XCTUnwrap(StatementProfile.detectMapping(header: header, currency: .all))
+        XCTAssertNotEqual(m.dateFormats.first, "dd/MM/yy",
+            "Header with bare 'Data' must not resolve to Raiffeisen (dd/MM/yy) profile")
+    }
+
     func test_raiffeisenAlbanianHeader_resolvesDebitCredit() throws {
         let header = ["DATA E TRANSAKSIONIT","PERSHKRIMI","DATE VALUTA","DEBI","KREDI","BALANCA"]
         let m = try XCTUnwrap(StatementProfile.detectMapping(header: header, currency: .all))

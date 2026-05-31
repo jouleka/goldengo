@@ -28,6 +28,8 @@ public final class ImportModel {
     }
 
     public func importPDF(url: URL, fileName: String) async throws {
+        let size = (try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0
+        guard size <= 10_000_000 else { resultText = "File too large (max 10 MB)."; return }
         guard let text = PDFTextExtractor.text(from: url) else {
             resultText = "Couldn't read the PDF."
             return

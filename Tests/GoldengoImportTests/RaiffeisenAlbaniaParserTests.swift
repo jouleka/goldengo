@@ -12,6 +12,14 @@ final class RaiffeisenAlbaniaParserTests: XCTestCase {
     Numri i veprimeve ne debi 1 -100.00
     """
 
+    func test_evilLine_doesNotHang() {
+        // A line starting with a date then thousands of spaces would backtrack catastrophically
+        // without the length guard. This must return instantly.
+        let evil = "01/01/01 " + String(repeating: " ", count: 5000)
+        let txns = RaiffeisenAlbaniaParser().parse(evil, currency: .all)
+        XCTAssertEqual(txns.count, 0)
+    }
+
     func test_parses_transactions_skippingSummaries() {
         let p = RaiffeisenAlbaniaParser()
         XCTAssertTrue(p.canParse(text))
