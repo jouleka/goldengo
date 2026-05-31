@@ -23,10 +23,12 @@ let package = Package(
         .target(name: "GoldengoDesignSystem"),
         .testTarget(name: "GoldengoDesignSystemTests", dependencies: ["GoldengoDesignSystem"]),
         .target(name: "GoldengoFeatures", dependencies: ["GoldengoCore", "GoldengoData", "GoldengoConnectors", "GoldengoDesignSystem", "GoldengoImport"]),
-        .testTarget(name: "GoldengoFeaturesTests", dependencies: ["GoldengoFeatures"]),
+        .testTarget(name: "GoldengoFeaturesTests", dependencies: ["GoldengoFeatures"],
+                    resources: [.copy("Fixtures/synthetic-statement.pdf")]),
         .target(name: "GoldengoIntents", dependencies: ["GoldengoCore", "GoldengoData"]),
         .testTarget(name: "GoldengoIntentsTests", dependencies: ["GoldengoIntents"]),
         .target(name: "GoldengoImport", dependencies: ["GoldengoCore"]),
-        .testTarget(name: "GoldengoImportTests", dependencies: ["GoldengoImport"]),
+        .testTarget(name: "GoldengoImportTests", dependencies: ["GoldengoImport"],
+                    resources: [.copy("Fixtures/synthetic-statement.pdf")]),
     ]
 )
