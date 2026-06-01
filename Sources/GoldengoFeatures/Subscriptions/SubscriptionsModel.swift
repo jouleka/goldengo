@@ -14,10 +14,11 @@ public final class SubscriptionsModel {
 
     /// Re-run detection, then load the surfaced candidates.
     public func load() async {
+        guard !isLoading else { return }   // .onAppear / .refreshable / confirm / dismiss can overlap
         isLoading = true
+        defer { isLoading = false }
         _ = try? await store.refreshSubscriptions()
         rows = (try? await store.subscriptionCandidates()) ?? []
-        isLoading = false
     }
 
     public func confirm(_ s: SubscriptionSnapshot) async {
@@ -43,8 +44,11 @@ public final class SubscriptionsModel {
         return "\(money) / \(per)"
     }
 
+    private let dateFormatter: DateFormatter = {
+        let f = DateFormatter(); f.dateStyle = .medium; f.timeStyle = .none; return f
+    }()
+
     public func nextChargeText(_ s: SubscriptionSnapshot) -> String {
-        let f = DateFormatter(); f.dateStyle = .medium; f.timeStyle = .none
-        return "Next: \(f.string(from: s.nextChargeDate))"
+        "Next: \(dateFormatter.string(from: s.nextChargeDate))"
     }
 }

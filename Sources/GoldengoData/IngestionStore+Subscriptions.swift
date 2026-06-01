@@ -86,7 +86,7 @@ extension IngestionStore {
             predicate: #Predicate { $0.isArchived == false && $0.isDismissed == false }))
         return recs
             .filter { includeConfirmed || !$0.isConfirmed }
-            .sorted { $0.confidence > $1.confidence }
+            .sorted { $0.confidence != $1.confidence ? $0.confidence > $1.confidence : $0.matchKey < $1.matchKey }
             .map { SubscriptionSnapshot(
                 id: $0.matchKey, displayName: $0.displayName, amount: $0.amount,
                 currencyCode: $0.currencyCode, cadence: $0.cadence, nextChargeDate: $0.nextChargeDate,

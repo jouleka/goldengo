@@ -36,7 +36,9 @@ public struct SubscriptionsView: View {
                                 if s.hadTrial { Label("trial", systemImage: "gift").font(.caption2) }
                                 if s.isVariableAmount { Label("variable", systemImage: "waveform").font(.caption2) }
                                 Spacer()
-                                Text("\(Int((s.confidence * 100).rounded()))%").font(.caption2).foregroundStyle(.secondary)
+                                Text("\(Int((s.confidence * 100).rounded()))%")
+                                    .font(.caption2).foregroundStyle(.secondary)
+                                    .accessibilityLabel("\(Int((s.confidence * 100).rounded()))% confidence")
                             }
                         }
                         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
