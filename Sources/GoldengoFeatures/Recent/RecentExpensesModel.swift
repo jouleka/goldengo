@@ -41,4 +41,17 @@ public final class RecentExpensesModel {
         let monthly = Money(amount: s.confirmedSubscriptionsMonthly, currency: currency).formatted()
         return "\(s.confirmedSubscriptionCount) confirmed · ~\(monthly)/mo"
     }
+
+    /// Formats a category total in the dashboard's currency (for the Top Categories card).
+    public func categoryTotalText(_ total: Decimal) -> String {
+        Money(amount: total, currency: currency).formatted()
+    }
+
+    /// A category's share of the largest category this month, in 0...1, for the proportional bar.
+    /// Returns 0 when there's no spend to compare against.
+    public func categoryFraction(_ total: Decimal) -> Double {
+        guard let top = summary?.topCategories.map(\.total).max(), top > 0 else { return 0 }
+        let value = (total as NSDecimalNumber).doubleValue / (top as NSDecimalNumber).doubleValue
+        return min(max(value, 0), 1)
+    }
 }
