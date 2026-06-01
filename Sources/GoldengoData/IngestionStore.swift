@@ -124,7 +124,7 @@ public actor IngestionStore {
         return key
     }
 
-    private func findOrCreateCategory(named rawName: String) throws -> CategoryRecord {
+    func findOrCreateCategory(named rawName: String) throws -> CategoryRecord {
         let name = rawName.trimmingCharacters(in: .whitespacesAndNewlines)
         // Case-insensitive reuse so free-text from Siri/Shortcuts doesn't spawn "Coffee"/"coffee".
         let all = try modelContext.fetch(FetchDescriptor<CategoryRecord>())
