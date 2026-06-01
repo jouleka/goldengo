@@ -1,5 +1,6 @@
 import SwiftUI
 import GoldengoCore
+import GoldengoData
 import GoldengoDesignSystem
 
 public struct RecentExpensesView: View {
@@ -13,6 +14,26 @@ public struct RecentExpensesView: View {
                     Section {
                         Label("Couldn't load your expenses. Pull to refresh.", systemImage: "exclamationmark.triangle")
                             .foregroundStyle(.orange)
+                    }
+                }
+                if let s = model.summary {
+                    Section {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("This month").font(.caption).foregroundStyle(.secondary)
+                            Text(model.monthTotalText()).font(.largeTitle.bold())
+                        }
+                    }
+                    if let subs = model.subscriptionsText() {
+                        Section("Subscriptions") { Label(subs, systemImage: "repeat.circle") }
+                    }
+                    if !s.topCategories.isEmpty {
+                        Section("Top categories this month") {
+                            ForEach(s.topCategories) { c in
+                                HStack { Text(c.name); Spacer()
+                                    Text(Money(amount: c.total, currency: CurrencyCode(s.currencyCode)).formatted())
+                                        .foregroundStyle(.secondary) }
+                            }
+                        }
                     }
                 }
                 Section("Today") { Text(model.todayTotalText).font(.title2.bold()) }

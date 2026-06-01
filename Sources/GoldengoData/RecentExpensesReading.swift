@@ -7,6 +7,7 @@ import GoldengoCore
 public protocol RecentExpensesReading: Sendable {
     func recentExpenses(limit: Int) async throws -> [ExpenseSnapshot]
     func todayTotal(in currency: CurrencyCode) async throws -> Decimal
+    func dashboardSummary(in currency: CurrencyCode, now: Date, topCategoryLimit: Int) async throws -> DashboardSummary
 }
 
 extension IngestionStore: RecentExpensesReading {}

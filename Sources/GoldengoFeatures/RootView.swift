@@ -21,7 +21,7 @@ public struct RootView: View {
                 .tabItem { Label("Add", systemImage: "plus.circle.fill") }
                 .tag(0)
             RecentExpensesView(model: RecentExpensesModel(store: store))
-                .tabItem { Label("Recent", systemImage: "list.bullet") }
+                .tabItem { Label("Home", systemImage: "house.fill") }
                 .tag(1)
             ImportView(model: ImportModel(store: store))
                 .tabItem { Label("Import", systemImage: "square.and.arrow.down") }
@@ -50,6 +50,7 @@ public struct RootView: View {
         switch url.host {
         case "quickadd": return 0
         case "recent":   return 1
+        case "home":     return 1
         case "settings":      return 2
         case "import":        return 3
         case "subscriptions": return 4

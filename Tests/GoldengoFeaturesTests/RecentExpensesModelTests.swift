@@ -12,6 +12,7 @@ final class RecentExpensesModelTests: XCTestCase {
         await m.load()
         XCTAssertEqual(m.rows.count, 1)
         XCTAssertEqual(m.todayTotalText, "L 250")
+        XCTAssertNotNil(m.summary)
         XCTAssertFalse(m.loadFailed)
     }
 
@@ -20,6 +21,7 @@ final class RecentExpensesModelTests: XCTestCase {
         await m.load()
         XCTAssertTrue(m.loadFailed)
         XCTAssertTrue(m.rows.isEmpty)
+        XCTAssertNil(m.summary)
     }
 }
 
@@ -28,4 +30,5 @@ private struct FailingReader: RecentExpensesReading {
     struct Boom: Error {}
     func recentExpenses(limit: Int) async throws -> [ExpenseSnapshot] { throw Boom() }
     func todayTotal(in currency: CurrencyCode) async throws -> Decimal { throw Boom() }
+    func dashboardSummary(in currency: CurrencyCode, now: Date, topCategoryLimit: Int) async throws -> DashboardSummary { throw Boom() }
 }
