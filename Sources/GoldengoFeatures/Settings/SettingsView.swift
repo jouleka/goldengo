@@ -8,6 +8,7 @@ public struct SettingsView: View {
     private var remind: Bool = false
     @AppStorage(SharedSummary.reminderLeadDaysKey, store: UserDefaults(suiteName: SharedSummary.appGroupID))
     private var leadDays: Int = 1
+    @Environment(\.dismiss) private var dismiss
 
     public init() {}
 
@@ -29,6 +30,11 @@ public struct SettingsView: View {
                 }
             }
             .navigationTitle("Settings")
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") { dismiss() }
+                }
+            }
             // Enabling requests notification permission; if it isn't granted we flip the toggle back
             // off so it never claims to be on while no reminder could ever fire. Actual reminders are
             // scheduled the next time the Subscriptions tab loads (SubscriptionsModel.syncReminders).
