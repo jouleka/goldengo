@@ -29,13 +29,17 @@ public struct SettingsView: View {
                 }
             }
             .navigationTitle("Settings")
-            // Enabling only requests permission here; the actual reminders are scheduled the next
-            // time the Subscriptions tab loads (SubscriptionsModel.syncReminders). Disabling clears
-            // immediately, and a later load's sync([]) is a belt-and-suspenders clear.
+            // Enabling requests notification permission; if it isn't granted we flip the toggle back
+            // off so it never claims to be on while no reminder could ever fire. Actual reminders are
+            // scheduled the next time the Subscriptions tab loads (SubscriptionsModel.syncReminders).
+            // Disabling clears immediately; a later load's sync([]) is a belt-and-suspenders clear.
             .onChange(of: remind) { _, on in
-                Task {
-                    if on { await LocalNotificationScheduler.requestAuthorization() }
-                    else { await LocalNotificationScheduler.cancelAll() }
+                Task { @MainActor in
+                    if on {
+                        if await LocalNotificationScheduler.requestAuthorization() == false { remind = false }
+                    } else {
+                        await LocalNotificationScheduler.cancelAll()
+                    }
                 }
             }
         }
