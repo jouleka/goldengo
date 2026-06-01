@@ -6,18 +6,28 @@ import GoldengoData
 @MainActor
 @Observable
 public final class RecentExpensesModel {
-    public let store: IngestionStore
+    private let reader: any RecentExpensesReading
     public var currency: CurrencyCode
     public private(set) var rows: [ExpenseSnapshot] = []
     public private(set) var todayTotalText: String = ""
+    /// True when the last load threw. The view surfaces this instead of silently showing an empty
+    /// list (errors used to be swallowed with `try?`).
+    public private(set) var loadFailed = false
 
-    public init(store: IngestionStore, currency: CurrencyCode = .all) {
-        self.store = store; self.currency = currency
+    public init(store: any RecentExpensesReading, currency: CurrencyCode = .all) {
+        self.reader = store; self.currency = currency
     }
 
     public func load() async {
-        rows = (try? await store.recentExpenses(limit: 50)) ?? []
-        let total = (try? await store.todayTotal(in: currency)) ?? 0
-        todayTotalText = Money(amount: total, currency: currency).formatted()
+        do {
+            let fetched = try await reader.recentExpenses(limit: 50)
+            let total = try await reader.todayTotal(in: currency)
+            rows = fetched
+            todayTotalText = Money(amount: total, currency: currency).formatted()
+            loadFailed = false
+        } catch {
+            // Keep any previously-loaded rows on screen; surface the failure so the user can retry.
+            loadFailed = true
+        }
     }
 }

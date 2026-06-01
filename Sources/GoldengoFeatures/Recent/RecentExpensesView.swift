@@ -9,6 +9,12 @@ public struct RecentExpensesView: View {
     public var body: some View {
         NavigationStack {
             List {
+                if model.loadFailed {
+                    Section {
+                        Label("Couldn't load your expenses. Pull to refresh.", systemImage: "exclamationmark.triangle")
+                            .foregroundStyle(.orange)
+                    }
+                }
                 Section("Today") { Text(model.todayTotalText).font(.title2.bold()) }
                 Section("Recent") {
                     if model.rows.isEmpty {
@@ -42,6 +48,7 @@ public struct RecentExpensesView: View {
                 }
             }
             .navigationTitle("Goldengo")
+            .refreshable { await model.load() }
             .onAppear { Task { await model.load() } }
         }
     }
