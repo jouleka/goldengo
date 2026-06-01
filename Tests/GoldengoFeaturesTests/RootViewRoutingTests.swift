@@ -14,4 +14,9 @@ final class RootViewRoutingTests: XCTestCase {
     func test_deepLink_importRoutesToTag3() {
         XCTAssertEqual(RootView.tab(forDeepLink: URL(string: "goldengo://import")!), 3)
     }
+
+    // T3 — subscriptions deep link routes to tag 4
+    func test_deepLink_subscriptionsRoutesToTag4() {
+        XCTAssertEqual(RootView.tab(forDeepLink: URL(string: "goldengo://subscriptions")!), 4)
+    }
 }

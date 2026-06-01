@@ -26,6 +26,9 @@ public struct RootView: View {
             ImportView(model: ImportModel(store: store))
                 .tabItem { Label("Import", systemImage: "square.and.arrow.down") }
                 .tag(3)
+            SubscriptionsView(model: SubscriptionsModel(store: store))
+                .tabItem { Label("Subs", systemImage: "repeat.circle") }
+                .tag(4)
             SettingsView()
                 .tabItem { Label("Settings", systemImage: "gearshape") }
                 .tag(2)
@@ -40,15 +43,17 @@ public struct RootView: View {
     }
 
     /// Maps a `goldengo://` deep link to a tab index (extracted so routing is unit-testable
-    /// and can't silently regress). `quickadd` -> Add (0), `recent` -> Recent (1), `import` -> Import (3).
+    /// and can't silently regress). `quickadd` -> Add (0), `recent` -> Recent (1), `import` -> Import (3),
+    /// `subscriptions` -> Subs (4).
     public nonisolated static func tab(forDeepLink url: URL) -> Int? {
         guard url.scheme == "goldengo" else { return nil }
         switch url.host {
         case "quickadd": return 0
         case "recent":   return 1
-        case "settings": return 2
-        case "import":   return 3
-        default:         return nil
+        case "settings":      return 2
+        case "import":        return 3
+        case "subscriptions": return 4
+        default:              return nil
         }
     }
 }
