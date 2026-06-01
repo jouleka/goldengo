@@ -106,6 +106,14 @@ extension IngestionStore {
     public func confirmSubscription(matchKey: String) throws {
         guard let rec = try fetchSubscription(matchKey: matchKey) else { return }
         rec.isConfirmed = true; rec.isDismissed = false; rec.updatedAt = .now
+        // Backfill: link existing expense-kind charges for this merchant+currency that aren't linked yet.
+        let expenseRaw = TransactionKind.expense.rawValue
+        let norm = rec.normalizedMerchant, code = rec.currencyCode
+        let candidates = try modelContext.fetch(FetchDescriptor<ExpenseRecord>(
+            predicate: #Predicate { $0.isArchived == false && $0.kindRaw == expenseRaw && $0.currencyCode == code && $0.subscription == nil }))
+        for e in candidates where MerchantNormalizer.normalize(e.merchantName) == norm {
+            e.subscription = rec
+        }
         try modelContext.save()
     }
 

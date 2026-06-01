@@ -13,6 +13,7 @@ public struct ExpenseSnapshot: Sendable, Equatable {
     public var date: Date
     public var merchantName: String?
     public var kind: TransactionKind
+    public var subscriptionName: String?
 }
 
 @ModelActor
@@ -36,6 +37,7 @@ public actor IngestionStore {
             if existing.category == nil {
                 existing.category = try defaultCategory(forMerchant: tx.rawMerchant)
             }
+            try linkToConfirmedSubscription(existing)
             try modelContext.save()
             return .merged
         }
@@ -44,6 +46,7 @@ public actor IngestionStore {
                                 kind: tx.kind, source: source, dedupeKey: key)
         rec.category = try defaultCategory(forMerchant: tx.rawMerchant)
         modelContext.insert(rec)
+        try linkToConfirmedSubscription(rec)
         try modelContext.save()
         return .inserted
     }
@@ -84,7 +87,20 @@ public actor IngestionStore {
     private func makeSnapshot(_ r: ExpenseRecord) -> ExpenseSnapshot {
         ExpenseSnapshot(dedupeKey: r.dedupeKey, amount: r.amount, currencyCode: r.currencyCode,
                         source: r.source, categoryName: r.category?.name,
-                        date: r.date, merchantName: r.merchantName, kind: r.kind)
+                        date: r.date, merchantName: r.merchantName, kind: r.kind,
+                        subscriptionName: r.subscription?.displayName)
+    }
+
+    /// Link an expense-kind record to a CONFIRMED subscription with the same normalized merchant + currency.
+    private func linkToConfirmedSubscription(_ rec: ExpenseRecord) throws {
+        guard rec.kindRaw == TransactionKind.expense.rawValue else { return }
+        let norm = MerchantNormalizer.normalize(rec.merchantName)
+        guard !norm.isEmpty else { return }
+        let confirmed = try modelContext.fetch(FetchDescriptor<SubscriptionRecord>(
+            predicate: #Predicate { $0.isConfirmed == true && $0.isDismissed == false && $0.isArchived == false }))
+        if let match = confirmed.first(where: { $0.normalizedMerchant == norm && $0.currencyCode == rec.currencyCode }) {
+            rec.subscription = match
+        }
     }
 
     /// Logs a user-entered expense. Always a distinct insert (unique key) so identical
@@ -101,6 +117,7 @@ public actor IngestionStore {
             rec.category = try defaultCategory(forMerchant: merchant)
         }
         modelContext.insert(rec)
+        try linkToConfirmedSubscription(rec)
         try modelContext.save()
         let total = try todayTotal(in: .all)
         SharedSummary().writeTodayTotal(Money(amount: total, currency: .all).formatted())

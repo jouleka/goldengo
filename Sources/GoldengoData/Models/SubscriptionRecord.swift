@@ -21,6 +21,11 @@ public final class SubscriptionRecord {
     public var detectedAt: Date = Date.now
     public var updatedAt: Date = Date.now
 
+    // Expense charges auto-matched to this subscription (same normalized merchant + currency).
+    // Inverse of `ExpenseRecord.subscription`; declared here only (CloudKit: inverse on one side).
+    @Relationship(deleteRule: .nullify, inverse: \ExpenseRecord.subscription)
+    public var charges: [ExpenseRecord]? = []
+
     public init(matchKey: String = "", displayName: String = "", normalizedMerchant: String = "",
                 amount: Decimal = 0, currencyCode: String = "ALL",
                 cadence: SubscriptionCadence = .monthly, nextChargeDate: Date = .now,

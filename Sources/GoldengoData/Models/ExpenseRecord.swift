@@ -17,6 +17,9 @@ public final class ExpenseRecord {
     public var updatedAt: Date = Date.now
     public var category: CategoryRecord?
     public var account: AccountRecord?
+    // Confirmed subscription this charge was auto-matched to (inverse declared on SubscriptionRecord).
+    // Left defaulting to nil; set by the auto-match linker, not in init.
+    public var subscription: SubscriptionRecord?
 
     public init(amount: Decimal = 0, currencyCode: String = "ALL", date: Date = .now,
                 merchantName: String? = nil, note: String? = nil,

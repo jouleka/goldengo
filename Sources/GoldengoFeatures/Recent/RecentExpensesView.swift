@@ -32,7 +32,12 @@ public struct RecentExpensesView: View {
                         ForEach(model.rows, id: \.dedupeKey) { r in
                             HStack {
                                 VStack(alignment: .leading) {
-                                    Text(r.merchantName ?? r.categoryName ?? "Expense")
+                                    HStack(spacing: 4) {
+                                        Text(r.merchantName ?? r.categoryName ?? "Expense")
+                                        if r.subscriptionName != nil {
+                                            Image(systemName: "repeat").font(.caption2).foregroundStyle(.secondary)
+                                        }
+                                    }
                                     Text(r.categoryName ?? "Uncategorized").font(.caption).foregroundStyle(.secondary)
                                 }
                                 Spacer()
