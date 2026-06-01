@@ -66,4 +66,18 @@ final class SubscriptionAutoMatchTests: XCTestCase {
         let sparLinked = try await linkedCount(store, name: "Spar")
         XCTAssertEqual(sparLinked, 0)
     }
+
+    func test_differentCurrency_notLinked() async throws {
+        // A same-merchant charge in a DIFFERENT currency must not link to the ALL subscription.
+        let store = try makeStore()
+        try await seedMonthlyNetflix(store)   // ALL
+        _ = try await store.refreshSubscriptions(now: day(2026, 3, 10))
+        try await store.confirmSubscription(matchKey: try await netflixKey(store))
+        _ = try await store.ingest(NormalizedTransaction(
+            externalID: "eur1", amount: 10, currency: CurrencyCode("EUR"), date: day(2026, 4, 5),
+            rawMerchant: "Netflix", kind: .expense, accountRef: "card"), source: .imported)
+        // Only the 3 ALL charges are linked; the EUR charge is not.
+        let linked = try await linkedCount(store, name: "Netflix")
+        XCTAssertEqual(linked, 3)
+    }
 }
