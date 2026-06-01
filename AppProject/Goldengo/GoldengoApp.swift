@@ -24,6 +24,10 @@ struct GoldengoApp: App {
                 if let sub = (try? await store.subscriptionCandidates())?.first {
                     try? await store.confirmSubscription(matchKey: sub.id)
                 }
+                // The sample charges are dated Mar–May, so "this month" on Home would be 0.
+                // Log one current-dated expense so the dashboard's month total + categories
+                // are non-zero for screenshots.
+                _ = try? await store.logManual(amount: 850, currency: .all, merchant: "Demo Lunch", categoryName: "Food")
             }
         }
         #endif
