@@ -1,0 +1,116 @@
+import Foundation
+import SwiftData
+import GoldengoCore
+
+/// `Sendable` view of a detected/persisted subscription, safe to cross the actor boundary to the UI.
+public struct SubscriptionSnapshot: Sendable, Equatable, Identifiable {
+    public var id: String              // matchKey
+    public var displayName: String
+    public var amount: Decimal
+    public var currencyCode: String
+    public var cadence: SubscriptionCadence
+    public var nextChargeDate: Date
+    public var occurrenceCount: Int
+    public var confidence: Double
+    public var isVariableAmount: Bool
+    public var hadTrial: Bool
+    public var isConfirmed: Bool
+}
+
+extension IngestionStore {
+    /// Run detection over all non-archived expense-kind records and UPSERT candidates by `matchKey`,
+    /// preserving the user's confirm/dismiss decisions. Returns the count of surfaced (non-dismissed)
+    /// candidates.
+    @discardableResult
+    public func refreshSubscriptions(now: Date = .now) throws -> Int {
+        let expenseRaw = TransactionKind.expense.rawValue
+        let fd = FetchDescriptor<ExpenseRecord>(predicate: #Predicate {
+            $0.isArchived == false && $0.kindRaw == expenseRaw
+        })
+        let occurrences = try modelContext.fetch(fd).map { r in
+            TransactionOccurrence(id: r.dedupeKey, date: r.date, amount: abs(r.amount),
+                                  currency: CurrencyCode(r.currencyCode), merchant: r.merchantName)
+        }
+        let detected = SubscriptionDetector.detect(occurrences, options: .init(now: now))
+
+        // Build the lookup defensively: `matchKey` is NOT unique (CloudKit cross-device inserts can
+        // produce two rows with the same key). `Dictionary(uniqueKeysWithValues:)` would TRAP on that.
+        // Converge duplicates here — keep the row carrying a user decision, archive the loser.
+        let existingAll = try modelContext.fetch(FetchDescriptor<SubscriptionRecord>())
+        var byKey: [String: SubscriptionRecord] = [:]
+        for r in existingAll {
+            guard let kept = byKey[r.matchKey] else { byKey[r.matchKey] = r; continue }
+            let rHasDecision = r.isConfirmed || r.isDismissed
+            let keptHasDecision = kept.isConfirmed || kept.isDismissed
+            let winner = (rHasDecision && !keptHasDecision) ? r : kept
+            let loser = (winner === r) ? kept : r
+            loser.isArchived = true
+            byKey[r.matchKey] = winner
+        }
+
+        for c in detected {
+            if let rec = byKey[c.id] {
+                // Update detection-derived fields; NEVER touch isConfirmed / isDismissed.
+                rec.displayName = c.displayName
+                rec.amount = c.amount
+                rec.cadenceRaw = c.cadence.rawValue
+                rec.nextChargeDate = c.predictedNextCharge
+                rec.occurrenceCount = c.occurrenceCount
+                rec.confidence = c.confidence
+                rec.isVariableAmount = c.isVariableAmount
+                rec.hadTrial = c.hadTrial
+                rec.isArchived = false
+                rec.updatedAt = now
+            } else {
+                let rec = SubscriptionRecord(
+                    matchKey: c.id, displayName: c.displayName, normalizedMerchant: c.normalizedMerchant,
+                    amount: c.amount, currencyCode: c.currency.rawValue, cadence: c.cadence,
+                    nextChargeDate: c.predictedNextCharge, occurrenceCount: c.occurrenceCount,
+                    confidence: c.confidence, isVariableAmount: c.isVariableAmount, hadTrial: c.hadTrial)
+                rec.detectedAt = now; rec.updatedAt = now
+                modelContext.insert(rec)
+                byKey[c.id] = rec
+            }
+        }
+        try modelContext.save()
+
+        let detectedKeys = Set(detected.map(\.id))
+        return byKey.values.filter { !$0.isDismissed && !$0.isArchived && detectedKeys.contains($0.matchKey) }.count
+    }
+
+    /// Candidates to show the user: currently-detected, not dismissed, not archived, most confident first.
+    public func subscriptionCandidates(includeConfirmed: Bool = true) throws -> [SubscriptionSnapshot] {
+        let recs = try modelContext.fetch(FetchDescriptor<SubscriptionRecord>(
+            predicate: #Predicate { $0.isArchived == false && $0.isDismissed == false }))
+        return recs
+            .filter { includeConfirmed || !$0.isConfirmed }
+            .sorted { $0.confidence > $1.confidence }
+            .map { SubscriptionSnapshot(
+                id: $0.matchKey, displayName: $0.displayName, amount: $0.amount,
+                currencyCode: $0.currencyCode, cadence: $0.cadence, nextChargeDate: $0.nextChargeDate,
+                occurrenceCount: $0.occurrenceCount, confidence: $0.confidence,
+                isVariableAmount: $0.isVariableAmount, hadTrial: $0.hadTrial, isConfirmed: $0.isConfirmed) }
+    }
+
+    public func confirmSubscription(matchKey: String) throws {
+        guard let rec = try fetchSubscription(matchKey: matchKey) else { return }
+        rec.isConfirmed = true; rec.isDismissed = false; rec.updatedAt = .now
+        try modelContext.save()
+    }
+
+    public func dismissSubscription(matchKey: String) throws {
+        guard let rec = try fetchSubscription(matchKey: matchKey) else { return }
+        rec.isDismissed = true; rec.isConfirmed = false; rec.updatedAt = .now
+        try modelContext.save()
+    }
+
+    public func subscriptionRecordCount() throws -> Int {
+        try modelContext.fetchCount(FetchDescriptor<SubscriptionRecord>())
+    }
+
+    private func fetchSubscription(matchKey key: String) throws -> SubscriptionRecord? {
+        var fd = FetchDescriptor<SubscriptionRecord>(predicate: #Predicate { $0.matchKey == key })
+        fd.fetchLimit = 1
+        return try modelContext.fetch(fd).first
+    }
+}
