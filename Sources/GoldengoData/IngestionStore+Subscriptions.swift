@@ -15,6 +15,15 @@ public struct SubscriptionSnapshot: Sendable, Equatable, Identifiable {
     public var isVariableAmount: Bool
     public var hadTrial: Bool
     public var isConfirmed: Bool
+
+    public init(id: String, displayName: String, amount: Decimal, currencyCode: String,
+                cadence: SubscriptionCadence, nextChargeDate: Date, occurrenceCount: Int,
+                confidence: Double, isVariableAmount: Bool, hadTrial: Bool, isConfirmed: Bool) {
+        self.id = id; self.displayName = displayName; self.amount = amount
+        self.currencyCode = currencyCode; self.cadence = cadence; self.nextChargeDate = nextChargeDate
+        self.occurrenceCount = occurrenceCount; self.confidence = confidence
+        self.isVariableAmount = isVariableAmount; self.hadTrial = hadTrial; self.isConfirmed = isConfirmed
+    }
 }
 
 extension IngestionStore {

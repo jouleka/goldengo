@@ -8,6 +8,8 @@ public struct SharedSummary {
     private let defaults: UserDefaults
     public static let appGroupID = "group.com.goldengo.app"
     public static let revealKey = "revealOnLockScreen"
+    public static let remindBeforeChargesKey = "remindBeforeCharges"
+    public static let reminderLeadDaysKey = "reminderLeadDays"
     private static let totalKey = "todayTotalText"
     private static let pendingTabKey = "pendingTab"
 
