@@ -12,13 +12,28 @@ public final class SubscriptionsModel {
 
     public init(store: IngestionStore) { self.store = store }
 
-    /// Re-run detection, then load the surfaced candidates.
+    /// Re-run detection, then load the surfaced candidates, then re-sync any scheduled reminders.
     public func load() async {
         guard !isLoading else { return }   // .onAppear / .refreshable / confirm / dismiss can overlap
         isLoading = true
         defer { isLoading = false }
         _ = try? await store.refreshSubscriptions()
         rows = (try? await store.subscriptionCandidates()) ?? []
+        await syncReminders()
+    }
+
+    /// Keep scheduled reminders in sync with the confirmed set. The pure decision lives in
+    /// `SubscriptionReminders.plannedRequests` (tested); this only reads settings and calls the
+    /// scheduler. When the toggle is off, `plannedRequests` returns [] and `sync([])` clears any
+    /// stale reminders (self-healing).
+    private func syncReminders() async {
+        let defaults = UserDefaults(suiteName: SharedSummary.appGroupID) ?? .standard
+        var cal = Calendar(identifier: .gregorian); cal.timeZone = .current
+        let requests = SubscriptionReminders.plannedRequests(
+            enabled: defaults.bool(forKey: SharedSummary.remindBeforeChargesKey),
+            leadDays: defaults.integer(forKey: SharedSummary.reminderLeadDaysKey),   // 0 when unset → clamped to 1
+            candidates: rows, now: .now, calendar: cal)
+        await LocalNotificationScheduler.sync(requests)
     }
 
     public func confirm(_ s: SubscriptionSnapshot) async {
