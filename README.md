@@ -10,7 +10,25 @@ Native iOS personal expense tracker focused on frictionless capture. Logic lives
 
 ## iCloud / CloudKit
 
-The data store is CloudKit-ready — `GoldengoStore` requests the private database and falls back to a **local-only** store when iCloud isn't provisioned (so unsigned/simulator builds just work). To turn on sync, provision it under your Apple Developer account: in Xcode select the **Goldengo** target → **Signing & Capabilities** → set your **Team**, add the **iCloud** capability with **CloudKit**, and create/select the container **`iCloud.com.goldengo.app`** (add the same App Group + iCloud container to the **GoldengoWidgetExtension** target too).
+The data store is CloudKit-ready — `GoldengoStore` requests the private database and falls back to a **local-only** store when iCloud isn't provisioned (so unsigned/simulator builds just work). The SwiftData schema is CloudKit-valid (every relationship has an inverse). Turning on sync is a provisioning step, done as part of running on a real device (below).
+
+## Running on your iPhone (and turning on iCloud sync)
+
+These steps install the app on a real device and enable iCloud sync. They require a **paid Apple Developer Program** membership — CloudKit, App Groups, and push all need it. (A free Apple ID can't provision those; the app still runs local-only without them.)
+
+1. **Generate + open the project:** `ruby AppProject/project.rb`, then `open AppProject/Goldengo.xcodeproj`.
+2. **Sign both targets.** For **Goldengo** *and* **GoldengoWidgetExtension** → **Signing & Capabilities**:
+   - Tick **Automatically manage signing** and pick your **Team**.
+   - The entitlements are already baked in by `project.rb` — iCloud + CloudKit container **`iCloud.com.goldengo.app`**, App Group **`group.com.goldengo.app`**, and push (`aps-environment`). Xcode registers the App IDs and builds the provisioning profiles. If the iCloud container shows as unregistered, click the refresh/＋ to create it (or create it at developer.apple.com → **Identifiers → iCloud Containers**).
+   - Bundle IDs: `com.goldengo.app` (app), `com.goldengo.app.widget` (widget).
+3. **Sign the iPhone into iCloud** (Settings → your name). The app uses your **private** CloudKit database, so your data stays in your own iCloud account.
+4. **Enable Developer Mode** (first time, iOS 16+): Settings → Privacy & Security → **Developer Mode** → on → reboot.
+5. **Run:** connect the iPhone (trust the Mac), select it as the run destination in Xcode, press **⌘R**. If prompted on the phone, trust the developer profile: Settings → General → **VPN & Device Management**.
+6. The app installs and launches. It starts empty (the demo seed only runs behind the `GOLDENGO_SEED_SAMPLE` env flag) — add an expense or import a statement.
+
+**Verify sync:** add an expense, then check **CloudKit Dashboard** (icloud.developer.apple.com → `iCloud.com.goldengo.app` → **Private Database**, Development env) — records appear shortly. Or run on a second device on the same iCloud account; entries sync automatically (SwiftData ↔ CloudKit, no manual step). For **TestFlight/App Store**, deploy the schema once in CloudKit Dashboard (**Development → Deploy Schema Changes to Production**).
+
+**Troubleshooting:** a "local-only store" warning in the DEBUG console means the iCloud/App Group entitlement isn't active — expected in the Simulator; on device it means signing didn't include the capability (re-check step 2 and that your team has a paid membership). If the widget doesn't share data, confirm the App Group is on **both** targets.
 
 ## Quick capture
 
