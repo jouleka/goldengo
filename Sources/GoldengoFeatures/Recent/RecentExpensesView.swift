@@ -37,7 +37,7 @@ public struct RecentExpensesView: View {
             .background(Color.goldengoBackground.ignoresSafeArea())
             .navigationTitle("Goldengo")
             .toolbar {
-                ToolbarItemGroup(placement: .topBarTrailing) {
+                ToolbarItemGroup(placement: .primaryAction) {
                     Button { onOpenImport() } label: {
                         Image(systemName: "square.and.arrow.down")
                     }
