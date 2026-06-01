@@ -19,8 +19,8 @@ public struct SubscriptionSnapshot: Sendable, Equatable, Identifiable {
 
 extension IngestionStore {
     /// Run detection over all non-archived expense-kind records and UPSERT candidates by `matchKey`,
-    /// preserving the user's confirm/dismiss decisions. Returns the count of surfaced (non-dismissed)
-    /// candidates.
+    /// preserving the user's confirm/dismiss decisions. Returns the surfaced candidate count
+    /// (equal to `subscriptionCandidates().count`).
     @discardableResult
     public func refreshSubscriptions(now: Date = .now) throws -> Int {
         let expenseRaw = TransactionKind.expense.rawValue
@@ -74,8 +74,10 @@ extension IngestionStore {
         }
         try modelContext.save()
 
-        let detectedKeys = Set(detected.map(\.id))
-        return byKey.values.filter { !$0.isDismissed && !$0.isArchived && detectedKeys.contains($0.matchKey) }.count
+        // Return the surfaced count so it matches exactly what `subscriptionCandidates()` will show
+        // — avoids a count/list divergence for callers (e.g. the UI) when a previously-detected
+        // candidate lingers (stale-candidate archival is out of scope; see plan Known limitations).
+        return try subscriptionCandidates().count
     }
 
     /// Candidates to show the user: currently-detected, not dismissed, not archived, most confident first.

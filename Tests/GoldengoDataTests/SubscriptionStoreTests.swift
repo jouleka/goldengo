@@ -82,4 +82,51 @@ final class SubscriptionStoreTests: XCTestCase {
         let active = try await store.subscriptionCandidates().filter { $0.id == key }
         XCTAssertEqual(active.count, 1)   // converged: one archived, one active
     }
+
+    func test_refreshWithNoExpenses_returnsZero_noCrash() async throws {
+        let store = try makeStore()
+        let count = try await store.refreshSubscriptions(now: day(2026, 3, 10))
+        XCTAssertEqual(count, 0)
+        let cands = try await store.subscriptionCandidates()
+        XCTAssertTrue(cands.isEmpty)
+    }
+
+    func test_threeDuplicateMatchKeysConverge() async throws {
+        // N-way convergence (not just pairs): three rows with the same matchKey collapse to one active.
+        let store = try makeStore()
+        try await seedMonthlyNetflix(store)
+        _ = try await store.refreshSubscriptions(now: day(2026, 3, 10))
+        let key = try await store.subscriptionCandidates()[0].id
+
+        let ctx = ModelContext(store.modelContainer)
+        ctx.insert(SubscriptionRecord(matchKey: key, displayName: "dup A", cadence: .monthly))
+        ctx.insert(SubscriptionRecord(matchKey: key, displayName: "dup B", cadence: .monthly))
+        try ctx.save()
+        let before = try await store.subscriptionRecordCount()
+        XCTAssertEqual(before, 3)
+
+        _ = try await store.refreshSubscriptions(now: day(2026, 3, 11))   // must not crash
+        let active = try await store.subscriptionCandidates().filter { $0.id == key }
+        XCTAssertEqual(active.count, 1)
+    }
+
+    func test_confirmedCandidate_updatesDetectionFieldsButKeepsConfirmation() async throws {
+        // A new charge extends the series; re-detection must refresh occurrenceCount while keeping
+        // the user's confirmation intact.
+        let store = try makeStore()
+        try await seedMonthlyNetflix(store)   // Jan/Feb/Mar (nf0/nf1/nf2)
+        _ = try await store.refreshSubscriptions(now: day(2026, 3, 10))
+        let key = try await store.subscriptionCandidates()[0].id
+        try await store.confirmSubscription(matchKey: key)
+
+        _ = try await store.ingest(
+            NormalizedTransaction(externalID: "nf3", amount: Decimal(9.99), currency: .all,
+                                  date: day(2026, 4, 5), rawMerchant: "Netflix",
+                                  kind: .expense, accountRef: "card"), source: .imported)
+        _ = try await store.refreshSubscriptions(now: day(2026, 5, 1))
+
+        let updated = try await store.subscriptionCandidates().first { $0.id == key }
+        XCTAssertEqual(updated?.occurrenceCount, 4)
+        XCTAssertEqual(updated?.isConfirmed, true)
+    }
 }
