@@ -4,7 +4,7 @@ import GoldengoCore
 
 public enum IngestOutcome: String, Sendable, Equatable { case inserted, merged }
 
-public struct ExpenseSnapshot: Sendable, Equatable {
+public struct ExpenseSnapshot: Sendable, Equatable, Identifiable {
     public var dedupeKey: String
     public var amount: Decimal
     public var currencyCode: String
@@ -14,6 +14,9 @@ public struct ExpenseSnapshot: Sendable, Equatable {
     public var merchantName: String?
     public var kind: TransactionKind
     public var subscriptionName: String?
+
+    /// Stable identity for `.sheet(item:)` / `ForEach` — the dedupeKey uniquely identifies the row.
+    public var id: String { dedupeKey }
 }
 
 @ModelActor

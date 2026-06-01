@@ -5,6 +5,7 @@ import GoldengoDesignSystem
 
 public struct RecentExpensesView: View {
     @State private var model: RecentExpensesModel
+    @State private var editing: ExpenseSnapshot?
     private let onAdd: () -> Void
     private let onOpenImport: () -> Void
     private let onOpenSettings: () -> Void
@@ -50,6 +51,18 @@ public struct RecentExpensesView: View {
             }
             .refreshable { await model.load() }
             .onAppear { Task { await model.load() } }
+            .sheet(item: $editing) { snap in
+                EditExpenseView(
+                    snapshot: snap,
+                    currency: model.currency,
+                    onSave: { amt, m, c, d in
+                        Task { await model.update(snap, amount: amt, merchant: m, categoryName: c, date: d) }
+                    },
+                    onDelete: {
+                        Task { await model.delete(snap) }
+                    }
+                )
+            }
         }
     }
 
@@ -165,7 +178,8 @@ public struct RecentExpensesView: View {
             } else {
                 ForEach(model.rows, id: \.dedupeKey) { r in
                     if r.dedupeKey != model.rows.first?.dedupeKey { Divider() }
-                    expenseRow(r)
+                    Button { editing = r } label: { expenseRow(r) }
+                        .buttonStyle(.plain)
                 }
             }
         }
