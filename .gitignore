@@ -24,3 +24,6 @@ secrets/
 
 # Misc
 *.log
+
+# Device build derived data
+AppProject/.build-device/
