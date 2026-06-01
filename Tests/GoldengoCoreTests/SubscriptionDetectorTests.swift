@@ -124,4 +124,14 @@ final class SubscriptionDetectorTests: XCTestCase {
         ]
         XCTAssertTrue(SubscriptionDetector.detect(occs, options: .init(now: day(2026, 3, 1))).isEmpty)
     }
+
+    func test_evenGapCount_fiveMonthlyCharges_classifiesMonthly() {
+        // 5 monthly charges → 4 gaps (even count). Locks in the upper-median index behaviour so a
+        // future change to true-median can't silently alter classification.
+        let occs = (0..<5).map { i in occ("\(i)", day(2026, 1 + i, 5), 12.0, "Adobe CC") }
+        let result = SubscriptionDetector.detect(occs, options: .init(now: day(2026, 6, 1)))
+        XCTAssertEqual(result.count, 1)
+        XCTAssertEqual(result[0].cadence, .monthly)
+        XCTAssertEqual(result[0].occurrenceCount, 5)
+    }
 }

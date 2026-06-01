@@ -57,6 +57,9 @@ public enum SubscriptionDetector {
             gaps.append(g)
         }
         let sortedGaps = gaps.sorted()
+        // Upper-median for even gap counts (picks the higher of the two middle values). Intentional
+        // and safe: the `inBand >= max(1, gaps.count / 2)` guard below rejects series that aren't
+        // genuinely concentrated in one band, so the exact tie-break never misclassifies.
         let medianGap = sortedGaps[sortedGaps.count / 2]
 
         guard let cadence = SubscriptionCadence.allCases.first(where: { $0.dayBand.contains(medianGap) }) else { return nil }
@@ -66,6 +69,7 @@ public enum SubscriptionDetector {
 
         let positive = series.map(\.amount).filter { $0 > 0 }.sorted()
         guard !positive.isEmpty else { return nil }
+        // Upper-median for even counts; representative amount only (excludes any £0 trial via the filter above).
         let median = positive[positive.count / 2]
         let hadTrial = series.contains { $0.amount == 0 }
         // Variable-amount flag: compute the spread ratio in Double (avoids Decimal(Double) literal
