@@ -111,7 +111,9 @@ extension IngestionStore {
     }
 
     private func fetchSubscription(matchKey key: String) throws -> SubscriptionRecord? {
-        var fd = FetchDescriptor<SubscriptionRecord>(predicate: #Predicate { $0.matchKey == key })
+        // Exclude archived tombstones: a converged CloudKit duplicate leaves an archived row with
+        // the SAME matchKey, and confirm/dismiss must always target the active record.
+        var fd = FetchDescriptor<SubscriptionRecord>(predicate: #Predicate { $0.matchKey == key && $0.isArchived == false })
         fd.fetchLimit = 1
         return try modelContext.fetch(fd).first
     }

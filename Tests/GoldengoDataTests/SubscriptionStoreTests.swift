@@ -129,4 +129,22 @@ final class SubscriptionStoreTests: XCTestCase {
         XCTAssertEqual(updated?.occurrenceCount, 4)
         XCTAssertEqual(updated?.isConfirmed, true)
     }
+
+    func test_dismissAfterDuplicateConverged_targetsActiveRow() async throws {
+        // Regression: with a converged CloudKit duplicate (one archived row sharing the matchKey),
+        // dismiss must hit the ACTIVE row so the candidate actually disappears from the list.
+        let store = try makeStore()
+        try await seedMonthlyNetflix(store)
+        _ = try await store.refreshSubscriptions(now: day(2026, 3, 10))
+        let key = try await store.subscriptionCandidates()[0].id
+
+        let ctx = ModelContext(store.modelContainer)
+        ctx.insert(SubscriptionRecord(matchKey: key, displayName: "dup", cadence: .monthly))
+        try ctx.save()
+        _ = try await store.refreshSubscriptions(now: day(2026, 3, 11))   // converges → one row archived
+
+        try await store.dismissSubscription(matchKey: key)
+        let cands = try await store.subscriptionCandidates()
+        XCTAssertFalse(cands.contains { $0.id == key })   // active row dismissed → not surfaced
+    }
 }
