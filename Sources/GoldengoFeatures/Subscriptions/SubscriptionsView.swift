@@ -4,8 +4,10 @@ import GoldengoData
 import GoldengoDesignSystem
 
 public struct SubscriptionsView: View {
-    @State private var model: SubscriptionsModel
-    public init(model: SubscriptionsModel) { _model = State(initialValue: model) }
+    /// Owned by `RootView` (so detection can be re-run on tab-return / after an import); observed
+    /// here via @Observable.
+    private let model: SubscriptionsModel
+    public init(model: SubscriptionsModel) { self.model = model }
 
     public var body: some View {
         NavigationStack {
@@ -45,7 +47,10 @@ public struct SubscriptionsView: View {
             .background(Color.goldengoBackground.ignoresSafeArea())
             .navigationTitle("Subscriptions")
             .refreshable { await model.load() }
-            .onAppear { Task { await model.load() } }
+            // First-load net (covers cold-launch straight to this tab via a deep link, which a
+            // selectedTab onChange can miss). Re-entry refresh is driven by RootView's onChange;
+            // load()'s `isLoading` guard makes any overlap a no-op.
+            .task { await model.load() }
         }
     }
 

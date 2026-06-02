@@ -11,9 +11,11 @@ public struct RootView: View {
     // Owned here (not inline in the tab) so Home can be refreshed when the user returns to it or
     // finishes an import — otherwise newly added/imported expenses don't appear until a manual reload.
     @State private var recentModel: RecentExpensesModel
+    @State private var subsModel: SubscriptionsModel
     public init(store: IngestionStore) {
         self.store = store
         _recentModel = State(initialValue: RecentExpensesModel(store: store))
+        _subsModel = State(initialValue: SubscriptionsModel(store: store))
     }
 
     /// Settings (2) and Import (3) live behind the Home toolbar as sheets rather than permanent
@@ -48,20 +50,25 @@ public struct RootView: View {
             )
             .tabItem { Label("Home", systemImage: "house.fill") }
             .tag(1)
-            SubscriptionsView(model: SubscriptionsModel(store: store))
+            SubscriptionsView(model: subsModel)
                 .tabItem { Label("Subscriptions", systemImage: "arrow.triangle.2.circlepath") }
                 .tag(4)
         }
         .tint(GoldengoTheme.accent)
         .sheet(isPresented: $showSettings) { SettingsView() }
-        .sheet(isPresented: $showImport, onDismiss: { Task { await recentModel.load() } }) {
+        .sheet(isPresented: $showImport, onDismiss: {
+            // A statement import adds expenses AND may form new recurring patterns — refresh both.
+            Task { await recentModel.load() }
+            Task { await subsModel.load() }
+        }) {
             ImportView(model: ImportModel(store: store))
         }
         .onAppear { applyPendingTab() }
         .task { await recentModel.load() }   // cold-launch load (Home is the landing tab)
         .onChange(of: selectedTab) { _, newTab in
-            // Returning to Home reloads so expenses added on the Add tab show up without a manual refresh.
+            // Reload the destination tab's data on entry so adds/imports show without a manual refresh.
             if newTab == 1 { Task { await recentModel.load() } }
+            if newTab == 4 { Task { await subsModel.load() } }
         }
         .onChange(of: scenePhase) { _, newPhase in
             if newPhase == .active { applyPendingTab() }

@@ -72,25 +72,20 @@ struct SwipeableRow<Content: View>: View {
     @State private var offset: CGFloat = 0
     /// The settled displacement the row rests at (0, +restOpen, or -restOpen).
     @State private var restOffset: CGFloat = 0
-    /// Measured row width, used to scale the full-swipe commit distance to the device.
-    @State private var rowWidth: CGFloat = 0
     /// Per-gesture axis decision: nil until decided, true = horizontal (ours), false = vertical (scroll).
     @State private var horizontalDrag: Bool?
 
     private var openThreshold: CGFloat { restOpen * 0.55 }
-    private var commitThreshold: CGFloat { max(rowWidth * 0.5, restOpen * 2.2) }
+    /// Fixed full-swipe commit distance. Deliberately NOT measured per-row: a `GeometryReader` in each
+    /// row's background interfered with the enclosing `ScrollView`'s scrolling and got worse as rows
+    /// piled up. A constant works fine — fast flicks still commit via the velocity (predictedEnd) path.
+    private var commitThreshold: CGFloat { restOpen * 2.4 }
 
     var body: some View {
         ZStack {
             actionsLayer
             contentLayer
         }
-        .background(
-            GeometryReader { proxy in
-                Color.clear.preference(key: RowWidthKey.self, value: proxy.size.width)
-            }
-        )
-        .onPreferenceChange(RowWidthKey.self) { rowWidth = $0 }
         .clipped()
         .onChange(of: openRowID) { _, newValue in
             // Another row opened — close this one so only one is ever open.
@@ -202,10 +197,4 @@ struct SwipeableRow<Content: View>: View {
         let damped = restOpen + over * 0.55
         return x < 0 ? -damped : damped
     }
-}
-
-/// Reports a row's width up the view tree so the commit distance can scale with the device.
-private struct RowWidthKey: PreferenceKey {
-    static let defaultValue: CGFloat = 0
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = nextValue() }
 }

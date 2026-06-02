@@ -249,7 +249,6 @@ public struct RecentExpensesView: View {
             }
         }
         .goldengoCard(padding: GoldengoTheme.Spacing.l)
-        .animation(.snappy, value: model.rows)
     }
 
     private func expenseRow(_ r: ExpenseSnapshot) -> some View {
