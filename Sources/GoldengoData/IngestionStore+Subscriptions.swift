@@ -96,11 +96,25 @@ extension IngestionStore {
         return recs
             .filter { includeConfirmed || !$0.isConfirmed }
             .sorted { $0.confidence != $1.confidence ? $0.confidence > $1.confidence : $0.matchKey < $1.matchKey }
-            .map { SubscriptionSnapshot(
-                id: $0.matchKey, displayName: $0.displayName, amount: $0.amount,
-                currencyCode: $0.currencyCode, cadence: $0.cadence, nextChargeDate: $0.nextChargeDate,
-                occurrenceCount: $0.occurrenceCount, confidence: $0.confidence,
-                isVariableAmount: $0.isVariableAmount, hadTrial: $0.hadTrial, isConfirmed: $0.isConfirmed) }
+            .map(snapshot(of:))
+    }
+
+    /// Subscriptions the user marked "not a subscription" — surfaced so the dismissal can be undone
+    /// (otherwise an accidentally dismissed recurring charge would stay hidden forever).
+    public func dismissedSubscriptions() throws -> [SubscriptionSnapshot] {
+        let recs = try modelContext.fetch(FetchDescriptor<SubscriptionRecord>(
+            predicate: #Predicate { $0.isArchived == false && $0.isDismissed == true }))
+        return recs
+            .sorted { $0.confidence != $1.confidence ? $0.confidence > $1.confidence : $0.matchKey < $1.matchKey }
+            .map(snapshot(of:))
+    }
+
+    private func snapshot(of rec: SubscriptionRecord) -> SubscriptionSnapshot {
+        SubscriptionSnapshot(
+            id: rec.matchKey, displayName: rec.displayName, amount: rec.amount,
+            currencyCode: rec.currencyCode, cadence: rec.cadence, nextChargeDate: rec.nextChargeDate,
+            occurrenceCount: rec.occurrenceCount, confidence: rec.confidence,
+            isVariableAmount: rec.isVariableAmount, hadTrial: rec.hadTrial, isConfirmed: rec.isConfirmed)
     }
 
     public func confirmSubscription(matchKey: String) throws {
@@ -120,6 +134,13 @@ extension IngestionStore {
     public func dismissSubscription(matchKey: String) throws {
         guard let rec = try fetchSubscription(matchKey: matchKey) else { return }
         rec.isDismissed = true; rec.isConfirmed = false; rec.updatedAt = .now
+        try modelContext.save()
+    }
+
+    /// Undo a dismissal — the candidate re-surfaces in `subscriptionCandidates()`.
+    public func unDismissSubscription(matchKey: String) throws {
+        guard let rec = try fetchSubscription(matchKey: matchKey) else { return }
+        rec.isDismissed = false; rec.updatedAt = .now
         try modelContext.save()
     }
 

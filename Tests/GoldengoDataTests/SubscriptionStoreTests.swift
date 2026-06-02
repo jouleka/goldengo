@@ -55,6 +55,27 @@ final class SubscriptionStoreTests: XCTestCase {
         XCTAssertTrue(cands.isEmpty)
     }
 
+    func test_unDismiss_resurfacesADismissedCandidate() async throws {
+        // A dismissal must be reversible: "Not a subscription" can be undone so an accidentally
+        // dismissed recurring charge isn't hidden forever.
+        let store = try makeStore()
+        try await seedMonthlyNetflix(store)
+        _ = try await store.refreshSubscriptions(now: day(2026, 3, 10))
+        let key = try await store.subscriptionCandidates()[0].id
+
+        try await store.dismissSubscription(matchKey: key)
+        let candidatesAfterDismiss = try await store.subscriptionCandidates()
+        let dismissedAfterDismiss = try await store.dismissedSubscriptions()
+        XCTAssertTrue(candidatesAfterDismiss.isEmpty)
+        XCTAssertEqual(dismissedAfterDismiss.map(\.id), [key])   // surfaced for restore
+
+        try await store.unDismissSubscription(matchKey: key)
+        let candidatesAfterRestore = try await store.subscriptionCandidates()
+        let dismissedAfterRestore = try await store.dismissedSubscriptions()
+        XCTAssertTrue(candidatesAfterRestore.contains { $0.id == key })   // back as a candidate
+        XCTAssertTrue(dismissedAfterRestore.isEmpty)                      // no longer dismissed
+    }
+
     func test_refreshIsIdempotent_noDuplicateRecords() async throws {
         let store = try makeStore()
         try await seedMonthlyNetflix(store)

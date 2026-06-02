@@ -8,6 +8,8 @@ import GoldengoData
 public final class SubscriptionsModel {
     public let store: IngestionStore
     public private(set) var rows: [SubscriptionSnapshot] = []
+    /// Subscriptions the user marked "not a subscription", surfaced so the dismissal can be undone.
+    public private(set) var dismissedRows: [SubscriptionSnapshot] = []
     public private(set) var isLoading = false
 
     public init(store: IngestionStore) { self.store = store }
@@ -19,6 +21,7 @@ public final class SubscriptionsModel {
         defer { isLoading = false }
         _ = try? await store.refreshSubscriptions()
         rows = (try? await store.subscriptionCandidates()) ?? []
+        dismissedRows = (try? await store.dismissedSubscriptions()) ?? []
         await syncReminders()
     }
 
@@ -43,6 +46,12 @@ public final class SubscriptionsModel {
 
     public func dismiss(_ s: SubscriptionSnapshot) async {
         try? await store.dismissSubscription(matchKey: s.id)
+        await load()
+    }
+
+    /// Undo a dismissal — the subscription re-surfaces as a candidate.
+    public func unDismiss(_ s: SubscriptionSnapshot) async {
+        try? await store.unDismissSubscription(matchKey: s.id)
         await load()
     }
 
