@@ -12,8 +12,6 @@ public struct RecentExpensesView: View {
     /// When the current Undo toast should auto-dismiss. A wall-clock deadline (not a fixed sleep) so
     /// leaving and returning to the Home tab can't reset the countdown.
     @State private var undoDeadline: Date?
-    /// dedupeKey of the recent row currently showing its swipe actions — only one at a time.
-    @State private var openRowID: String?
     /// How long the Undo toast stays before auto-dismissing.
     private let undoWindow: TimeInterval = 4
     private let onAdd: () -> Void
@@ -35,16 +33,29 @@ public struct RecentExpensesView: View {
 
     public var body: some View {
         NavigationStack {
-            ScrollView {
-                LazyVStack(spacing: GoldengoTheme.Spacing.m) {
-                    if model.loadFailed { errorBanner }
-                    monthCard
-                    if model.subscriptionsText() != nil { subscriptionsCard }
-                    if let s = model.summary, !s.topCategories.isEmpty { categoriesCard(s) }
-                    recentCard
+            // A real `List` (not ScrollView+LazyVStack) so the recent rows get native, scroll-safe
+            // `.swipeActions`. A custom per-row DragGesture fought the ScrollView's scrolling; the
+            // system's List owns scrolling and swipe together, so they never conflict. The dashboard
+            // cards ride on clear, separator-less rows to keep their existing card look.
+            List {
+                if model.loadFailed { errorBanner.goldengoCardRow() }
+                monthCard.goldengoCardRow()
+                if model.subscriptionsText() != nil { subscriptionsCard.goldengoCardRow() }
+                if let s = model.summary, !s.topCategories.isEmpty { categoriesCard(s).goldengoCardRow() }
+
+                GoldengoSectionLabel("Recent")
+                    .goldengoCardRow(top: GoldengoTheme.Spacing.m, bottom: GoldengoTheme.Spacing.xs)
+                if model.rows.isEmpty {
+                    ContentUnavailableView("No expenses yet", systemImage: "tray",
+                                           description: Text("Tap Add to log your first."))
+                        .frame(maxWidth: .infinity)
+                        .goldengoCardRow()
+                } else {
+                    ForEach(model.rows, id: \.dedupeKey) { r in recentRow(r) }
                 }
-                .padding(GoldengoTheme.Spacing.m)
             }
+            .listStyle(.plain)
+            .scrollContentBackground(.hidden)
             .background(Color.goldengoBackground.ignoresSafeArea())
             .navigationTitle("Goldengo")
             .toolbar {
@@ -87,6 +98,37 @@ public struct RecentExpensesView: View {
                 guard !Task.isCancelled else { return }
                 withAnimation(.snappy) { recentlyDeleted = nil }
             }
+        }
+    }
+
+    // MARK: - Recent row (native swipe)
+
+    /// One recent expense as a List row: full-row tap opens edit, native swipe reveals Edit (right) /
+    /// Delete (left). Delete soft-deletes immediately with an Undo toast — no confirmation dialog.
+    private func recentRow(_ r: ExpenseSnapshot) -> some View {
+        // A Button (not .onTapGesture) so VoiceOver gets an activatable, isButton row and the tap
+        // participates in the List's normal touch arbitration. The card is inside the label so the
+        // whole card is the tap target (full-row tap → edit).
+        Button { editing = r } label: {
+            expenseRow(r)
+                .goldengoCard(padding: GoldengoTheme.Spacing.m)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .listRowBackground(Color.clear)
+        .listRowSeparator(.hidden)
+        .listRowInsets(EdgeInsets(top: GoldengoTheme.Spacing.xs, leading: GoldengoTheme.Spacing.m,
+                                  bottom: GoldengoTheme.Spacing.xs, trailing: GoldengoTheme.Spacing.m))
+        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+            Button(role: .destructive) { deleteWithUndo(r) } label: {
+                Label("Delete", systemImage: "trash")
+            }
+        }
+        .swipeActions(edge: .leading, allowsFullSwipe: true) {
+            Button { editing = r } label: {
+                Label("Edit", systemImage: "pencil")
+            }
+            .tint(GoldengoTheme.accent)
         }
     }
 
@@ -223,34 +265,6 @@ public struct RecentExpensesView: View {
         .frame(height: 6)
     }
 
-    private var recentCard: some View {
-        VStack(alignment: .leading, spacing: GoldengoTheme.Spacing.s) {
-            GoldengoSectionLabel("Recent")
-            if model.rows.isEmpty {
-                ContentUnavailableView(
-                    "No expenses yet",
-                    systemImage: "tray",
-                    description: Text("Tap Add to log your first.")
-                )
-                .frame(maxWidth: .infinity)
-            } else {
-                ForEach(model.rows, id: \.dedupeKey) { r in
-                    if r.dedupeKey != model.rows.first?.dedupeKey { Divider() }
-                    SwipeableRow(
-                        id: r.dedupeKey,
-                        openRowID: $openRowID,
-                        leading: .edit { editing = r },
-                        trailing: .delete { deleteWithUndo(r) },
-                        onTap: { editing = r }
-                    ) {
-                        expenseRow(r)
-                    }
-                }
-            }
-        }
-        .goldengoCard(padding: GoldengoTheme.Spacing.l)
-    }
-
     private func expenseRow(_ r: ExpenseSnapshot) -> some View {
         HStack(spacing: GoldengoTheme.Spacing.m) {
             Image(systemName: GoldengoCategoryIcon.symbol(for: r.categoryName))
@@ -281,5 +295,18 @@ public struct RecentExpensesView: View {
             }
         }
         .padding(.vertical, 4)
+    }
+}
+
+private extension View {
+    /// A dashboard card on a clear, separator-less `List` row with consistent margins, so the List
+    /// provides native scrolling while the cards keep their custom look.
+    func goldengoCardRow(top: CGFloat = GoldengoTheme.Spacing.s,
+                         bottom: CGFloat = GoldengoTheme.Spacing.s) -> some View {
+        self
+            .listRowBackground(Color.clear)
+            .listRowSeparator(.hidden)
+            .listRowInsets(EdgeInsets(top: top, leading: GoldengoTheme.Spacing.m,
+                                      bottom: bottom, trailing: GoldengoTheme.Spacing.m))
     }
 }
