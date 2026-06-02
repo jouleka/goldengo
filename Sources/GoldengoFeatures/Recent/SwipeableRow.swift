@@ -1,0 +1,207 @@
+import SwiftUI
+import GoldengoDesignSystem
+
+/// One revealable swipe action (Edit / Delete) for `SwipeableRow`.
+struct SwipeAction {
+    let label: String
+    let systemImage: String
+    let tint: Color
+    let foreground: Color
+    let handler: () -> Void
+
+    /// Gold Edit action, revealed by swiping right. Mirrors the dashboard's Add button (gold on black).
+    static func edit(_ handler: @escaping () -> Void) -> SwipeAction {
+        SwipeAction(label: "Edit", systemImage: "pencil",
+                    tint: GoldengoTheme.accent, foreground: .black, handler: handler)
+    }
+
+    /// Red Delete action, revealed by swiping left.
+    static func delete(_ handler: @escaping () -> Void) -> SwipeAction {
+        SwipeAction(label: "Delete", systemImage: "trash",
+                    tint: GoldengoTheme.danger, foreground: .white, handler: handler)
+    }
+}
+
+/// A row that reveals a swipe action on each edge — swipe right for `leading` (Edit), left for
+/// `trailing` (Delete) — while keeping a full-row tap (`onTap`).
+///
+/// Built for the Home recent list, which is a `ScrollView { LazyVStack { … } }` rather than a `List`,
+/// so native `.swipeActions` is unavailable. The horizontal `DragGesture` is direction-locked to
+/// predominantly-horizontal movement and attached as a `simultaneousGesture` so it never steals the
+/// vertical scroll: a vertical drag is ignored here and handled by the ScrollView as usual. Release
+/// behaviour (snap closed / rest open / commit) is decided by the pure `SwipeResolver`.
+struct SwipeableRow<Content: View>: View {
+    private let id: String
+    @Binding private var openRowID: String?
+    private let leading: SwipeAction?
+    private let trailing: SwipeAction?
+    private let onTap: () -> Void
+    private let content: Content
+
+    /// - Parameters:
+    ///   - id: Stable identity for this row.
+    ///   - openRowID: Shared "which row is currently open" binding — opening one row closes any
+    ///     other, mirroring how a `List`'s native swipe actions behave.
+    init(id: String,
+         openRowID: Binding<String?>,
+         leading: SwipeAction? = nil,
+         trailing: SwipeAction? = nil,
+         onTap: @escaping () -> Void,
+         @ViewBuilder content: () -> Content) {
+        self.id = id
+        self._openRowID = openRowID
+        self.leading = leading
+        self.trailing = trailing
+        self.onTap = onTap
+        self.content = content()
+    }
+
+    /// Resting width of a revealed action panel.
+    private let actionWidth: CGFloat = 76
+    /// Spring used for every snap so opening, closing, and committing feel identical.
+    private let snap = Animation.spring(response: 0.32, dampingFraction: 0.82)
+
+    /// Live horizontal displacement of the content (positive = revealing Edit, negative = Delete).
+    @State private var offset: CGFloat = 0
+    /// The settled displacement the row rests at (0, +actionWidth, or -actionWidth).
+    @State private var restOffset: CGFloat = 0
+    /// Measured row width, used to scale the full-swipe commit distance to the device.
+    @State private var rowWidth: CGFloat = 0
+    /// Per-gesture axis decision: nil until decided, true = horizontal (ours), false = vertical (scroll).
+    @State private var horizontalDrag: Bool?
+
+    private var openThreshold: CGFloat { actionWidth * 0.55 }
+    private var commitThreshold: CGFloat { max(rowWidth * 0.5, actionWidth * 2.2) }
+
+    var body: some View {
+        ZStack {
+            actionsLayer
+            contentLayer
+        }
+        .background(
+            GeometryReader { proxy in
+                Color.clear.preference(key: RowWidthKey.self, value: proxy.size.width)
+            }
+        )
+        .onPreferenceChange(RowWidthKey.self) { rowWidth = $0 }
+        .clipped()
+        .onChange(of: openRowID) { _, newValue in
+            // Another row opened — close this one so only one is ever open.
+            if newValue != id, restOffset != 0 { settle(0) }
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(.isButton)
+        .accessibilityActions {
+            if let leading { Button(leading.label) { leading.handler() } }
+            if let trailing { Button(trailing.label) { trailing.handler() } }
+        }
+    }
+
+    // MARK: - Layers
+
+    private var actionsLayer: some View {
+        HStack(spacing: 0) {
+            if let leading { actionPanel(leading, edge: .leading, revealed: max(0, offset)) }
+            Spacer(minLength: 0)
+            if let trailing { actionPanel(trailing, edge: .trailing, revealed: max(0, -offset)) }
+        }
+    }
+
+    private var contentLayer: some View {
+        content
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color.goldengoSurface)
+            .contentShape(Rectangle())
+            .offset(x: offset)
+            .simultaneousGesture(dragGesture)
+            .onTapGesture { handleTap() }
+    }
+
+    /// A tint-filled panel whose label is pinned to the swiped-from edge and stays put while the
+    /// panel grows during a full swipe. Tapping it (when revealed) fires the action.
+    private func actionPanel(_ action: SwipeAction, edge: HorizontalEdge, revealed: CGFloat) -> some View {
+        let alignment: Alignment = edge == .leading ? .leading : .trailing
+        return ZStack(alignment: alignment) {
+            action.tint
+            VStack(spacing: 4) {
+                Image(systemName: action.systemImage).font(.subheadline.weight(.semibold))
+                Text(action.label).font(.caption2.weight(.semibold))
+            }
+            .foregroundStyle(action.foreground)
+            .frame(width: actionWidth)
+        }
+        .frame(width: revealed, alignment: alignment)
+        .frame(maxHeight: .infinity)
+        .clipped()
+        .contentShape(Rectangle())
+        .onTapGesture { trigger(action) }
+        .accessibilityHidden(true) // exposed via the row's accessibilityActions instead
+    }
+
+    // MARK: - Gesture
+
+    private var dragGesture: some Gesture {
+        DragGesture(minimumDistance: 12, coordinateSpace: .local)
+            .onChanged { value in
+                if horizontalDrag == nil {
+                    horizontalDrag = abs(value.translation.width) > abs(value.translation.height)
+                }
+                guard horizontalDrag == true else { return }
+                offset = resisted(restOffset + value.translation.width)
+            }
+            .onEnded { value in
+                defer { horizontalDrag = nil }
+                guard horizontalDrag == true else { return }
+                let total = restOffset + value.translation.width
+                let predicted = restOffset + value.predictedEndTranslation.width
+                switch SwipeResolver.outcome(translation: total, predictedEnd: predicted,
+                                             openThreshold: openThreshold, commitThreshold: commitThreshold,
+                                             hasLeading: leading != nil, hasTrailing: trailing != nil) {
+                case .closed:         settle(0)
+                case .openLeading:    settle(actionWidth)
+                case .openTrailing:   settle(-actionWidth)
+                case .commitLeading:  if let leading { trigger(leading) } else { settle(0) }
+                case .commitTrailing: if let trailing { trigger(trailing) } else { settle(0) }
+                }
+            }
+    }
+
+    // MARK: - State transitions
+
+    private func handleTap() {
+        if restOffset != 0 { settle(0) } else { onTap() }
+    }
+
+    private func trigger(_ action: SwipeAction) {
+        settle(0)
+        action.handler()
+    }
+
+    private func settle(_ to: CGFloat) {
+        restOffset = to
+        withAnimation(snap) { offset = to }
+        // Keep the shared open-row tracking in sync: claim it when opening, release it when closing.
+        // (When another row claimed it, `openRowID` already points elsewhere, so we don't clobber it.)
+        if to != 0 {
+            openRowID = id
+        } else if openRowID == id {
+            openRowID = nil
+        }
+    }
+
+    /// Follows the finger up to `actionWidth`, then adds resistance — including against swiping
+    /// toward an edge that has no action — so the row feels elastic instead of free-sliding.
+    private func resisted(_ x: CGFloat) -> CGFloat {
+        if (x > 0 && leading == nil) || (x < 0 && trailing == nil) { return x * 0.15 }
+        guard abs(x) > actionWidth else { return x }
+        let over = abs(x) - actionWidth
+        let damped = actionWidth + over * 0.55
+        return x < 0 ? -damped : damped
+    }
+}
+
+/// Reports a row's width up the view tree so the commit distance can scale with the device.
+private struct RowWidthKey: PreferenceKey {
+    static let defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = nextValue() }
+}

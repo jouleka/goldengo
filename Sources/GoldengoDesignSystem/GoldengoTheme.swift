@@ -7,6 +7,18 @@ public enum GoldengoTheme {
     /// Faint gold wash used behind icons and selected states.
     public static var accentSoft: Color { accent.opacity(0.16) }
 
+    /// Destructive-action red (e.g. swipe-to-delete). Uses the system red so it adapts to light/dark
+    /// and reads as the platform's standard "delete" tint.
+    public static var danger: Color {
+#if canImport(UIKit)
+        Color(uiColor: .systemRed)
+#elseif canImport(AppKit)
+        Color(nsColor: .systemRed)
+#else
+        .red
+#endif
+    }
+
     public enum Spacing {
         public static let xs: CGFloat = 4
         public static let s: CGFloat = 8

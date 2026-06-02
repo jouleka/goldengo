@@ -6,6 +6,9 @@ import GoldengoDesignSystem
 public struct RecentExpensesView: View {
     @State private var model: RecentExpensesModel
     @State private var editing: ExpenseSnapshot?
+    @State private var pendingDelete: ExpenseSnapshot?
+    /// dedupeKey of the recent row currently showing its swipe actions — only one at a time.
+    @State private var openRowID: String?
     private let onAdd: () -> Void
     private let onOpenImport: () -> Void
     private let onOpenSettings: () -> Void
@@ -62,6 +65,16 @@ public struct RecentExpensesView: View {
                         Task { await model.delete(snap) }
                     }
                 )
+            }
+            .confirmationDialog(
+                "Delete this expense?",
+                isPresented: Binding(get: { pendingDelete != nil },
+                                     set: { if !$0 { pendingDelete = nil } }),
+                titleVisibility: .visible,
+                presenting: pendingDelete
+            ) { snap in
+                Button("Delete", role: .destructive) { Task { await model.delete(snap) } }
+                Button("Cancel", role: .cancel) {}
             }
         }
     }
@@ -178,8 +191,15 @@ public struct RecentExpensesView: View {
             } else {
                 ForEach(model.rows, id: \.dedupeKey) { r in
                     if r.dedupeKey != model.rows.first?.dedupeKey { Divider() }
-                    Button { editing = r } label: { expenseRow(r) }
-                        .buttonStyle(.plain)
+                    SwipeableRow(
+                        id: r.dedupeKey,
+                        openRowID: $openRowID,
+                        leading: .edit { editing = r },
+                        trailing: .delete { pendingDelete = r },
+                        onTap: { editing = r }
+                    ) {
+                        expenseRow(r)
+                    }
                 }
             }
         }
