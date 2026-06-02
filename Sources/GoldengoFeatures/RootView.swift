@@ -8,7 +8,13 @@ public struct RootView: View {
     @State private var showSettings = false
     @State private var showImport = false
     @Environment(\.scenePhase) private var scenePhase
-    public init(store: IngestionStore) { self.store = store }
+    // Owned here (not inline in the tab) so Home can be refreshed when the user returns to it or
+    // finishes an import — otherwise newly added/imported expenses don't appear until a manual reload.
+    @State private var recentModel: RecentExpensesModel
+    public init(store: IngestionStore) {
+        self.store = store
+        _recentModel = State(initialValue: RecentExpensesModel(store: store))
+    }
 
     /// Settings (2) and Import (3) live behind the Home toolbar as sheets rather than permanent
     /// tabs, so deep links / widget / Siri targeting them open the matching sheet instead of a tab.
@@ -34,7 +40,7 @@ public struct RootView: View {
                 .tabItem { Label("Add", systemImage: "plus.circle.fill") }
                 .tag(0)
             RecentExpensesView(
-                model: RecentExpensesModel(store: store),
+                model: recentModel,
                 onAdd: { selectedTab = 0 },
                 onOpenImport: { showImport = true },
                 onOpenSettings: { showSettings = true },
@@ -48,8 +54,15 @@ public struct RootView: View {
         }
         .tint(GoldengoTheme.accent)
         .sheet(isPresented: $showSettings) { SettingsView() }
-        .sheet(isPresented: $showImport) { ImportView(model: ImportModel(store: store)) }
+        .sheet(isPresented: $showImport, onDismiss: { Task { await recentModel.load() } }) {
+            ImportView(model: ImportModel(store: store))
+        }
         .onAppear { applyPendingTab() }
+        .task { await recentModel.load() }   // cold-launch load (Home is the landing tab)
+        .onChange(of: selectedTab) { _, newTab in
+            // Returning to Home reloads so expenses added on the Add tab show up without a manual refresh.
+            if newTab == 1 { Task { await recentModel.load() } }
+        }
         .onChange(of: scenePhase) { _, newPhase in
             if newPhase == .active { applyPendingTab() }
         }

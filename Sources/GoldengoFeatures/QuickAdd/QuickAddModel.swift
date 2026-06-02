@@ -27,6 +27,10 @@ public final class QuickAddModel {
     public var canSave: Bool { amountDecimal > 0 }
     public var errorText: String?
 
+    /// Bumped once per successful save. The view observes it to flash an "Added" confirmation, since
+    /// after a save the fields reset and there's otherwise no cue that anything happened.
+    public private(set) var savedCount: Int = 0
+
     public func tap(_ digit: String) {
         guard amountString.count < 12 else { return }
         if digit == "." {
@@ -55,6 +59,7 @@ public final class QuickAddModel {
             try await store.logManual(amount: amountDecimal, currency: currency,
                                       merchant: merchant.isEmpty ? nil : merchant,
                                       categoryName: selectedCategory)
+            savedCount += 1
             reset()
 #if canImport(WidgetKit)
             WidgetCenter.shared.reloadAllTimelines()

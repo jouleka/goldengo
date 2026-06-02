@@ -18,6 +18,13 @@ public struct SubscriptionsView: View {
                         .listRowBackground(Color.clear)
                         .listRowSeparator(.hidden)
                 } else {
+                    Text("Auto-detected from your recurring charges — swipe a row to confirm or mark “Not a subscription.” Deleting a single expense won't remove one.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .listRowBackground(Color.clear)
+                        .listRowSeparator(.hidden)
+                        .listRowInsets(EdgeInsets(top: GoldengoTheme.Spacing.s, leading: GoldengoTheme.Spacing.m,
+                                                  bottom: GoldengoTheme.Spacing.s, trailing: GoldengoTheme.Spacing.m))
                     ForEach(model.rows) { s in
                         row(s)
                             .listRowBackground(Color.clear)

@@ -30,6 +30,18 @@ final class QuickAddModelTests: XCTestCase {
         XCTAssertEqual(m.amountString, "")          // resets for the next entry
     }
 
+    func test_save_incrementsSavedCount_onlyOnSuccess() async throws {
+        // The Add screen shows an "Added" confirmation by observing savedCount, so it must tick
+        // exactly once per successful save and never on a no-op (empty amount) save.
+        let m = try makeModel()
+        XCTAssertEqual(m.savedCount, 0)
+        await m.save()                       // nothing entered → no-op
+        XCTAssertEqual(m.savedCount, 0)
+        m.tap("2"); m.tap("5"); m.tap("0")
+        await m.save()                       // valid → confirmation should fire once
+        XCTAssertEqual(m.savedCount, 1)
+    }
+
     func test_keypad_rejectsSecondDecimalPoint() throws {
         let m = try makeModel(.eur)
         m.tap("1"); m.tap("."); m.tap("2"); m.tap("."); m.tap("3")

@@ -27,9 +27,11 @@ struct SwipeAction {
 ///
 /// Built for the Home recent list, which is a `ScrollView { LazyVStack { … } }` rather than a `List`,
 /// so native `.swipeActions` is unavailable. The horizontal `DragGesture` is direction-locked to
-/// predominantly-horizontal movement and attached as a `simultaneousGesture` so it never steals the
-/// vertical scroll: a vertical drag is ignored here and handled by the ScrollView as usual. Release
-/// behaviour (snap closed / rest open / commit) is decided by the pure `SwipeResolver`.
+/// predominantly-horizontal movement and attached as a low-priority `.gesture`, so SwiftUI's scroll
+/// arbitration keeps vertical scrolling intact: the ScrollView claims vertical drags and this gesture
+/// only engages on horizontal ones (using `.simultaneousGesture` here made the row compete with every
+/// scroll touch and could stall the list). Release behaviour (snap closed / rest open / commit) is
+/// decided by the pure `SwipeResolver`.
 struct SwipeableRow<Content: View>: View {
     private let id: String
     @Binding private var openRowID: String?
@@ -119,7 +121,7 @@ struct SwipeableRow<Content: View>: View {
             .background(Color.goldengoSurface)
             .contentShape(Rectangle())
             .offset(x: offset)
-            .simultaneousGesture(dragGesture)
+            .gesture(dragGesture)
             .onTapGesture { handleTap() }
     }
 

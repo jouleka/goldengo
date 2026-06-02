@@ -1,8 +1,12 @@
 import SwiftUI
 import GoldengoDesignSystem
+#if canImport(UIKit)
+import UIKit
+#endif
 
 public struct QuickAddView: View {
     @State private var model: QuickAddModel
+    @State private var showAdded = false
     public init(model: QuickAddModel) { _model = State(initialValue: model) }
 
     private let keys = ["1", "2", "3", "4", "5", "6", "7", "8", "9", ".", "0", "⌫"]
@@ -26,6 +30,29 @@ public struct QuickAddView: View {
         } message: {
             Text(model.errorText ?? "")
         }
+        .overlay(alignment: .top) {
+            if showAdded {
+                GoldengoToast("Added", icon: "checkmark.circle.fill", iconTint: GoldengoTheme.accent)
+                    .padding(.top, GoldengoTheme.Spacing.m)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+            }
+        }
+        // Fire only on a *new* save (not on returning to this tab), so the confirmation isn't replayed.
+        .onChange(of: model.savedCount) { _, newCount in
+            guard newCount > 0 else { return }
+            successHaptic()
+            withAnimation(.snappy) { showAdded = true }
+            Task {
+                try? await Task.sleep(for: .seconds(1.4))
+                if model.savedCount == newCount { withAnimation(.snappy) { showAdded = false } }
+            }
+        }
+    }
+
+    private func successHaptic() {
+#if canImport(UIKit)
+        UINotificationFeedbackGenerator().notificationOccurred(.success)
+#endif
     }
 
     // MARK: - Amount

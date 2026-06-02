@@ -4,12 +4,18 @@ import GoldengoData
 import GoldengoDesignSystem
 
 public struct RecentExpensesView: View {
-    @State private var model: RecentExpensesModel
+    /// Owned by `RootView` (so it can refresh on tab-return / import); observed here via @Observable.
+    private let model: RecentExpensesModel
     @State private var editing: ExpenseSnapshot?
     /// The just-deleted expense, surfaced in the Undo toast until it auto-dismisses or is undone.
     @State private var recentlyDeleted: ExpenseSnapshot?
+    /// When the current Undo toast should auto-dismiss. A wall-clock deadline (not a fixed sleep) so
+    /// leaving and returning to the Home tab can't reset the countdown.
+    @State private var undoDeadline: Date?
     /// dedupeKey of the recent row currently showing its swipe actions — only one at a time.
     @State private var openRowID: String?
+    /// How long the Undo toast stays before auto-dismissing.
+    private let undoWindow: TimeInterval = 4
     private let onAdd: () -> Void
     private let onOpenImport: () -> Void
     private let onOpenSettings: () -> Void
@@ -20,7 +26,7 @@ public struct RecentExpensesView: View {
                 onOpenImport: @escaping () -> Void = {},
                 onOpenSettings: @escaping () -> Void = {},
                 onOpenSubscriptions: @escaping () -> Void = {}) {
-        _model = State(initialValue: model)
+        self.model = model
         self.onAdd = onAdd
         self.onOpenImport = onOpenImport
         self.onOpenSettings = onOpenSettings
@@ -54,7 +60,6 @@ public struct RecentExpensesView: View {
                 }
             }
             .refreshable { await model.load() }
-            .onAppear { Task { await model.load() } }
             .sheet(item: $editing) { snap in
                 EditExpenseView(
                     snapshot: snap,
@@ -71,11 +76,14 @@ public struct RecentExpensesView: View {
                         .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
             }
-            // Auto-dismiss the toast ~4s after the latest delete. Keying the task on the deleted
-            // row restarts the timer on a new delete and cancels it the moment Undo clears it.
+            // Auto-dismiss the toast on a wall-clock deadline so leaving and returning to the Home
+            // tab doesn't restart the countdown. Keying on the deleted row restarts it for a new
+            // delete and cancels it the moment Undo clears recentlyDeleted.
             .task(id: recentlyDeleted?.dedupeKey) {
-                guard recentlyDeleted != nil else { return }
-                try? await Task.sleep(for: .seconds(4))
+                guard recentlyDeleted != nil, let deadline = undoDeadline else { return }
+                let remaining = deadline.timeIntervalSinceNow
+                guard remaining > 0 else { recentlyDeleted = nil; return } // already elapsed off-screen
+                try? await Task.sleep(for: .seconds(remaining))
                 guard !Task.isCancelled else { return }
                 withAnimation(.snappy) { recentlyDeleted = nil }
             }
@@ -91,6 +99,7 @@ public struct RecentExpensesView: View {
     private func deleteWithUndo(_ snapshot: ExpenseSnapshot) {
         Task {
             await model.delete(snapshot)
+            undoDeadline = Date().addingTimeInterval(undoWindow)
             withAnimation(.snappy) { recentlyDeleted = snapshot }
         }
     }
@@ -102,29 +111,17 @@ public struct RecentExpensesView: View {
         }
     }
 
-    /// Slim, on-brand toast that floats above the tab bar after a delete.
+    /// Slim, on-brand toast that floats clear of the tab bar after a delete.
     private func undoToast(_ snapshot: ExpenseSnapshot) -> some View {
-        HStack(spacing: GoldengoTheme.Spacing.m) {
-            Image(systemName: "trash")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-            Text("\(snapshot.merchantName ?? snapshot.categoryName ?? "Expense") deleted")
-                .font(.subheadline.weight(.medium))
-                .lineLimit(1)
-            Spacer(minLength: GoldengoTheme.Spacing.m)
-            Button("Undo") { undoDelete(snapshot) }
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(GoldengoTheme.accent)
-        }
-        .padding(.horizontal, GoldengoTheme.Spacing.m)
-        .padding(.vertical, GoldengoTheme.Spacing.s + 2)
-        .background(
-            RoundedRectangle(cornerRadius: GoldengoTheme.Radius.control, style: .continuous)
-                .fill(Color.goldengoSurface)
-                .shadow(color: .black.opacity(0.18), radius: 14, y: 6)
+        GoldengoToast(
+            "\(snapshot.merchantName ?? snapshot.categoryName ?? "Expense") deleted",
+            icon: "trash.fill",
+            iconTint: GoldengoTheme.danger,
+            actionTitle: "Undo",
+            action: { undoDelete(snapshot) }
         )
-        .padding(.horizontal, GoldengoTheme.Spacing.m)
-        .padding(.bottom, GoldengoTheme.Spacing.s)
+        .padding(.horizontal, GoldengoTheme.Spacing.l)
+        .padding(.bottom, GoldengoTheme.Spacing.m)
     }
 
     // MARK: - Cards
