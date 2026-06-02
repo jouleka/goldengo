@@ -6,7 +6,8 @@ import GoldengoDesignSystem
 public struct RecentExpensesView: View {
     @State private var model: RecentExpensesModel
     @State private var editing: ExpenseSnapshot?
-    @State private var pendingDelete: ExpenseSnapshot?
+    /// The just-deleted expense, surfaced in the Undo toast until it auto-dismisses or is undone.
+    @State private var recentlyDeleted: ExpenseSnapshot?
     /// dedupeKey of the recent row currently showing its swipe actions — only one at a time.
     @State private var openRowID: String?
     private let onAdd: () -> Void
@@ -61,22 +62,69 @@ public struct RecentExpensesView: View {
                     onSave: { amt, m, c, d in
                         Task { await model.update(snap, amount: amt, merchant: m, categoryName: c, date: d) }
                     },
-                    onDelete: {
-                        Task { await model.delete(snap) }
-                    }
+                    onDelete: { deleteWithUndo(snap) }
                 )
             }
-            .confirmationDialog(
-                "Delete this expense?",
-                isPresented: Binding(get: { pendingDelete != nil },
-                                     set: { if !$0 { pendingDelete = nil } }),
-                titleVisibility: .visible,
-                presenting: pendingDelete
-            ) { snap in
-                Button("Delete", role: .destructive) { Task { await model.delete(snap) } }
-                Button("Cancel", role: .cancel) {}
+            .overlay(alignment: .bottom) {
+                if let snap = recentlyDeleted {
+                    undoToast(snap)
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                }
+            }
+            // Auto-dismiss the toast ~4s after the latest delete. Keying the task on the deleted
+            // row restarts the timer on a new delete and cancels it the moment Undo clears it.
+            .task(id: recentlyDeleted?.dedupeKey) {
+                guard recentlyDeleted != nil else { return }
+                try? await Task.sleep(for: .seconds(4))
+                guard !Task.isCancelled else { return }
+                withAnimation(.snappy) { recentlyDeleted = nil }
             }
         }
+    }
+
+    // MARK: - Delete + Undo
+
+    /// Soft-delete immediately (the row collapses away), then surface the Undo toast. No modal —
+    /// the delete is reversible, which is friendlier than a pre-confirmation dialog. The toast holds
+    /// a single most-recent deletion: a second delete replaces it (the earlier row stays deleted,
+    /// re-addable) — standard "latest action" undo, safe because the soft-delete loses nothing.
+    private func deleteWithUndo(_ snapshot: ExpenseSnapshot) {
+        Task {
+            await model.delete(snapshot)
+            withAnimation(.snappy) { recentlyDeleted = snapshot }
+        }
+    }
+
+    private func undoDelete(_ snapshot: ExpenseSnapshot) {
+        Task {
+            await model.restore(snapshot)
+            withAnimation(.snappy) { recentlyDeleted = nil }
+        }
+    }
+
+    /// Slim, on-brand toast that floats above the tab bar after a delete.
+    private func undoToast(_ snapshot: ExpenseSnapshot) -> some View {
+        HStack(spacing: GoldengoTheme.Spacing.m) {
+            Image(systemName: "trash")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+            Text("\(snapshot.merchantName ?? snapshot.categoryName ?? "Expense") deleted")
+                .font(.subheadline.weight(.medium))
+                .lineLimit(1)
+            Spacer(minLength: GoldengoTheme.Spacing.m)
+            Button("Undo") { undoDelete(snapshot) }
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(GoldengoTheme.accent)
+        }
+        .padding(.horizontal, GoldengoTheme.Spacing.m)
+        .padding(.vertical, GoldengoTheme.Spacing.s + 2)
+        .background(
+            RoundedRectangle(cornerRadius: GoldengoTheme.Radius.control, style: .continuous)
+                .fill(Color.goldengoSurface)
+                .shadow(color: .black.opacity(0.18), radius: 14, y: 6)
+        )
+        .padding(.horizontal, GoldengoTheme.Spacing.m)
+        .padding(.bottom, GoldengoTheme.Spacing.s)
     }
 
     // MARK: - Cards
@@ -195,7 +243,7 @@ public struct RecentExpensesView: View {
                         id: r.dedupeKey,
                         openRowID: $openRowID,
                         leading: .edit { editing = r },
-                        trailing: .delete { pendingDelete = r },
+                        trailing: .delete { deleteWithUndo(r) },
                         onTap: { editing = r }
                     ) {
                         expenseRow(r)
@@ -204,6 +252,7 @@ public struct RecentExpensesView: View {
             }
         }
         .goldengoCard(padding: GoldengoTheme.Spacing.l)
+        .animation(.snappy, value: model.rows)
     }
 
     private func expenseRow(_ r: ExpenseSnapshot) -> some View {

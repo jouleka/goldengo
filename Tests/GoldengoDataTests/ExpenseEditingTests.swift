@@ -22,6 +22,34 @@ final class ExpenseEditingTests: XCTestCase {
         XCTAssertNil(snap)   // archived rows aren't returned
     }
 
+    func test_restoreExpense_unarchivesADeletedExpense() async throws {
+        // Backs the Undo toast: a swipe-deleted expense must come back exactly as it was.
+        let store = try makeStore()
+        let key = try await store.logManual(amount: 250, currency: .all, merchant: "Coffee", categoryName: "Coffee")
+        try await store.deleteExpense(dedupeKey: key)
+        let afterDelete = try await store.expenseCount()
+        XCTAssertEqual(afterDelete, 0)
+
+        try await store.restoreExpense(dedupeKey: key)
+
+        let afterRestore = try await store.expenseCount()
+        XCTAssertEqual(afterRestore, 1)
+        let snap = try await store.snapshot(dedupeKey: key)
+        XCTAssertEqual(snap?.amount, 250)
+        XCTAssertEqual(snap?.merchantName, "Coffee")
+        XCTAssertEqual(snap?.categoryName, "Coffee")
+    }
+
+    func test_restoreExpense_whenNothingArchived_isNoOp() async throws {
+        // Undo of a row that was never deleted (or an unknown key) must not crash or resurrect anything.
+        let store = try makeStore()
+        let key = try await store.logManual(amount: 250, currency: .all, merchant: "Coffee", categoryName: "Coffee")
+        try await store.restoreExpense(dedupeKey: key)              // nothing archived for this key
+        try await store.restoreExpense(dedupeKey: "does-not-exist") // unknown key
+        let count = try await store.expenseCount()
+        XCTAssertEqual(count, 1)                                    // still exactly the one active row
+    }
+
     func test_updateExpense_changesAllFields() async throws {
         let store = try makeStore()
         let key = try await store.logManual(amount: 250, currency: .all, merchant: "Coffee", categoryName: "Coffee")

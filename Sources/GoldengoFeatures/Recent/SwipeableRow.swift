@@ -56,22 +56,27 @@ struct SwipeableRow<Content: View>: View {
         self.content = content()
     }
 
-    /// Resting width of a revealed action panel.
-    private let actionWidth: CGFloat = 76
+    /// Width of a revealed action button (the rounded pill behind the row).
+    private let buttonWidth: CGFloat = 60
+    /// Margin floating each action button in from the row's edges (top/bottom/outer/inner).
+    private let actionInset: CGFloat = GoldengoTheme.Spacing.s
     /// Spring used for every snap so opening, closing, and committing feel identical.
     private let snap = Animation.spring(response: 0.32, dampingFraction: 0.82)
 
+    /// How far the content rests open to fully reveal a button (button + its inner & outer margins).
+    private var restOpen: CGFloat { buttonWidth + 2 * actionInset }
+
     /// Live horizontal displacement of the content (positive = revealing Edit, negative = Delete).
     @State private var offset: CGFloat = 0
-    /// The settled displacement the row rests at (0, +actionWidth, or -actionWidth).
+    /// The settled displacement the row rests at (0, +restOpen, or -restOpen).
     @State private var restOffset: CGFloat = 0
     /// Measured row width, used to scale the full-swipe commit distance to the device.
     @State private var rowWidth: CGFloat = 0
     /// Per-gesture axis decision: nil until decided, true = horizontal (ours), false = vertical (scroll).
     @State private var horizontalDrag: Bool?
 
-    private var openThreshold: CGFloat { actionWidth * 0.55 }
-    private var commitThreshold: CGFloat { max(rowWidth * 0.5, actionWidth * 2.2) }
+    private var openThreshold: CGFloat { restOpen * 0.55 }
+    private var commitThreshold: CGFloat { max(rowWidth * 0.5, restOpen * 2.2) }
 
     var body: some View {
         ZStack {
@@ -101,10 +106,11 @@ struct SwipeableRow<Content: View>: View {
 
     private var actionsLayer: some View {
         HStack(spacing: 0) {
-            if let leading { actionPanel(leading, edge: .leading, revealed: max(0, offset)) }
+            if let leading { actionButton(leading) }
             Spacer(minLength: 0)
-            if let trailing { actionPanel(trailing, edge: .trailing, revealed: max(0, -offset)) }
+            if let trailing { actionButton(trailing) }
         }
+        .padding(actionInset)
     }
 
     private var contentLayer: some View {
@@ -117,24 +123,20 @@ struct SwipeableRow<Content: View>: View {
             .onTapGesture { handleTap() }
     }
 
-    /// A tint-filled panel whose label is pinned to the swiped-from edge and stays put while the
-    /// panel grows during a full swipe. Tapping it (when revealed) fires the action.
-    private func actionPanel(_ action: SwipeAction, edge: HorizontalEdge, revealed: CGFloat) -> some View {
-        let alignment: Alignment = edge == .leading ? .leading : .trailing
-        return ZStack(alignment: alignment) {
-            action.tint
+    /// A rounded, floating action button revealed as the content slides off it. Tapping it (when
+    /// revealed) fires the action.
+    private func actionButton(_ action: SwipeAction) -> some View {
+        Button { trigger(action) } label: {
             VStack(spacing: 4) {
                 Image(systemName: action.systemImage).font(.subheadline.weight(.semibold))
                 Text(action.label).font(.caption2.weight(.semibold))
             }
             .foregroundStyle(action.foreground)
-            .frame(width: actionWidth)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(action.tint, in: RoundedRectangle(cornerRadius: GoldengoTheme.Radius.control, style: .continuous))
         }
-        .frame(width: revealed, alignment: alignment)
-        .frame(maxHeight: .infinity)
-        .clipped()
-        .contentShape(Rectangle())
-        .onTapGesture { trigger(action) }
+        .buttonStyle(.plain)
+        .frame(width: buttonWidth)
         .accessibilityHidden(true) // exposed via the row's accessibilityActions instead
     }
 
@@ -158,8 +160,8 @@ struct SwipeableRow<Content: View>: View {
                                              openThreshold: openThreshold, commitThreshold: commitThreshold,
                                              hasLeading: leading != nil, hasTrailing: trailing != nil) {
                 case .closed:         settle(0)
-                case .openLeading:    settle(actionWidth)
-                case .openTrailing:   settle(-actionWidth)
+                case .openLeading:    settle(restOpen)
+                case .openTrailing:   settle(-restOpen)
                 case .commitLeading:  if let leading { trigger(leading) } else { settle(0) }
                 case .commitTrailing: if let trailing { trigger(trailing) } else { settle(0) }
                 }
@@ -189,13 +191,13 @@ struct SwipeableRow<Content: View>: View {
         }
     }
 
-    /// Follows the finger up to `actionWidth`, then adds resistance — including against swiping
+    /// Follows the finger up to `restOpen`, then adds resistance — including against swiping
     /// toward an edge that has no action — so the row feels elastic instead of free-sliding.
     private func resisted(_ x: CGFloat) -> CGFloat {
         if (x > 0 && leading == nil) || (x < 0 && trailing == nil) { return x * 0.15 }
-        guard abs(x) > actionWidth else { return x }
-        let over = abs(x) - actionWidth
-        let damped = actionWidth + over * 0.55
+        guard abs(x) > restOpen else { return x }
+        let over = abs(x) - restOpen
+        let damped = restOpen + over * 0.55
         return x < 0 ? -damped : damped
     }
 }

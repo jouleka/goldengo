@@ -39,6 +39,12 @@ public final class RecentExpensesModel {
         await load()
     }
 
+    /// Undo a soft-delete, then reload so the row reappears (backs the "Undo" toast).
+    public func restore(_ snapshot: ExpenseSnapshot) async {
+        try? await reader.restoreExpense(dedupeKey: snapshot.dedupeKey)
+        await load()
+    }
+
     /// Apply an edit to an expense, then reload so the change is reflected.
     public func update(_ snapshot: ExpenseSnapshot, amount: Decimal, merchant: String?,
                        categoryName: String?, date: Date) async {
