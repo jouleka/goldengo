@@ -1,3 +1,7 @@
+# Local-only agent instructions — never commit
+CLAUDE.md
+.claude/
+
 # Brainstorm/visual-companion artifacts
 .superpowers/
 
