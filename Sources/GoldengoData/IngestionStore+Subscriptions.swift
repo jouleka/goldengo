@@ -81,12 +81,44 @@ extension IngestionStore {
                 byKey[c.id] = rec
             }
         }
+
+        // Reconcile records that are no longer detected (e.g. the user deleted charges so the series
+        // fell below the cadence bar) so they don't linger with a stale count: drop unconfirmed
+        // guesses; keep confirmed ones but correct their charge count to reality. Dismissed records
+        // are left untouched.
+        let detectedIDs = Set(detected.map(\.id))
+        for rec in byKey.values where !rec.isArchived && !rec.isDismissed && !detectedIDs.contains(rec.matchKey) {
+            if rec.isConfirmed {
+                let count = try currentChargeCount(normalizedMerchant: rec.normalizedMerchant,
+                                                   currencyCode: rec.currencyCode)
+                if count == 0 {
+                    rec.isArchived = true          // confirmed but no charges left → nothing to track
+                } else {
+                    rec.occurrenceCount = count     // keep, count corrected to reality
+                }
+            } else {
+                rec.isArchived = true               // drop an unconfirmed guess that no longer repeats
+            }
+            rec.updatedAt = now
+        }
         try modelContext.save()
 
-        // Return the surfaced count so it matches exactly what `subscriptionCandidates()` will show
-        // — avoids a count/list divergence for callers (e.g. the UI) when a previously-detected
-        // candidate lingers (stale-candidate archival is out of scope; see plan Known limitations).
+        // Return the surfaced count so it matches exactly what `subscriptionCandidates()` will show.
         return try subscriptionCandidates().count
+    }
+
+    /// Count of current (non-archived) charge *days* for a merchant+currency — used to correct a
+    /// confirmed subscription's displayed count after some charges are deleted. Counts distinct UTC
+    /// days (not raw rows) to match `SubscriptionDetector`'s same-day collapse, so "Charged N times"
+    /// means the same thing whether the series is currently detected or reconciled here.
+    private func currentChargeCount(normalizedMerchant: String, currencyCode: String) throws -> Int {
+        let expenseRaw = TransactionKind.expense.rawValue
+        let recs = try modelContext.fetch(FetchDescriptor<ExpenseRecord>(
+            predicate: #Predicate { $0.isArchived == false && $0.kindRaw == expenseRaw && $0.currencyCode == currencyCode }))
+        var cal = Calendar(identifier: .gregorian); cal.timeZone = TimeZone(identifier: "UTC")!
+        let days = Set(recs.filter { MerchantNormalizer.normalize($0.merchantName) == normalizedMerchant }
+                           .map { cal.startOfDay(for: $0.date) })
+        return days.count
     }
 
     /// Candidates to show the user: currently-detected, not dismissed, not archived, most confident first.

@@ -76,6 +76,83 @@ final class SubscriptionStoreTests: XCTestCase {
         XCTAssertTrue(dismissedAfterRestore.isEmpty)                      // no longer dismissed
     }
 
+    func test_unconfirmedCandidate_archivedWhenItNoLongerRecurs() async throws {
+        // Delete charges so the pattern falls below the detection bar: an UNCONFIRMED guess should
+        // disappear (not linger with a stale "3× seen").
+        let store = try makeStore()
+        try await seedMonthlyNetflix(store)
+        _ = try await store.refreshSubscriptions(now: day(2026, 3, 10))
+        let before = try await store.subscriptionCandidates().count
+        XCTAssertEqual(before, 1)
+
+        let netflix = try await store.recentExpenses(limit: 50).filter { $0.merchantName == "Netflix" }
+        try await store.deleteExpense(dedupeKey: netflix[0].dedupeKey)
+        try await store.deleteExpense(dedupeKey: netflix[1].dedupeKey)   // 1 charge remains
+        _ = try await store.refreshSubscriptions(now: day(2026, 3, 11))
+
+        let after = try await store.subscriptionCandidates()
+        XCTAssertTrue(after.isEmpty)   // guess dropped
+    }
+
+    func test_confirmedSubscription_keptButCountCorrected_whenChargesDeleted() async throws {
+        // A CONFIRMED subscription stays even if it dips below the detection bar, but its count must
+        // reflect the actual remaining charges (no stale "3× seen").
+        let store = try makeStore()
+        try await seedMonthlyNetflix(store)
+        _ = try await store.refreshSubscriptions(now: day(2026, 3, 10))
+        let key = try await store.subscriptionCandidates()[0].id
+        try await store.confirmSubscription(matchKey: key)
+
+        let netflix = try await store.recentExpenses(limit: 50).filter { $0.merchantName == "Netflix" }
+        try await store.deleteExpense(dedupeKey: netflix[0].dedupeKey)
+        try await store.deleteExpense(dedupeKey: netflix[1].dedupeKey)   // 1 charge remains
+        _ = try await store.refreshSubscriptions(now: day(2026, 3, 11))
+
+        let sub = try await store.subscriptionCandidates().first { $0.id == key }
+        XCTAssertEqual(sub?.isConfirmed, true)        // confirmed → kept
+        XCTAssertEqual(sub?.occurrenceCount, 1)       // count corrected to reality
+    }
+
+    func test_confirmedSubscription_archivedWhenAllChargesDeleted() async throws {
+        // A confirmed sub with zero remaining charges has nothing to track — it should drop off
+        // rather than linger in "Tracked" as a dead "No recent charges" row.
+        let store = try makeStore()
+        try await seedMonthlyNetflix(store)
+        _ = try await store.refreshSubscriptions(now: day(2026, 3, 10))
+        let key = try await store.subscriptionCandidates()[0].id
+        try await store.confirmSubscription(matchKey: key)
+
+        let netflix = try await store.recentExpenses(limit: 50).filter { $0.merchantName == "Netflix" }
+        for c in netflix { try await store.deleteExpense(dedupeKey: c.dedupeKey) }
+        _ = try await store.refreshSubscriptions(now: day(2026, 3, 11))
+
+        let cands = try await store.subscriptionCandidates()
+        XCTAssertFalse(cands.contains { $0.id == key })
+    }
+
+    func test_confirmedSubscription_chargeCountCollapsesSameDay() async throws {
+        // "Charged N times" must count distinct days (matching the detector's same-day collapse),
+        // not raw charge rows — so the number means the same thing whether detected or reconciled.
+        let store = try makeStore()
+        try await seedMonthlyNetflix(store)                       // Jan5, Feb5, Mar5 @ 9.99
+        _ = try await store.ingest(                                // extra same-day charge (Jan 5),
+            NormalizedTransaction(externalID: "nfDup", amount: Decimal(5), currency: .all,
+                                  date: day(2026, 1, 5), rawMerchant: "Netflix",
+                                  kind: .expense, accountRef: "card2"), source: .imported)  // distinct key
+        _ = try await store.refreshSubscriptions(now: day(2026, 3, 10))
+        let key = try await store.subscriptionCandidates()[0].id
+        try await store.confirmSubscription(matchKey: key)
+
+        // Delete March → Jan (2 raw charges, 1 day) + Feb (1) remain = 2 distinct days, below the bar.
+        let netflix = try await store.recentExpenses(limit: 50).filter { $0.merchantName == "Netflix" }
+        let march = try XCTUnwrap(netflix.first { cal.dateComponents([.month], from: $0.date).month == 3 })
+        try await store.deleteExpense(dedupeKey: march.dedupeKey)
+        _ = try await store.refreshSubscriptions(now: day(2026, 3, 11))
+
+        let sub = try await store.subscriptionCandidates().first { $0.id == key }
+        XCTAssertEqual(sub?.occurrenceCount, 2)   // 2 distinct days, not 3 raw charges
+    }
+
     func test_refreshIsIdempotent_noDuplicateRecords() async throws {
         let store = try makeStore()
         try await seedMonthlyNetflix(store)
