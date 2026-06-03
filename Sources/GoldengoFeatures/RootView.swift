@@ -1,6 +1,7 @@
 import SwiftUI
 import GoldengoData
 import GoldengoDesignSystem
+import GoldengoCore
 
 public struct RootView: View {
     private let store: IngestionStore
@@ -12,10 +13,13 @@ public struct RootView: View {
     // finishes an import — otherwise newly added/imported expenses don't appear until a manual reload.
     @State private var recentModel: RecentExpensesModel
     @State private var subsModel: SubscriptionsModel
+    @State private var quickAddModel: QuickAddModel
     public init(store: IngestionStore) {
         self.store = store
-        _recentModel = State(initialValue: RecentExpensesModel(store: store))
+        let preferred = SharedSummary().readPreferredCurrency()
+        _recentModel = State(initialValue: RecentExpensesModel(store: store, currency: preferred))
         _subsModel = State(initialValue: SubscriptionsModel(store: store))
+        _quickAddModel = State(initialValue: QuickAddModel(store: store, currency: preferred))
     }
 
     /// Settings (2) and Import (3) live behind the Home toolbar as sheets rather than permanent
@@ -38,7 +42,7 @@ public struct RootView: View {
 
     public var body: some View {
         TabView(selection: $selectedTab) {
-            QuickAddView(model: QuickAddModel(store: store))
+            QuickAddView(model: quickAddModel)
                 .tabItem { Label("Add", systemImage: "plus.circle.fill") }
                 .tag(0)
             RecentExpensesView(
@@ -55,7 +59,15 @@ public struct RootView: View {
                 .tag(4)
         }
         .tint(GoldengoTheme.accent)
-        .sheet(isPresented: $showSettings) { SettingsView() }
+        .sheet(isPresented: $showSettings, onDismiss: {
+            // Adopt a changed preferred currency: update the new-expense default + dashboard display
+            // currency, and reload Home only when it actually changed.
+            let preferred = SharedSummary().readPreferredCurrency()
+            let changed = recentModel.currency != preferred
+            quickAddModel.currency = preferred
+            recentModel.currency = preferred
+            if changed { Task { await recentModel.load() } }
+        }) { SettingsView() }
         .sheet(isPresented: $showImport, onDismiss: {
             // A statement import adds expenses AND may form new recurring patterns — refresh both.
             Task { await recentModel.load() }
