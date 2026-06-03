@@ -1,0 +1,22 @@
+import Foundation
+
+/// A real captured snapshot of the ExchangeRate-API response (open.er-api.com/v6/latest/USD),
+/// compiled in as the last-resort offline fallback. Captured 2026-06-03. Its old `asOf` makes it
+/// read as stale; the live cache is always preferred over it. Compiled-in (not a Bundle resource)
+/// so it can never fail to load. The exact values are validated by `SeedRatesTests`.
+public enum SeedRates {
+    /// Verbatim capture (raw string literal → quotes/slashes are literal, no interpolation).
+    static let json = #"""
+{"result":"success","provider":"https://www.exchangerate-api.com","documentation":"https://www.exchangerate-api.com/docs/free","terms_of_use":"https://www.exchangerate-api.com/terms","time_last_update_unix":1780444951,"time_last_update_utc":"Wed, 03 Jun 2026 00:02:31 +0000","time_next_update_unix":1780532221,"time_next_update_utc":"Thu, 04 Jun 2026 00:17:01 +0000","time_eol_unix":0,"base_code":"USD","rates":{"USD":1,"AED":3.6725,"AFN":63.202604,"ALL":81.946489,"AMD":368.500321,"ANG":1.79,"AOA":927.638138,"ARS":1426.9788,"AUD":1.393663,"AWG":1.79,"AZN":1.699316,"BAM":1.681689,"BBD":2,"BDT":122.785751,"BGN":1.681689,"BHD":0.376,"BIF":2985.08079,"BMD":1,"BND":1.279427,"BOB":6.91591,"BRL":5.018906,"BSD":1,"BTN":95.340656,"BWP":13.751608,"BYN":2.757292,"BZD":2,"CAD":1.383781,"CDF":2259.282327,"CHF":0.787339,"CLF":0.022579,"CLP":892.459879,"CNH":6.763669,"CNY":6.778569,"COP":3563.974375,"CRC":455.135204,"CUP":24,"CVE":94.809595,"CZK":20.827754,"DJF":177.721,"DKK":6.414983,"DOP":58.388662,"DZD":132.921376,"EGP":51.936717,"ERN":15,"ETB":157.414315,"EUR":0.859836,"FJD":2.196551,"FKP":0.74278,"FOK":6.415012,"GBP":0.742781,"GEL":2.66312,"GGP":0.74278,"GHS":11.784028,"GIP":0.74278,"GMD":74.205373,"GNF":8766.584009,"GTQ":7.623028,"GYD":209.131959,"HKD":7.837645,"HNL":26.59656,"HRK":6.478419,"HTG":130.732434,"HUF":305.156585,"IDR":17822.850359,"ILS":2.843427,"IMP":0.74278,"INR":95.341177,"IQD":1311.075472,"IRR":1236451.732697,"ISK":123.24942,"JEP":0.74278,"JMD":157.751321,"JOD":0.709,"JPY":159.874651,"KES":129.413809,"KGS":87.469833,"KHR":4036.534457,"KID":1.393662,"KMF":423.010592,"KRW":1516.867785,"KWD":0.308685,"KYD":0.833333,"KZT":489.435297,"LAK":21945.849277,"LBP":89500,"LKR":331.567328,"LRD":182.552933,"LSL":16.240083,"LYD":6.351618,"MAD":9.184722,"MDL":17.266133,"MGA":4196.538897,"MKD":52.973618,"MMK":2099.318942,"MNT":3604.975769,"MOP":8.072774,"MRU":40.076306,"MUR":47.361175,"MVR":15.434996,"MWK":1743.311978,"MXN":17.303097,"MYR":3.965015,"MZN":63.576844,"NAD":16.240083,"NGN":1364.880819,"NIO":36.751098,"NOK":9.280651,"NPR":152.54505,"NZD":1.687836,"OMR":0.384497,"PAB":1,"PEN":3.40453,"PGK":4.361224,"PHP":61.66813,"PKR":278.7907,"PLN":3.639732,"PYG":6019.31364,"QAR":3.64,"RON":4.514493,"RSD":100.842926,"RUB":72.354693,"RWF":1467.166,"SAR":3.75,"SBD":7.91211,"SCR":14.763721,"SDG":449.421056,"SEK":9.311027,"SGD":1.279427,"SHP":0.74278,"SLE":24.581085,"SLL":24581.085213,"SOS":571.316598,"SRD":37.209165,"SSP":4700.966924,"STN":21.065933,"SYP":112.267227,"SZL":16.240083,"THB":32.629625,"TJS":9.230504,"TMT":3.499992,"TND":2.90914,"TOP":2.362953,"TRY":45.960334,"TTD":6.751141,"TVD":1.393662,"TWD":31.461999,"TZS":2619.311982,"UAH":44.337494,"UGX":3745.777885,"UYU":40.178084,"UZS":11908.110194,"VES":558.6436,"VND":26173.871262,"VUV":118.04925,"WST":2.67882,"XAF":564.014123,"XCD":2.7,"XCG":1.79,"XDR":0.730418,"XOF":564.014123,"XPF":102.605709,"YER":238.482583,"ZAR":16.240109,"ZMW":18.070099,"ZWG":26.8893,"ZWL":26.8893}}
+"""#
+
+    /// Decoded once. A guaranteed-safe minimal fallback covers the impossible decode-failure case
+    /// (the JSON is a build-time constant the test pins), so this never throws at runtime.
+    public static let table: RateTable = {
+        if let dto = try? JSONDecoder().decode(ExchangeRateAPIResponse.self, from: Data(json.utf8)),
+           let t = dto.toRateTable() {
+            return t
+        }
+        return RateTable(base: CurrencyCode("USD"), rates: ["USD": 1], asOf: Date(timeIntervalSince1970: 0))
+    }()
+}
