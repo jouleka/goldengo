@@ -21,17 +21,21 @@ public final class RecentExpensesModel {
 
     public func load() async {
         do {
+            let rates = ExchangeRateCache().load() ?? SeedRates.table
             let fetched = try await reader.recentExpenses(limit: 50)
-            let total = try await reader.todayTotal(in: currency)
+            let total = try await reader.todayTotal(in: currency, rates: rates)
             rows = fetched
             todayTotalText = Money(amount: total, currency: currency).formatted()
-            summary = try await reader.dashboardSummary(in: currency, now: .now, topCategoryLimit: 4)
+            summary = try await reader.dashboardSummary(in: currency, rates: rates, now: .now, topCategoryLimit: 4)
             loadFailed = false
         } catch {
             // Keep any previously-loaded rows on screen; surface the failure so the user can retry.
             loadFailed = true
         }
     }
+
+    /// The rate date behind the converted totals, when conversion was involved (for the staleness caption).
+    public var ratesAsOf: Date? { summary?.ratesAsOf }
 
     /// Soft-delete an expense, then reload so the row disappears.
     public func delete(_ snapshot: ExpenseSnapshot) async {

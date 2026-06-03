@@ -37,12 +37,14 @@ final class IngestionStoreTests: XCTestCase {
         XCTAssertEqual(snap?.amount, 500)
     }
 
-    // F2 — EUR expense should not inflate the ALL (lek) total
-    func test_logManual_eurExpense_doesNotInflateAllTotal() async throws {
+    // F2 — a EUR expense now converts INTO the lek total (was excluded under single-currency filtering).
+    func test_logManual_eurExpense_convertsIntoLekTotal() async throws {
         let store = IngestionStore(modelContainer: try .goldengoInMemory())
-        try await store.logManual(amount: 100, currency: .eur, merchant: nil, categoryName: nil)
-        let total = try await store.todayTotal(in: .all)
-        XCTAssertEqual(total, 0)
+        let rates = RateTable(base: CurrencyCode("USD"), rates: ["USD": 1, "ALL": 100, "EUR": 1],
+                              asOf: Date(timeIntervalSince1970: 1_780_444_800))
+        try await store.logManual(amount: 1, currency: .eur, merchant: nil, categoryName: nil)
+        let total = try await store.todayTotal(in: .all, rates: rates)   // 1 EUR = 100 ALL
+        XCTAssertEqual(total, 100)
     }
 
     func test_ingest_manualThenImport_mergesAndUpgradesSource() async throws {

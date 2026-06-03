@@ -4,6 +4,10 @@ import GoldengoCore
 @testable import GoldengoData
 
 final class ReadMethodsTests: XCTestCase {
+    // 1 USD = 100 ALL = 1 EUR, so 1 EUR = 100 ALL.
+    private let rates = RateTable(base: CurrencyCode("USD"), rates: ["USD": 1, "ALL": 100, "EUR": 1],
+                                  asOf: Date(timeIntervalSince1970: 1_780_444_800))
+
     func test_recentExpenses_returnsAllNonArchived() async throws {
         let store = IngestionStore(modelContainer: try .goldengoInMemory())
         try await store.logManual(amount: 100, currency: .all, merchant: "A", categoryName: nil)
@@ -17,7 +21,7 @@ final class ReadMethodsTests: XCTestCase {
         let store = IngestionStore(modelContainer: try .goldengoInMemory())
         try await store.logManual(amount: 100, currency: .all, merchant: nil, categoryName: nil)
         try await store.logManual(amount: 250, currency: .all, merchant: nil, categoryName: nil)
-        let total = try await store.todayTotal()
+        let total = try await store.todayTotal(rates: rates)
         XCTAssertEqual(total, 350)
     }
 
@@ -47,11 +51,11 @@ final class ReadMethodsTests: XCTestCase {
         ctx.insert(ExpenseRecord(amount: 500, currencyCode: "ALL", date: today, kind: .income, source: .manual, dedupeKey: "c"))
         try ctx.save()
         let store = IngestionStore(modelContainer: container)
-        let total = try await store.todayTotal()
+        let total = try await store.todayTotal(rates: rates)
         XCTAssertEqual(total, 100)  // excludes yesterday and income
     }
 
-    func test_todayTotal_filtersToRequestedCurrency() async throws {
+    func test_todayTotal_convertsAllExpensesToRequestedCurrency() async throws {
         let container = try ModelContainer.goldengoInMemory()
         let ctx = ModelContext(container)
         let today = Date.now
@@ -59,9 +63,10 @@ final class ReadMethodsTests: XCTestCase {
         ctx.insert(ExpenseRecord(amount: 50, currencyCode: "EUR", date: today, kind: .expense, source: .manual, dedupeKey: "y"))
         try ctx.save()
         let store = IngestionStore(modelContainer: container)
-        let lek = try await store.todayTotal(in: .all)
-        let eur = try await store.todayTotal(in: .eur)
-        XCTAssertEqual(lek, 100)
-        XCTAssertEqual(eur, 50)
+        // 1 EUR = 100 ALL. In lek: 100 + 50*100 = 5100. In euro: 100/100 + 50 = 51.
+        let lek = try await store.todayTotal(in: .all, rates: rates)
+        let eur = try await store.todayTotal(in: .eur, rates: rates)
+        XCTAssertEqual(lek, 5100)
+        XCTAssertEqual(eur, 51)
     }
 }

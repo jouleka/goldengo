@@ -73,18 +73,26 @@ public actor IngestionStore {
         return try modelContext.fetch(fd).map(makeSnapshot)
     }
 
-    /// Sum of today's expense-kind amounts in ONE currency. Note: `.all` is the ISO 4217
-    /// code for the Albanian lek ("ALL") — the user's primary currency — NOT a wildcard.
-    /// This method is single-currency by design; a true cross-currency total would need
-    /// FX conversion (spec §6 ExchangeRate) and is out of scope for the MVP.
-    public func todayTotal(in currency: CurrencyCode = .all) throws -> Decimal {
+    /// Sum of today's expense-kind amounts, each converted into `displayCurrency` via `rates`.
+    /// (`.all` is the ISO 4217 code for the Albanian lek — the user's primary currency.)
+    public func todayTotal(in displayCurrency: CurrencyCode = .all, rates: RateTable) throws -> Decimal {
         let start = Calendar.current.startOfDay(for: .now)
         let expenseRaw = TransactionKind.expense.rawValue
-        let code = currency.rawValue
         let fd = FetchDescriptor<ExpenseRecord>(predicate: #Predicate {
-            $0.isArchived == false && $0.kindRaw == expenseRaw && $0.date >= start && $0.currencyCode == code
+            $0.isArchived == false && $0.kindRaw == expenseRaw && $0.date >= start
         })
-        return try modelContext.fetch(fd).reduce(Decimal(0)) { $0 + $1.amount }
+        let monies = try modelContext.fetch(fd).map {
+            Money(amount: $0.amount, currency: CurrencyCode($0.currencyCode))
+        }
+        return CurrencyConverter(table: rates).sum(monies, to: displayCurrency)
+    }
+
+    /// Recompute the widget's today-total in the user's preferred currency and publish it.
+    private func refreshSharedTodayTotal() throws {
+        let display = SharedSummary().readPreferredCurrency()
+        let rates = ExchangeRateCache().load() ?? SeedRates.table
+        let total = try todayTotal(in: display, rates: rates)
+        SharedSummary().writeTodayTotal(Money(amount: total, currency: display).formatted())
     }
 
     private func makeSnapshot(_ r: ExpenseRecord) -> ExpenseSnapshot {
@@ -122,8 +130,7 @@ public actor IngestionStore {
         modelContext.insert(rec)
         try linkToConfirmedSubscription(rec)
         try modelContext.save()
-        let total = try todayTotal(in: .all)
-        SharedSummary().writeTodayTotal(Money(amount: total, currency: .all).formatted())
+        try refreshSharedTodayTotal()
         return key
     }
 
@@ -155,8 +162,7 @@ public actor IngestionStore {
         modelContext.insert(ImportBatch(fileName: fileName, rowCount: transactions.count,
                                         importedCount: imported, dedupedCount: deduped))
         try modelContext.save()
-        let total = try todayTotal(in: .all)
-        SharedSummary().writeTodayTotal(Money(amount: total, currency: .all).formatted())
+        try refreshSharedTodayTotal()
         return ImportSummary(imported: imported, deduped: deduped)
     }
 
