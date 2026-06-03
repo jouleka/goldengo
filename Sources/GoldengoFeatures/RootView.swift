@@ -50,7 +50,13 @@ public struct RootView: View {
                 onAdd: { selectedTab = 0 },
                 onOpenImport: { showImport = true },
                 onOpenSettings: { showSettings = true },
-                onOpenSubscriptions: { selectedTab = 4 }
+                onOpenSubscriptions: { selectedTab = 4 },
+                onChangeCurrency: { code in
+                    SharedSummary().setPreferredCurrency(code)
+                    quickAddModel.currency = code
+                    recentModel.currency = code
+                    Task { await recentModel.load() }
+                }
             )
             .tabItem { Label("Home", systemImage: "house.fill") }
             .tag(1)

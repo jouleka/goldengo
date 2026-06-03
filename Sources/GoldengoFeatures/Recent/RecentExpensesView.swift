@@ -18,17 +18,21 @@ public struct RecentExpensesView: View {
     private let onOpenImport: () -> Void
     private let onOpenSettings: () -> Void
     private let onOpenSubscriptions: () -> Void
+    private let onChangeCurrency: (CurrencyCode) -> Void
+    @State private var showCurrencyPicker = false
 
     public init(model: RecentExpensesModel,
                 onAdd: @escaping () -> Void = {},
                 onOpenImport: @escaping () -> Void = {},
                 onOpenSettings: @escaping () -> Void = {},
-                onOpenSubscriptions: @escaping () -> Void = {}) {
+                onOpenSubscriptions: @escaping () -> Void = {},
+                onChangeCurrency: @escaping (CurrencyCode) -> Void = { _ in }) {
         self.model = model
         self.onAdd = onAdd
         self.onOpenImport = onOpenImport
         self.onOpenSettings = onOpenSettings
         self.onOpenSubscriptions = onOpenSubscriptions
+        self.onChangeCurrency = onChangeCurrency
     }
 
     public var body: some View {
@@ -175,15 +179,63 @@ public struct RecentExpensesView: View {
             .goldengoCard()
     }
 
+    // MARK: - Display currency
+
+    private func menuLabel(_ c: CurrencyCode) -> String {
+        let name = Locale.current.localizedString(forCurrencyCode: c.rawValue) ?? c.rawValue
+        return "\(c.symbol)  \(name)"
+    }
+    private var availableCurrencies: [CurrencyCode] {
+        CurrencyCatalog.selectable(from: ExchangeRateCache().load() ?? SeedRates.table)
+    }
+    private var menuCurrencies: [CurrencyCode] {
+        let have = Set(availableCurrencies.map(\.rawValue))
+        var list = CurrencyCode.popular.filter { have.contains($0.rawValue) }
+        if !list.contains(where: { $0.rawValue == model.currency.rawValue }) {
+            list.insert(model.currency, at: 0)
+        }
+        return list
+    }
+
     private var monthCard: some View {
         VStack(alignment: .leading, spacing: GoldengoTheme.Spacing.m) {
             HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: GoldengoTheme.Spacing.xs) {
                     GoldengoSectionLabel("This month")
-                    Text(model.monthTotalText())
-                        .font(.system(size: 40, weight: .bold, design: .rounded))
-                        .minimumScaleFactor(0.6)
-                        .lineLimit(1)
+                    Menu {
+                        ForEach(menuCurrencies, id: \.rawValue) { c in
+                            Button {
+                                onChangeCurrency(c)
+                            } label: {
+                                if c.rawValue == model.currency.rawValue {
+                                    Label(menuLabel(c), systemImage: "checkmark")
+                                } else {
+                                    Text(menuLabel(c))
+                                }
+                            }
+                        }
+                        Divider()
+                        Button { showCurrencyPicker = true } label: {
+                            Label("More currencies…", systemImage: "ellipsis.circle")
+                        }
+                    } label: {
+                        HStack(alignment: .firstTextBaseline, spacing: 4) {
+                            Text(model.monthTotalText())
+                                .font(.system(size: 40, weight: .bold, design: .rounded))
+                                .minimumScaleFactor(0.6)
+                                .lineLimit(1)
+                            Image(systemName: "chevron.down")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(.secondary)
+                        }
+                        .contentShape(Rectangle())
+                    }
+                    .foregroundStyle(.primary)
+                    if let asOf = model.ratesAsOf {
+                        Text("Rates as of \(asOf.formatted(date: .abbreviated, time: .omitted))")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
                 }
                 Spacer()
                 Button(action: onAdd) {
@@ -208,6 +260,17 @@ public struct RecentExpensesView: View {
             }
         }
         .goldengoCard(padding: GoldengoTheme.Spacing.l)
+        .sheet(isPresented: $showCurrencyPicker) {
+            NavigationStack {
+                CurrencyPickerView(
+                    available: availableCurrencies,
+                    selectedCode: Binding(
+                        get: { model.currency.rawValue },
+                        set: { onChangeCurrency(CurrencyCode($0)) }
+                    )
+                )
+            }
+        }
     }
 
     private var subscriptionsCard: some View {
