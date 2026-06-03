@@ -34,6 +34,9 @@ final class CurrencyCodeMetadataTests: XCTestCase {
         XCTAssertEqual(CurrencyCode("JPY").symbol, "¥")
         XCTAssertEqual(CurrencyCode.all.symbol, "L")
         XCTAssertEqual(CurrencyCode("ZZZ").symbol, "ZZZ") // unknown → ISO code
+        // Ambiguous glyphs fall back to the ISO code: ¥ is shared by yen and renminbi, so CNY
+        // must NOT render as ¥ (same rule that excludes CAD/AUD/SGD's "$").
+        XCTAssertEqual(CurrencyCode("CNY").symbol, "CNY")
     }
 
     func test_popular_startsWithLekAndEuro_andHasNoDuplicates() {

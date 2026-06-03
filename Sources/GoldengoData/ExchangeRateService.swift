@@ -8,7 +8,17 @@ public struct ExchangeRateService: Sendable {
     private static let endpoint = URL(string: "https://open.er-api.com/v6/latest/USD")!
     private static let log = Logger(subsystem: "com.goldengo.app", category: "fx")
 
-    public init() {}
+    /// How the latest table is obtained. Defaults to the live network fetch; tests inject a stub
+    /// so the staleness gate (skip-when-fresh / save-when-stale) is unit-coverable without networking.
+    private let fetch: @Sendable () async -> RateTable?
+
+    public init() {
+        self.fetch = { await Self.fetchFromNetwork() }
+    }
+
+    init(fetch: @escaping @Sendable () async -> RateTable?) {
+        self.fetch = fetch
+    }
 
     /// Fetches fresh rates only when the cache is missing or older than `maxAge`.
     public func refreshIfNeeded(now: Date = .now,
@@ -19,22 +29,22 @@ public struct ExchangeRateService: Sendable {
             Self.log.debug("FX cache fresh (asOf \(existing.asOf, privacy: .public)); skipping fetch")
             return
         }
-        guard let table = await fetchLatest() else { return }
+        guard let table = await fetch() else { return }
         cache.save(table)
         Self.log.info("FX cache updated: \(table.rates.count, privacy: .public) rates, asOf \(table.asOf, privacy: .public)")
     }
 
     /// Single GET → DTO → RateTable. Returns nil on any network/HTTP/decode failure.
-    func fetchLatest() async -> RateTable? {
+    private static func fetchFromNetwork() async -> RateTable? {
         do {
-            let (data, response) = try await URLSession.shared.data(from: Self.endpoint)
+            let (data, response) = try await URLSession.shared.data(from: endpoint)
             guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
-                Self.log.error("FX fetch non-200")
+                log.error("FX fetch non-200")
                 return nil
             }
             return try JSONDecoder().decode(ExchangeRateAPIResponse.self, from: data).toRateTable()
         } catch {
-            Self.log.error("FX fetch failed: \(error.localizedDescription, privacy: .public)")
+            log.error("FX fetch failed: \(error.localizedDescription, privacy: .public)")
             return nil
         }
     }

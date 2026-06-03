@@ -23,7 +23,7 @@ public struct CurrencyCode: Hashable, Sendable, Codable {
     /// Unambiguous display symbols; codes that share a glyph (e.g. CAD/AUD/SGD all "$") are left
     /// to fall back to the ISO code so the user is never shown an ambiguous symbol.
     private static let symbols: [String: String] = [
-        "ALL": "L", "EUR": "€", "USD": "$", "GBP": "£", "JPY": "¥", "CNY": "¥", "INR": "₹",
+        "ALL": "L", "EUR": "€", "USD": "$", "GBP": "£", "JPY": "¥", "INR": "₹",
         "RUB": "₽", "TRY": "₺", "BRL": "R$", "KRW": "₩", "CHF": "Fr", "PLN": "zł", "THB": "฿",
         "VND": "₫", "UAH": "₴", "ILS": "₪", "PHP": "₱", "NGN": "₦", "ZAR": "R"
     ]
