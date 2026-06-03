@@ -1,5 +1,7 @@
 import SwiftUI
 import GoldengoDesignSystem
+import GoldengoCore
+import GoldengoData
 #if canImport(UIKit)
 import UIKit
 #endif
@@ -7,6 +9,7 @@ import UIKit
 public struct QuickAddView: View {
     @State private var model: QuickAddModel
     @State private var showAdded = false
+    @State private var showCurrencyPicker = false
     public init(model: QuickAddModel) { _model = State(initialValue: model) }
 
     private var keys: [String] {
@@ -25,6 +28,17 @@ public struct QuickAddView: View {
         .padding(.horizontal, GoldengoTheme.Spacing.l)
         .padding(.bottom, GoldengoTheme.Spacing.m)
         .background(Color.goldengoBackground.ignoresSafeArea())
+        .sheet(isPresented: $showCurrencyPicker) {
+            NavigationStack {
+                CurrencyPickerView(
+                    available: availableCurrencies,
+                    selectedCode: Binding(
+                        get: { model.currency.rawValue },
+                        set: { model.setCurrency(CurrencyCode($0)) }
+                    )
+                )
+            }
+        }
         .alert("Couldn't save", isPresented: Binding(
             get: { model.errorText != nil },
             set: { if !$0 { model.errorText = nil } }
@@ -66,9 +80,7 @@ public struct QuickAddView: View {
                 .font(.subheadline.weight(.medium))
                 .foregroundStyle(.secondary)
             HStack(alignment: .firstTextBaseline, spacing: 6) {
-                Text(model.currency.symbol)
-                    .font(.system(size: 28, weight: .semibold, design: .rounded))
-                    .foregroundStyle(.secondary)
+                currencyMenu
                 Text(model.amountString.isEmpty ? "0" : model.amountString)
                     .font(.system(size: 64, weight: .bold, design: .rounded))
                     .foregroundStyle(model.amountString.isEmpty ? Color.secondary : Color.primary)
@@ -77,6 +89,57 @@ public struct QuickAddView: View {
             }
         }
         .padding(.top, GoldengoTheme.Spacing.xl)
+    }
+
+    // MARK: - Currency
+
+    private var currencyMenu: some View {
+        Menu {
+            ForEach(menuCurrencies, id: \.rawValue) { c in
+                Button {
+                    model.setCurrency(c)
+                } label: {
+                    if c.rawValue == model.currency.rawValue {
+                        Label(menuLabel(c), systemImage: "checkmark")
+                    } else {
+                        Text(menuLabel(c))
+                    }
+                }
+            }
+            Divider()
+            Button {
+                showCurrencyPicker = true
+            } label: {
+                Label("More currencies…", systemImage: "ellipsis.circle")
+            }
+        } label: {
+            HStack(alignment: .firstTextBaseline, spacing: 2) {
+                Text(model.currency.symbol)
+                    .font(.system(size: 28, weight: .semibold, design: .rounded))
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 11, weight: .bold))
+            }
+            .foregroundStyle(.secondary)
+            .contentShape(Rectangle())
+        }
+    }
+
+    private func menuLabel(_ c: CurrencyCode) -> String {
+        let name = Locale.current.localizedString(forCurrencyCode: c.rawValue) ?? c.rawValue
+        return "\(c.symbol)  \(name)"
+    }
+
+    private var availableCurrencies: [CurrencyCode] {
+        CurrencyCatalog.selectable(from: ExchangeRateCache().load() ?? SeedRates.table)
+    }
+
+    private var menuCurrencies: [CurrencyCode] {
+        let have = Set(availableCurrencies.map(\.rawValue))
+        var list = CurrencyCode.popular.filter { have.contains($0.rawValue) }
+        if !list.contains(where: { $0.rawValue == model.currency.rawValue }) {
+            list.insert(model.currency, at: 0)   // keep the current currency reachable
+        }
+        return list
     }
 
     // MARK: - Categories
