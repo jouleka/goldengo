@@ -23,6 +23,14 @@ public final class QuickAddModel {
         self.currency = currency
     }
 
+    /// Switch the currency for the in-progress expense, trimming the typed amount so it stays valid
+    /// for the new currency's precision (e.g. €12.50 → L12). The symbol, "." key, and amount update
+    /// via Observation.
+    public func setCurrency(_ code: CurrencyCode) {
+        currency = code
+        amountString = CurrencyInput.fit(amountString, toFractionDigits: code.fractionDigits)
+    }
+
     public var amountDecimal: Decimal { Decimal(string: amountString) ?? 0 }
     public var canSave: Bool { amountDecimal > 0 }
 

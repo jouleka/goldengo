@@ -66,4 +66,23 @@ final class QuickAddModelTests: XCTestCase {
         m.tap("1"); m.tap("2"); m.tap("."); m.tap("5"); m.tap("0"); m.tap("9")
         XCTAssertEqual(m.amountString, "12.50")
     }
+
+    func test_setCurrency_truncatesTypedAmount_whenSwitchingToZeroDecimalCurrency() throws {
+        let m = try makeModel(.eur)                 // euro: 2 decimals
+        m.tap("1"); m.tap("2"); m.tap("."); m.tap("5"); m.tap("0")
+        XCTAssertEqual(m.amountString, "12.50")
+        m.setCurrency(.all)                         // lek: no minor unit
+        XCTAssertEqual(m.currency, .all)
+        XCTAssertEqual(m.amountString, "12")        // decimals dropped → display == saved value
+        XCTAssertFalse(m.allowsDecimal)             // "." key now hidden
+    }
+
+    func test_setCurrency_keepsAmount_whenSwitchingToHigherPrecision() throws {
+        let m = try makeModel(.all)                 // lek
+        m.tap("1"); m.tap("5"); m.tap("0")
+        m.setCurrency(.eur)                          // euro
+        XCTAssertEqual(m.currency, .eur)
+        XCTAssertEqual(m.amountString, "150")        // integer amount unaffected
+        XCTAssertTrue(m.allowsDecimal)
+    }
 }
