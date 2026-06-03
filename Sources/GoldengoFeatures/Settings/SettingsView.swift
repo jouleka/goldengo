@@ -1,5 +1,6 @@
 import SwiftUI
 import GoldengoData
+import GoldengoCore
 
 public struct SettingsView: View {
     @AppStorage(SharedSummary.revealKey, store: UserDefaults(suiteName: SharedSummary.appGroupID))
@@ -8,13 +9,33 @@ public struct SettingsView: View {
     private var remind: Bool = false
     @AppStorage(SharedSummary.reminderLeadDaysKey, store: UserDefaults(suiteName: SharedSummary.appGroupID))
     private var leadDays: Int = 1
+    @AppStorage(SharedSummary.preferredCurrencyKey, store: UserDefaults(suiteName: SharedSummary.appGroupID))
+    private var preferredCode: String = "ALL"
     @Environment(\.dismiss) private var dismiss
 
     public init() {}
 
+    private var availableCurrencies: [CurrencyCode] {
+        CurrencyCatalog.selectable(from: ExchangeRateCache().load() ?? SeedRates.table)
+    }
+    private var preferredLabel: String {
+        let c = CurrencyCode(preferredCode)
+        let n = Locale.current.localizedString(forCurrencyCode: c.rawValue) ?? c.rawValue
+        return "\(c.symbol) · \(n)"
+    }
+
     public var body: some View {
         NavigationStack {
             Form {
+                Section("Currency") {
+                    NavigationLink {
+                        CurrencyPickerView(available: availableCurrencies, selectedCode: $preferredCode)
+                    } label: {
+                        LabeledContent("Default currency", value: preferredLabel)
+                    }
+                    Text("Used as the default for new expenses and your dashboard total.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
                 Section("Privacy") {
                     Toggle("Show amounts on Lock Screen", isOn: $reveal)
                     Text("Off by default — your spending stays hidden on the Lock Screen widget.")
