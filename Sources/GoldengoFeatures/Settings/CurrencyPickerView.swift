@@ -35,7 +35,9 @@ struct CurrencyPickerView: View {
     var body: some View {
         List {
             if query.isEmpty {
-                Section("Suggested") { ForEach(suggested, id: \.rawValue, content: row) }
+                if !suggested.isEmpty {
+                    Section("Suggested") { ForEach(suggested, id: \.rawValue, content: row) }
+                }
                 Section("All currencies") { ForEach(others, id: \.rawValue, content: row) }
             } else {
                 ForEach(results, id: \.rawValue, content: row)
