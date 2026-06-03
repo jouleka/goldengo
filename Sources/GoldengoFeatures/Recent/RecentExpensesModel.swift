@@ -51,9 +51,9 @@ public final class RecentExpensesModel {
 
     /// Apply an edit to an expense, then reload so the change is reflected.
     public func update(_ snapshot: ExpenseSnapshot, amount: Decimal, merchant: String?,
-                       categoryName: String?, date: Date) async {
+                       note: String? = nil, categoryName: String?, date: Date) async {
         try? await reader.updateExpense(dedupeKey: snapshot.dedupeKey, amount: amount,
-                                        merchant: merchant, categoryName: categoryName, date: date)
+                                        merchant: merchant, note: note, categoryName: categoryName, date: date)
         await load()
     }
 

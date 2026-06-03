@@ -73,4 +73,21 @@ final class ExpenseEditingTests: XCTestCase {
         XCTAssertNil(snap?.merchantName)
         XCTAssertNil(snap?.categoryName)
     }
+
+    func test_updateExpense_setsAndClearsNote() async throws {
+        // Editing must be able to add a note and later remove it (blank -> nil) — not just change it —
+        // so a mistaken note isn't permanent.
+        let store = try makeStore()
+        let key = try await store.logManual(amount: 250, currency: .all, merchant: "Coffee", categoryName: "Coffee")
+
+        try await store.updateExpense(dedupeKey: key, amount: 250, merchant: "Coffee",
+                                      note: "with Ana", categoryName: "Coffee", date: .now)
+        var snap = try await store.snapshot(dedupeKey: key)
+        XCTAssertEqual(snap?.note, "with Ana")
+
+        try await store.updateExpense(dedupeKey: key, amount: 250, merchant: "Coffee",
+                                      note: "   ", categoryName: "Coffee", date: .now)
+        snap = try await store.snapshot(dedupeKey: key)
+        XCTAssertNil(snap?.note)
+    }
 }

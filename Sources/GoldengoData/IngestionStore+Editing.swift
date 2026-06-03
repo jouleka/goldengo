@@ -25,14 +25,16 @@ extension IngestionStore {
         try modelContext.save()
     }
 
-    /// Edit an existing expense's amount, merchant, category, and date. An empty/whitespace
-    /// merchant or category clears that field.
+    /// Edit an existing expense's amount, merchant, note, category, and date. An empty/whitespace
+    /// merchant, note, or category clears that field.
     public func updateExpense(dedupeKey: String, amount: Decimal, merchant: String?,
-                              categoryName: String?, date: Date) throws {
+                              note: String? = nil, categoryName: String?, date: Date) throws {
         guard let r = try fetchActiveExpense(dedupeKey: dedupeKey) else { return }
         r.amount = amount
         let trimmedMerchant = merchant?.trimmingCharacters(in: .whitespacesAndNewlines)
         r.merchantName = (trimmedMerchant?.isEmpty ?? true) ? nil : trimmedMerchant
+        let trimmedNote = note?.trimmingCharacters(in: .whitespacesAndNewlines)
+        r.note = (trimmedNote?.isEmpty ?? true) ? nil : trimmedNote
         r.date = date
         if let categoryName, !categoryName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             r.category = try findOrCreateCategory(named: categoryName)
