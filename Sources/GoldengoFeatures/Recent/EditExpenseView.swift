@@ -11,11 +11,12 @@ public struct EditExpenseView: View {
 
     private let snapshot: ExpenseSnapshot
     private let currency: CurrencyCode
-    private let onSave: (_ amount: Decimal, _ merchant: String?, _ category: String?, _ date: Date) -> Void
+    private let onSave: (_ amount: Decimal, _ merchant: String?, _ note: String?, _ category: String?, _ date: Date) -> Void
     private let onDelete: () -> Void
 
     @State private var amountText: String
     @State private var merchant: String
+    @State private var note: String
     @State private var category: String?
     @State private var date: Date
     @State private var showDeleteConfirm = false
@@ -26,7 +27,7 @@ public struct EditExpenseView: View {
 
     public init(snapshot: ExpenseSnapshot,
                 currency: CurrencyCode,
-                onSave: @escaping (_ amount: Decimal, _ merchant: String?, _ category: String?, _ date: Date) -> Void,
+                onSave: @escaping (_ amount: Decimal, _ merchant: String?, _ note: String?, _ category: String?, _ date: Date) -> Void,
                 onDelete: @escaping () -> Void) {
         self.snapshot = snapshot
         self.currency = currency
@@ -34,6 +35,7 @@ public struct EditExpenseView: View {
         self.onDelete = onDelete
         _amountText = State(initialValue: NSDecimalNumber(decimal: snapshot.amount).stringValue)
         _merchant = State(initialValue: snapshot.merchantName ?? "")
+        _note = State(initialValue: snapshot.note ?? "")
         _category = State(initialValue: snapshot.categoryName)
         _date = State(initialValue: snapshot.date)
     }
@@ -57,6 +59,7 @@ public struct EditExpenseView: View {
             Form {
                 amountSection
                 merchantSection
+                noteSection
                 categorySection
                 dateSection
                 deleteSection
@@ -104,6 +107,12 @@ public struct EditExpenseView: View {
     private var merchantSection: some View {
         Section("Merchant") {
             TextField("Merchant (optional)", text: $merchant)
+        }
+    }
+
+    private var noteSection: some View {
+        Section("Note") {
+            TextField("Note (optional)", text: $note)
         }
     }
 
@@ -156,7 +165,9 @@ public struct EditExpenseView: View {
     private func save() {
         guard let amount = parsedAmount else { return }
         let trimmedMerchant = merchant.trimmingCharacters(in: .whitespacesAndNewlines)
-        onSave(amount, trimmedMerchant.isEmpty ? nil : trimmedMerchant, category, date)
+        let trimmedNote = note.trimmingCharacters(in: .whitespacesAndNewlines)
+        onSave(amount, trimmedMerchant.isEmpty ? nil : trimmedMerchant,
+               trimmedNote.isEmpty ? nil : trimmedNote, category, date)
         dismiss()
     }
 }

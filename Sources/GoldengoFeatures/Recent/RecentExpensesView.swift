@@ -79,8 +79,8 @@ public struct RecentExpensesView: View {
                 EditExpenseView(
                     snapshot: snap,
                     currency: model.currency,
-                    onSave: { amt, m, c, d in
-                        Task { await model.update(snap, amount: amt, merchant: m, categoryName: c, date: d) }
+                    onSave: { amt, m, n, c, d in
+                        Task { await model.update(snap, amount: amt, merchant: m, note: n, categoryName: c, date: d) }
                     },
                     onDelete: { deleteWithUndo(snap) }
                 )
