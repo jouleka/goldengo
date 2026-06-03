@@ -12,6 +12,7 @@ public struct ExpenseSnapshot: Sendable, Equatable, Identifiable {
     public var categoryName: String?
     public var date: Date
     public var merchantName: String?
+    public var note: String?
     public var kind: TransactionKind
     public var subscriptionName: String?
 
@@ -98,7 +99,7 @@ public actor IngestionStore {
     private func makeSnapshot(_ r: ExpenseRecord) -> ExpenseSnapshot {
         ExpenseSnapshot(dedupeKey: r.dedupeKey, amount: r.amount, currencyCode: r.currencyCode,
                         source: r.source, categoryName: r.category?.name,
-                        date: r.date, merchantName: r.merchantName, kind: r.kind,
+                        date: r.date, merchantName: r.merchantName, note: r.note, kind: r.kind,
                         subscriptionName: r.subscription?.displayName)
     }
 
@@ -118,10 +119,12 @@ public actor IngestionStore {
     /// same-day purchases are never collapsed. Returns the new record's dedupeKey.
     @discardableResult
     public func logManual(amount: Decimal, currency: CurrencyCode,
-                          merchant: String?, categoryName: String?) throws -> String {
+                          merchant: String?, note: String? = nil, categoryName: String?) throws -> String {
         let key = "manual:\(UUID().uuidString)"
+        let cleanNote = note?.trimmingCharacters(in: .whitespacesAndNewlines)
         let rec = ExpenseRecord(amount: amount, currencyCode: currency.rawValue, date: .now,
-                                merchantName: merchant, kind: .expense, source: .manual, dedupeKey: key)
+                                merchantName: merchant, note: (cleanNote?.isEmpty ?? true) ? nil : cleanNote,
+                                kind: .expense, source: .manual, dedupeKey: key)
         if let categoryName, !categoryName.isEmpty {
             rec.category = try findOrCreateCategory(named: categoryName)
         } else {

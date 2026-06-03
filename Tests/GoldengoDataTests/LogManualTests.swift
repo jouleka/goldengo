@@ -37,4 +37,24 @@ final class LogManualTests: XCTestCase {
         let cats = try ctx.fetch(FetchDescriptor<CategoryRecord>())
         XCTAssertEqual(cats.count, 1)
     }
+
+    func test_logManual_persistsNote_roundTripsToSnapshot() async throws {
+        // The note typed at add time must survive to the snapshot, or the Recent row and Edit view
+        // have nothing to show — this is the whole point of the feature.
+        let store = IngestionStore(modelContainer: try .goldengoInMemory())
+        let key = try await store.logManual(amount: 250, currency: .all, merchant: nil,
+                                            note: "lunch with Ana", categoryName: nil)
+        let snap = try await store.snapshot(dedupeKey: key)
+        XCTAssertEqual(snap?.note, "lunch with Ana")
+    }
+
+    func test_logManual_blankNote_storesNil() async throws {
+        // A whitespace-only note normalizes to nil so the Recent row falls back to merchant/category
+        // instead of rendering a blank primary line.
+        let store = IngestionStore(modelContainer: try .goldengoInMemory())
+        let key = try await store.logManual(amount: 100, currency: .all, merchant: nil,
+                                            note: "   ", categoryName: nil)
+        let snap = try await store.snapshot(dedupeKey: key)
+        XCTAssertNil(snap?.note)
+    }
 }
