@@ -73,4 +73,24 @@ final class DashboardSummaryTests: XCTestCase {
         XCTAssertEqual(s.confirmedSubscriptionCount, 1)
         XCTAssertEqual(s.confirmedSubscriptionsMonthly, 1200)   // monthly cadence → ×1
     }
+
+    // GOL-69: a euro-billed subscription is detected in euro and its monthly estimate converts into
+    // the display currency for the Home "~/mo" figure.
+    func test_confirmedSubscriptions_convertToDisplayCurrency() async throws {
+        let store = try makeStore()
+        let now = day(2026, 6, 15)
+        // Three monthly €2 charges → a confirmed EUR monthly subscription.
+        for m in [3, 4, 5] {
+            _ = try await store.ingest(NormalizedTransaction(externalID: "eur\(m)", amount: 2, currency: CurrencyCode("EUR"),
+                date: day(2026, m, 5), rawMerchant: "Spotify", kind: .expense, accountRef: "card"), source: .imported)
+        }
+        _ = try await store.refreshSubscriptions(now: day(2026, 5, 10))
+        let cands = try await store.subscriptionCandidates()
+        let key = try XCTUnwrap(cands.first?.id)
+        try await store.confirmSubscription(matchKey: key)
+        // Displayed in lek: €2/mo → L200/mo (1 EUR = 100 ALL), and the staleness date is present.
+        let s = try await store.dashboardSummary(in: .all, rates: rates, now: now)
+        XCTAssertEqual(s.confirmedSubscriptionsMonthly, 200)
+        XCTAssertEqual(s.ratesAsOf, rates.asOf)
+    }
 }
