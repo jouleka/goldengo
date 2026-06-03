@@ -1,4 +1,5 @@
 import Foundation
+import GoldengoCore
 
 public struct SharedSummary {
     public struct Snapshot: Equatable {
@@ -10,6 +11,7 @@ public struct SharedSummary {
     public static let revealKey = "revealOnLockScreen"
     public static let remindBeforeChargesKey = "remindBeforeCharges"
     public static let reminderLeadDaysKey = "reminderLeadDays"
+    public static let preferredCurrencyKey = "preferredCurrency"
     private static let totalKey = "todayTotalText"
     private static let pendingTabKey = "pendingTab"
 
@@ -19,6 +21,16 @@ public struct SharedSummary {
 
     public func writeTodayTotal(_ text: String) { defaults.set(text, forKey: Self.totalKey) }
     public func setRevealOnLockScreen(_ on: Bool) { defaults.set(on, forKey: Self.revealKey) }
+
+    /// The user's preferred/display currency (ISO code). Defaults to lek when unset.
+    public func readPreferredCurrency() -> CurrencyCode {
+        let raw = defaults.string(forKey: Self.preferredCurrencyKey) ?? ""
+        return raw.isEmpty ? .all : CurrencyCode(raw)
+    }
+
+    public func setPreferredCurrency(_ code: CurrencyCode) {
+        defaults.set(code.rawValue, forKey: Self.preferredCurrencyKey)
+    }
 
     public func setPendingTab(_ tab: Int?) {
         if let tab {

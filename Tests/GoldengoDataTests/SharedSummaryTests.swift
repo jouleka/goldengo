@@ -1,5 +1,6 @@
 import XCTest
 @testable import GoldengoData
+import GoldengoCore
 
 final class SharedSummaryTests: XCTestCase {
     private func freshSuite() -> String { "test.goldengo.\(UUID().uuidString)" }
@@ -32,5 +33,22 @@ final class SharedSummaryTests: XCTestCase {
         XCTAssertEqual(s.readPendingTab(), 0)              // set to 0 → read 0
         s.setPendingTab(nil)
         XCTAssertNil(s.readPendingTab())                   // cleared → nil
+    }
+
+    func test_preferredCurrency_defaultsToLek_whenUnset() {
+        let s = SharedSummary(suiteName: freshSuite())
+        XCTAssertEqual(s.readPreferredCurrency(), .all)
+    }
+
+    func test_preferredCurrency_roundTrips() {
+        let s = SharedSummary(suiteName: freshSuite())
+        s.setPreferredCurrency(.eur)
+        XCTAssertEqual(s.readPreferredCurrency(), .eur)
+    }
+
+    func test_preferredCurrency_persistsAcrossInstances_onSameSuite() {
+        let suite = freshSuite()
+        SharedSummary(suiteName: suite).setPreferredCurrency(CurrencyCode("USD"))
+        XCTAssertEqual(SharedSummary(suiteName: suite).readPreferredCurrency(), CurrencyCode("USD"))
     }
 }
