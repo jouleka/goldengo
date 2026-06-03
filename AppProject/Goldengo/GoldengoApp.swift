@@ -7,9 +7,6 @@ import GoldengoIntents
 @main
 struct GoldengoApp: App {
     init() {
-        // Wire the App Intent's store provider to the app's shared container.
-        IntentEnvironment.storeProvider = { GoldengoStore.shared() }
-
         #if DEBUG
         // QA affordance (DEBUG only, off by default): launch with the env var
         // GOLDENGO_SEED_SAMPLE=1 to import the demo statement on startup, so the UI can be
