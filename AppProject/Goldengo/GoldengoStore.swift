@@ -38,4 +38,9 @@ public enum GoldengoStore {
     }()
 
     public static func shared() -> IngestionStore { IngestionStore(modelContainer: container) }
+
+    /// Refresh the exchange-rate cache on launch (no-op if the cache is still fresh). Offline-safe.
+    public static func refreshExchangeRates() async {
+        await ExchangeRateService().refreshIfNeeded()
+    }
 }

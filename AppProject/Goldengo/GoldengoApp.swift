@@ -35,6 +35,7 @@ struct GoldengoApp: App {
     var body: some Scene {
         WindowGroup {
             RootView(store: GoldengoStore.shared())
+                .task { await GoldengoStore.refreshExchangeRates() }
         }
         .modelContainer(GoldengoStore.container)
     }
