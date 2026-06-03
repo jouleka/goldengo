@@ -52,4 +52,25 @@ final class CurrencyConverterTests: XCTestCase {
         XCTAssertFalse(c.isStale(asOf: asOf.addingTimeInterval(3599), maxAge: 3600))
         XCTAssertTrue(c.isStale(asOf: asOf.addingTimeInterval(3601), maxAge: 3600))
     }
+
+    // Totals add up across currencies: each Money is converted to the target, then summed.
+    func test_sum_convertsEachAndAdds() {
+        let c = CurrencyConverter(table: table())          // 1 USD = 100 ALL = 0.9 EUR
+        let monies = [Money(amount: 100, currency: .all),  // 100 ALL = 0.9 EUR
+                      Money(amount: Decimal(string: "0.9")!, currency: .eur)] // 0.9 EUR
+        XCTAssertEqual(c.sum(monies, to: .eur), Decimal(string: "1.8")!)
+    }
+
+    // Same-currency-only sums are exact (identity, no rate needed).
+    func test_sum_singleCurrency_isExact() {
+        let c = CurrencyConverter(table: table())
+        XCTAssertEqual(c.sum([Money(amount: 250, currency: .all), Money(amount: 750, currency: .all)], to: .all), 1000)
+    }
+
+    // An un-convertible entry (no rate) is skipped; the rest still count.
+    func test_sum_skipsUnconvertible() {
+        let c = CurrencyConverter(table: table())
+        let monies = [Money(amount: 100, currency: .all), Money(amount: 5, currency: CurrencyCode("XYZ"))]
+        XCTAssertEqual(c.sum(monies, to: .all), 100)       // XYZ has no rate → skipped
+    }
 }

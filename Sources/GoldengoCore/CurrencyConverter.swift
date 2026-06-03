@@ -26,6 +26,13 @@ public struct CurrencyConverter: Sendable {
         Money(amount: try convert(money.amount, from: money.currency, to: to), currency: to)
     }
 
+    /// Convert each `Money` to `target` and sum, skipping any that can't convert (missing rate).
+    public func sum(_ monies: [Money], to target: CurrencyCode) -> Decimal {
+        monies.reduce(Decimal(0)) { acc, m in
+            (try? convert(m, to: target)).map { acc + $0.amount } ?? acc
+        }
+    }
+
     /// True when the table is older than `maxAge` relative to `now`.
     public func isStale(asOf now: Date, maxAge: TimeInterval) -> Bool {
         now.timeIntervalSince(table.asOf) > maxAge
