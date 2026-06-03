@@ -10,6 +10,7 @@ public struct QuickAddView: View {
     @State private var model: QuickAddModel
     @State private var showAdded = false
     @State private var showCurrencyPicker = false
+    @FocusState private var noteFocused: Bool
     public init(model: QuickAddModel) { _model = State(initialValue: model) }
 
     private var keys: [String] {
@@ -20,6 +21,7 @@ public struct QuickAddView: View {
     public var body: some View {
         VStack(spacing: GoldengoTheme.Spacing.l) {
             amountDisplay
+            noteField
             categoryChips
             Spacer(minLength: 0)
             keypad
@@ -28,6 +30,14 @@ public struct QuickAddView: View {
         .padding(.horizontal, GoldengoTheme.Spacing.l)
         .padding(.bottom, GoldengoTheme.Spacing.m)
         .background(Color.goldengoBackground.ignoresSafeArea())
+#if canImport(UIKit)
+        .toolbar {
+            ToolbarItemGroup(placement: .keyboard) {
+                Spacer()
+                Button("Done") { noteFocused = false }
+            }
+        }
+#endif
         .sheet(isPresented: $showCurrencyPicker) {
             NavigationStack {
                 CurrencyPickerView(
@@ -89,6 +99,30 @@ public struct QuickAddView: View {
             }
         }
         .padding(.top, GoldengoTheme.Spacing.xl)
+    }
+
+    // MARK: - Note
+
+    private var noteField: some View {
+        HStack(spacing: GoldengoTheme.Spacing.s) {
+            Image(systemName: "pencil")
+                .font(.subheadline)
+                .foregroundStyle(noteFocused ? GoldengoTheme.accent : .secondary)
+            TextField("Add a note (optional)", text: $model.note)
+                .font(.subheadline)
+                .focused($noteFocused)
+                .submitLabel(.done)
+                .onSubmit { noteFocused = false }
+                .tint(GoldengoTheme.accent)
+#if canImport(UIKit)
+                .textInputAutocapitalization(.sentences)
+#endif
+        }
+        .padding(.horizontal, GoldengoTheme.Spacing.m)
+        .padding(.vertical, 12)
+        .background(Color.goldengoField)
+        .clipShape(RoundedRectangle(cornerRadius: GoldengoTheme.Radius.control, style: .continuous))
+        .animation(.snappy, value: noteFocused)
     }
 
     // MARK: - Currency
