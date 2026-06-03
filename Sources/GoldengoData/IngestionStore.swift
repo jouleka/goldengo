@@ -18,6 +18,10 @@ public struct ExpenseSnapshot: Sendable, Equatable, Identifiable {
 
     /// Stable identity for `.sheet(item:)` / `ForEach` — the dedupeKey uniquely identifies the row.
     public var id: String { dedupeKey }
+
+    /// The row's primary label: lead with the most specific thing the user gave — the free-text note
+    /// ("what"), then the merchant ("who"), then the category, then a generic fallback.
+    public var displayTitle: String { note ?? merchantName ?? categoryName ?? "Expense" }
 }
 
 @ModelActor
