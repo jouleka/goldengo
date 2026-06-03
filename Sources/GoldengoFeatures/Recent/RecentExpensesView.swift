@@ -160,7 +160,7 @@ public struct RecentExpensesView: View {
     /// Slim, on-brand toast that floats clear of the tab bar after a delete.
     private func undoToast(_ snapshot: ExpenseSnapshot) -> some View {
         GoldengoToast(
-            "\(snapshot.merchantName ?? snapshot.categoryName ?? "Expense") deleted",
+            "\(snapshot.displayTitle) deleted",
             icon: "trash.fill",
             iconTint: GoldengoTheme.danger,
             actionTitle: "Undo",
@@ -343,7 +343,7 @@ public struct RecentExpensesView: View {
                 .clipShape(RoundedRectangle(cornerRadius: GoldengoTheme.Radius.chip, style: .continuous))
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 4) {
-                    Text(r.merchantName ?? r.categoryName ?? "Expense")
+                    Text(r.displayTitle)
                         .font(.subheadline.weight(.medium))
                     if r.subscriptionName != nil {
                         Image(systemName: "repeat").font(.caption2).foregroundStyle(.secondary)
