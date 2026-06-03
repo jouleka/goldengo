@@ -42,6 +42,13 @@ final class QuickAddModelTests: XCTestCase {
         XCTAssertEqual(m.savedCount, 1)
     }
 
+    func test_allowsDecimal_onlyForCurrenciesWithAMinorUnit() throws {
+        // The keypad should hide the "." key for currencies with no minor unit (e.g. lek), where
+        // tapping it does nothing.
+        XCTAssertFalse(try makeModel(.all).allowsDecimal)   // lek: no minor unit
+        XCTAssertTrue(try makeModel(.eur).allowsDecimal)    // eur: 2 decimal places
+    }
+
     func test_keypad_rejectsSecondDecimalPoint() throws {
         let m = try makeModel(.eur)
         m.tap("1"); m.tap("."); m.tap("2"); m.tap("."); m.tap("3")

@@ -25,6 +25,10 @@ public final class QuickAddModel {
 
     public var amountDecimal: Decimal { Decimal(string: amountString) ?? 0 }
     public var canSave: Bool { amountDecimal > 0 }
+
+    /// Whether the keypad should offer a decimal point — only for currencies with a minor unit.
+    /// For currencies like lek (no minor unit) the "." key does nothing, so it's hidden.
+    public var allowsDecimal: Bool { currency.fractionDigits > 0 }
     public var errorText: String?
 
     /// Bumped once per successful save. The view observes it to flash an "Added" confirmation, since

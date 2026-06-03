@@ -9,7 +9,10 @@ public struct QuickAddView: View {
     @State private var showAdded = false
     public init(model: QuickAddModel) { _model = State(initialValue: model) }
 
-    private let keys = ["1", "2", "3", "4", "5", "6", "7", "8", "9", ".", "0", "⌫"]
+    private var keys: [String] {
+        // Hide the decimal key for currencies with no minor unit (e.g. lek) — it would do nothing.
+        ["1", "2", "3", "4", "5", "6", "7", "8", "9", model.allowsDecimal ? "." : "", "0", "⌫"]
+    }
 
     public var body: some View {
         VStack(spacing: GoldengoTheme.Spacing.l) {
@@ -107,21 +110,25 @@ public struct QuickAddView: View {
         LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: GoldengoTheme.Spacing.s), count: 3),
                   spacing: GoldengoTheme.Spacing.s) {
             ForEach(keys, id: \.self) { k in
-                Button { tap(k) } label: {
-                    Group {
-                        if k == "⌫" {
-                            Image(systemName: "delete.left")
-                        } else {
-                            Text(k)
+                if k.isEmpty {
+                    Color.clear.frame(maxWidth: .infinity, minHeight: 60)   // keeps 0 / ⌫ aligned
+                } else {
+                    Button { tap(k) } label: {
+                        Group {
+                            if k == "⌫" {
+                                Image(systemName: "delete.left")
+                            } else {
+                                Text(k)
+                            }
                         }
+                        .font(.title2.weight(.medium))
+                        .frame(maxWidth: .infinity, minHeight: 60)
+                        .background(Color.goldengoField)
+                        .clipShape(RoundedRectangle(cornerRadius: GoldengoTheme.Radius.control, style: .continuous))
                     }
-                    .font(.title2.weight(.medium))
-                    .frame(maxWidth: .infinity, minHeight: 60)
-                    .background(Color.goldengoField)
-                    .clipShape(RoundedRectangle(cornerRadius: GoldengoTheme.Radius.control, style: .continuous))
+                    .buttonStyle(.plain)
+                    .foregroundStyle(.primary)
                 }
-                .buttonStyle(.plain)
-                .foregroundStyle(.primary)
             }
         }
     }
