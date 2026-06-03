@@ -32,11 +32,12 @@ These steps install the app on a real device and enable iCloud sync. They requir
 
 ## Quick capture
 
-Goldengo exposes a **Log Expense** shortcut via `AppShortcutsProvider`, discoverable in the Shortcuts app and by Siri after installing the app.
+Goldengo exposes a **Log Expense** App Shortcut (`AppShortcutsProvider`), so you can log an expense **without opening the app** from any trigger you like. When triggered it asks *"What's it for?"* then *"Amount?"*, saves to your default currency, and shows a quick confirmation — the app never opens.
 
-To wire it to **Back Tap** or the **Action Button** on a real device:
+You pick the trigger (Goldengo hardcodes none):
 
-- **Back Tap:** Settings → Accessibility → Touch → Back Tap → Double Tap (or Triple Tap) → select the Goldengo shortcut.
-- **Action Button (iPhone 15 Pro / 16):** Settings → Action Button → Shortcuts → select the Goldengo shortcut.
+- **Back Tap:** Settings → Accessibility → Touch → **Back Tap** → Double Tap (or Triple Tap) → **Log Expense**.
+- **Action Button (iPhone 15 Pro and later):** Settings → **Action Button** → Shortcut → **Log Expense**.
+- **Control Center**, a **Home/Lock-Screen widget**, the **Shortcuts** app, or **Siri** ("Log an expense in Goldengo").
 
 These are physical-device steps and cannot be verified in the simulator.
