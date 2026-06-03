@@ -30,4 +30,12 @@ final class MoneyTests: XCTestCase {
         let m = Money(amount: Decimal(string: "-12.5")!, currency: .eur)
         XCTAssertEqual(m.formatted(), "-€ 12.50")
     }
+
+    // amountText() is the signed number WITHOUT the symbol — for layouts that render the currency
+    // separately (e.g. the dashboard's tappable currency control beside the amount).
+    func test_amountText_omitsCurrencySymbol() {
+        XCTAssertEqual(Money(amount: Decimal(string: "1383.98")!, currency: .eur).amountText(), "1,383.98")
+        XCTAssertEqual(Money(amount: 1500, currency: .all).amountText(), "1,500")
+        XCTAssertEqual(Money(amount: Decimal(string: "-12.5")!, currency: .eur).amountText(), "-12.50")
+    }
 }

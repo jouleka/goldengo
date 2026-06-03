@@ -13,6 +13,18 @@ public struct Money: Hashable, Sendable {
     /// magnitude formatted and the sign placed before the symbol (e.g. "-L 1,500").
     /// Rounding is explicit and lossy — never use this output for serialization or keys.
     public func formatted() -> String {
+        let (sign, body) = signAndBody()
+        return "\(sign)\(currency.symbol) \(body)"
+    }
+
+    /// The signed magnitude WITHOUT the currency symbol (e.g. "-1,383.98"), for layouts that render
+    /// the currency separately (e.g. a tappable currency control beside the amount).
+    public func amountText() -> String {
+        let (sign, body) = signAndBody()
+        return "\(sign)\(body)"
+    }
+
+    private func signAndBody() -> (sign: String, body: String) {
         let f = NumberFormatter()
         f.numberStyle = .decimal
         f.groupingSeparator = ","
@@ -23,7 +35,6 @@ public struct Money: Hashable, Sendable {
         f.maximumFractionDigits = currency.fractionDigits
         let magnitude = NSDecimalNumber(decimal: abs(amount))
         let body = f.string(from: magnitude) ?? "\(abs(amount))"
-        let sign = amount < 0 ? "-" : ""
-        return "\(sign)\(currency.symbol) \(body)"
+        return (amount < 0 ? "-" : "", body)
     }
 }

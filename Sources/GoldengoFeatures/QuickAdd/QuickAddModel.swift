@@ -16,7 +16,7 @@ public final class QuickAddModel {
     public var merchant: String = ""
 
     /// Most-used categories surfaced as one-tap chips (smart defaults come later).
-    public let quickCategories = ["Groceries", "Food", "Transport", "Coffee", "Bills", "Shopping"]
+    public let quickCategories = ["Groceries", "Food", "Transport", "Coffee", "Bills", "Shopping", "Other"]
 
     public init(store: IngestionStore, currency: CurrencyCode = .all) {
         self.store = store

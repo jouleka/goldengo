@@ -202,35 +202,40 @@ public struct RecentExpensesView: View {
             HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: GoldengoTheme.Spacing.xs) {
                     GoldengoSectionLabel("This month")
-                    Menu {
-                        ForEach(menuCurrencies, id: \.rawValue) { c in
-                            Button {
-                                onChangeCurrency(c)
-                            } label: {
-                                if c.rawValue == model.currency.rawValue {
-                                    Label(menuLabel(c), systemImage: "checkmark")
-                                } else {
-                                    Text(menuLabel(c))
+                    HStack(alignment: .firstTextBaseline, spacing: 6) {
+                        Menu {
+                            ForEach(menuCurrencies, id: \.rawValue) { c in
+                                Button {
+                                    onChangeCurrency(c)
+                                } label: {
+                                    if c.rawValue == model.currency.rawValue {
+                                        Label(menuLabel(c), systemImage: "checkmark")
+                                    } else {
+                                        Text(menuLabel(c))
+                                    }
                                 }
                             }
+                            Divider()
+                            Button { showCurrencyPicker = true } label: {
+                                Label("More currencies…", systemImage: "ellipsis.circle")
+                            }
+                        } label: {
+                            // Small, fixed-width currency control (gold tint signals it's tappable) so the
+                            // big amount beside it keeps a real width budget and scales instead of clipping.
+                            HStack(alignment: .firstTextBaseline, spacing: 2) {
+                                Text(model.currency.symbol)
+                                    .font(.system(size: 26, weight: .bold, design: .rounded))
+                                Image(systemName: "chevron.down")
+                                    .font(.caption2.weight(.bold))
+                            }
+                            .contentShape(Rectangle())
                         }
-                        Divider()
-                        Button { showCurrencyPicker = true } label: {
-                            Label("More currencies…", systemImage: "ellipsis.circle")
-                        }
-                    } label: {
-                        HStack(alignment: .firstTextBaseline, spacing: 4) {
-                            Text(model.monthTotalText())
-                                .font(.system(size: 40, weight: .bold, design: .rounded))
-                                .minimumScaleFactor(0.6)
-                                .lineLimit(1)
-                            Image(systemName: "chevron.down")
-                                .font(.caption.weight(.semibold))
-                                .foregroundStyle(.secondary)
-                        }
-                        .contentShape(Rectangle())
+                        Text(model.monthAmountText())
+                            .font(.system(size: 40, weight: .bold, design: .rounded))
+                            .minimumScaleFactor(0.5)
+                            .lineLimit(1)
+                            .foregroundStyle(.primary)
                     }
-                    .foregroundStyle(.primary)
                     if let asOf = model.ratesAsOf {
                         Text("Rates as of \(asOf.formatted(date: .abbreviated, time: .omitted))")
                             .font(.caption2)

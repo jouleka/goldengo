@@ -60,6 +60,11 @@ public final class RecentExpensesModel {
     public func monthTotalText() -> String {
         Money(amount: summary?.monthTotal ?? 0, currency: currency).formatted()
     }
+    /// The month total as a number without the currency symbol — the symbol is shown separately as a
+    /// tappable currency control, so the big number can scale to fit instead of clipping.
+    public func monthAmountText() -> String {
+        Money(amount: summary?.monthTotal ?? 0, currency: currency).amountText()
+    }
     public func subscriptionsText() -> String? {
         guard let s = summary, s.confirmedSubscriptionCount > 0 else { return nil }
         let monthly = Money(amount: s.confirmedSubscriptionsMonthly, currency: currency).formatted()
