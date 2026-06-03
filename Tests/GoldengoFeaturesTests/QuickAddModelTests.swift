@@ -85,4 +85,16 @@ final class QuickAddModelTests: XCTestCase {
         XCTAssertEqual(m.amountString, "150")        // integer amount unaffected
         XCTAssertTrue(m.allowsDecimal)
     }
+
+    func test_save_persistsTypedNote_andResetClearsIt() async throws {
+        // A note typed on the Quick Add screen must reach the saved expense, and must clear after a
+        // save so it never bleeds into the next entry.
+        let m = try makeModel()
+        m.tap("2"); m.tap("5"); m.tap("0")
+        m.note = "lunch with Ana"
+        await m.save()
+        let rows = try await m.store.recentExpenses()
+        XCTAssertEqual(rows.first?.note, "lunch with Ana")
+        XCTAssertEqual(m.note, "")
+    }
 }

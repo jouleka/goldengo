@@ -14,6 +14,7 @@ public final class QuickAddModel {
     public private(set) var amountString: String = ""
     public var selectedCategory: String?
     public var merchant: String = ""
+    public var note: String = ""
 
     /// Most-used categories surfaced as one-tap chips (smart defaults come later).
     public let quickCategories = ["Groceries", "Food", "Transport", "Coffee", "Bills", "Shopping", "Other"]
@@ -70,6 +71,7 @@ public final class QuickAddModel {
         do {
             try await store.logManual(amount: amountDecimal, currency: currency,
                                       merchant: merchant.isEmpty ? nil : merchant,
+                                      note: note.isEmpty ? nil : note,
                                       categoryName: selectedCategory)
             savedCount += 1
             reset()
@@ -84,6 +86,7 @@ public final class QuickAddModel {
     public func reset() {
         amountString = ""
         merchant = ""
+        note = ""
         selectedCategory = nil
     }
 }
