@@ -29,15 +29,11 @@ public struct QuickAddView: View {
         }
         .padding(.horizontal, GoldengoTheme.Spacing.l)
         .padding(.bottom, GoldengoTheme.Spacing.m)
-        .background(Color.goldengoBackground.ignoresSafeArea())
-#if canImport(UIKit)
-        .toolbar {
-            ToolbarItemGroup(placement: .keyboard) {
-                Spacer()
-                Button("Done") { noteFocused = false }
-            }
-        }
-#endif
+        .background(
+            Color.goldengoBackground
+                .ignoresSafeArea()
+                .onTapGesture { noteFocused = false }   // tap anywhere off the field dismisses the keyboard
+        )
         .sheet(isPresented: $showCurrencyPicker) {
             NavigationStack {
                 CurrencyPickerView(
@@ -234,6 +230,7 @@ public struct QuickAddView: View {
 
     private var addButton: some View {
         Button {
+            noteFocused = false                     // drop the keyboard the moment the expense is added
             Task { await model.save() }
         } label: {
             Text("Add expense")
