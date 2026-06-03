@@ -344,7 +344,7 @@ public struct RecentExpensesView: View {
                         Image(systemName: "repeat").font(.caption2).foregroundStyle(.secondary)
                     }
                 }
-                Text(r.categoryName ?? "Uncategorized")
+                Text(r.categoryName ?? "Other")
                     .font(.caption).foregroundStyle(.secondary)
             }
             Spacer()

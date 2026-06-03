@@ -50,7 +50,7 @@ extension IngestionStore {
             if r.currencyCode != display { usedConversion = true }
             let v = (try? converter.convert(r.amount, from: CurrencyCode(r.currencyCode), to: displayCurrency)) ?? 0
             monthTotal += v
-            byCategory[r.category?.name ?? "Uncategorized", default: 0] += v
+            byCategory[r.category?.name ?? "Other", default: 0] += v
         }
         let topCategories = byCategory
             .map { CategoryTotal(name: $0.key, total: $0.value) }

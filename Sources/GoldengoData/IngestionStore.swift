@@ -125,7 +125,9 @@ public actor IngestionStore {
         if let categoryName, !categoryName.isEmpty {
             rec.category = try findOrCreateCategory(named: categoryName)
         } else {
-            rec.category = try defaultCategory(forMerchant: merchant)
+            // No explicit category and no remembered one for this merchant → a real "Other" category
+            // (so it's counted, shows in Top Categories, and is re-assignable) rather than nil.
+            rec.category = try defaultCategory(forMerchant: merchant) ?? findOrCreateCategory(named: "Other")
         }
         modelContext.insert(rec)
         try linkToConfirmedSubscription(rec)

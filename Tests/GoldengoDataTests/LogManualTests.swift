@@ -19,6 +19,15 @@ final class LogManualTests: XCTestCase {
         XCTAssertEqual(snap?.categoryName, "Groceries")
     }
 
+    func test_logManual_noCategory_defaultsToOther() async throws {
+        // A quick-add with no category and an unknown merchant lands in a real "Other" category
+        // (counted + re-assignable), not nil.
+        let store = IngestionStore(modelContainer: try .goldengoInMemory())
+        let key = try await store.logManual(amount: 100, currency: .all, merchant: nil, categoryName: nil)
+        let snap = try await store.snapshot(dedupeKey: key)
+        XCTAssertEqual(snap?.categoryName, "Other")
+    }
+
     func test_logManual_reusesCategoryCaseInsensitively() async throws {
         let container = try ModelContainer.goldengoInMemory()
         let store = IngestionStore(modelContainer: container)

@@ -50,7 +50,7 @@ final class DashboardSummaryTests: XCTestCase {
     func test_topCategories_sortedDescending() async throws {
         let store = try makeStore()
         let now = day(2026, 6, 15)
-        // No merchant→category mapping, so category is nil → "Uncategorized"; group by amount instead via 2 merchants.
+        // No merchant→category mapping, so imported expenses fall back to "Other"; group by amount via 2 merchants.
         try await ingest(store, "a", 300, day(2026, 6, 2), merchant: "Coffee Corner")
         try await ingest(store, "b", 1200, day(2026, 6, 3), merchant: "Spar Market")
         let s = try await store.dashboardSummary(rates: rates, now: now)
