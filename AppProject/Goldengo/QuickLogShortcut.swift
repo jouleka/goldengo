@@ -51,12 +51,14 @@ struct LogExpenseIntent: AppIntent {
     }
 
     @MainActor
-    func perform() async throws -> some IntentResult & ProvidesDialog {
+    func perform() async throws -> some IntentResult {
         let store = GoldengoStore.shared()
         let currency = SharedSummary().readPreferredCurrency().rawValue
-        let summary = try await ExpenseLogging.log(amount: Decimal(amount), currencyCode: currency,
-                                                   merchant: nil, categoryName: category.rawValue, store: store)
-        return .result(dialog: IntentDialog(stringLiteral: "\(summary) for \(category.rawValue)"))
+        // Save and return NO dialog, so triggering it (e.g. via Back Tap) shows only the system's
+        // brief auto-dismissing banner — there's no "Done" to tap.
+        _ = try await ExpenseLogging.log(amount: Decimal(amount), currencyCode: currency,
+                                         merchant: nil, categoryName: category.rawValue, store: store)
+        return .result()
     }
 }
 
