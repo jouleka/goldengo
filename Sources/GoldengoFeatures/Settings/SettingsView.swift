@@ -12,6 +12,7 @@ public struct SettingsView: View {
     @AppStorage(SharedSummary.preferredCurrencyKey, store: UserDefaults(suiteName: SharedSummary.appGroupID))
     private var preferredCode: String = "ALL"
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.openURL) private var openURL
 
     public init() {}
 
@@ -34,6 +35,19 @@ public struct SettingsView: View {
                         LabeledContent("Default currency", value: preferredLabel)
                     }
                     Text("Used as the default for new expenses and your dashboard total.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+                Section("Quick-log gesture") {
+                    Text("Log an expense without opening Goldengo — a gesture pops up a category list, then the amount. Set it up once:")
+                        .font(.caption).foregroundStyle(.secondary)
+                    Button {
+                        if let url = URL(string: "shortcuts://") { openURL(url) }
+                    } label: {
+                        Label("Open Shortcuts", systemImage: "square.stack.3d.up.fill")
+                    }
+                    Label("In Shortcuts: tap ＋, **Add Action**, search **Log Expense**, add it, then name it and tap Done.", systemImage: "1.circle.fill")
+                    Label("Then **Settings ▸ Accessibility ▸ Touch ▸ Back Tap ▸ Double (or Triple) Tap** → choose **Log Expense**.", systemImage: "2.circle.fill")
+                    Text("Only you can assign the gesture (step 2) — iOS doesn't let apps set Back Tap.")
                         .font(.caption).foregroundStyle(.secondary)
                 }
                 Section("Privacy") {
