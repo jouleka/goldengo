@@ -10,30 +10,30 @@ public struct EditExpenseView: View {
     @Environment(\.dismiss) private var dismiss
 
     private let snapshot: ExpenseSnapshot
-    private let currency: CurrencyCode
-    private let onSave: (_ amount: Decimal, _ merchant: String?, _ note: String?, _ category: String?, _ date: Date) -> Void
+    private let onSave: (_ amount: Decimal, _ currency: CurrencyCode, _ merchant: String?, _ note: String?, _ category: String?, _ date: Date) -> Void
     private let onDelete: () -> Void
 
     @State private var amountText: String
+    @State private var currency: CurrencyCode
     @State private var merchant: String
     @State private var note: String
     @State private var category: String?
     @State private var date: Date
     @State private var showDeleteConfirm = false
+    @State private var showCurrencyPicker = false
 
     /// Base quick categories, shared with QuickAdd; the snapshot's current category is appended
     /// (if not already present) so editing never silently drops an existing assignment.
     private static let baseCategories = ["Groceries", "Food", "Transport", "Coffee", "Bills", "Shopping"]
 
     public init(snapshot: ExpenseSnapshot,
-                currency: CurrencyCode,
-                onSave: @escaping (_ amount: Decimal, _ merchant: String?, _ note: String?, _ category: String?, _ date: Date) -> Void,
+                onSave: @escaping (_ amount: Decimal, _ currency: CurrencyCode, _ merchant: String?, _ note: String?, _ category: String?, _ date: Date) -> Void,
                 onDelete: @escaping () -> Void) {
         self.snapshot = snapshot
-        self.currency = currency
         self.onSave = onSave
         self.onDelete = onDelete
         _amountText = State(initialValue: NSDecimalNumber(decimal: snapshot.amount).stringValue)
+        _currency = State(initialValue: CurrencyCode(snapshot.currencyCode))
         _merchant = State(initialValue: snapshot.merchantName ?? "")
         _note = State(initialValue: snapshot.note ?? "")
         _category = State(initialValue: snapshot.categoryName)
@@ -84,6 +84,17 @@ public struct EditExpenseView: View {
                 }
                 Button("Cancel", role: .cancel) {}
             }
+            .sheet(isPresented: $showCurrencyPicker) {
+                NavigationStack {
+                    CurrencyPickerView(
+                        available: availableCurrencies,
+                        selectedCode: Binding(
+                            get: { currency.rawValue },
+                            set: { currency = CurrencyCode($0) }
+                        )
+                    )
+                }
+            }
         }
     }
 
@@ -92,9 +103,7 @@ public struct EditExpenseView: View {
     private var amountSection: some View {
         Section("Amount") {
             HStack(spacing: GoldengoTheme.Spacing.s) {
-                Text(currency.symbol)
-                    .font(.title3.weight(.semibold))
-                    .foregroundStyle(.secondary)
+                currencyMenu
                 TextField("0", text: $amountText)
                     .font(.title3.weight(.medium))
 #if canImport(UIKit)
@@ -102,6 +111,51 @@ public struct EditExpenseView: View {
 #endif
             }
         }
+    }
+
+    /// Tap the currency to change it — popular currencies inline, "More…" opens the full picker.
+    private var currencyMenu: some View {
+        Menu {
+            ForEach(menuCurrencies, id: \.rawValue) { c in
+                Button {
+                    currency = c
+                } label: {
+                    if c.rawValue == currency.rawValue {
+                        Label(menuLabel(c), systemImage: "checkmark")
+                    } else {
+                        Text(menuLabel(c))
+                    }
+                }
+            }
+            Divider()
+            Button { showCurrencyPicker = true } label: {
+                Label("More currencies…", systemImage: "ellipsis.circle")
+            }
+        } label: {
+            HStack(spacing: 2) {
+                Text(currency.symbol).font(.title3.weight(.semibold))
+                Image(systemName: "chevron.down").font(.caption2.weight(.bold))
+            }
+            .foregroundStyle(.secondary)
+        }
+    }
+
+    private func menuLabel(_ c: CurrencyCode) -> String {
+        let name = Locale.current.localizedString(forCurrencyCode: c.rawValue) ?? c.rawValue
+        return "\(c.symbol)  \(name)"
+    }
+
+    private var availableCurrencies: [CurrencyCode] {
+        CurrencyCatalog.selectable(from: ExchangeRateCache().load() ?? SeedRates.table)
+    }
+
+    private var menuCurrencies: [CurrencyCode] {
+        let have = Set(availableCurrencies.map(\.rawValue))
+        var list = CurrencyCode.popular.filter { have.contains($0.rawValue) }
+        if !list.contains(where: { $0.rawValue == currency.rawValue }) {
+            list.insert(currency, at: 0)   // keep the expense's own currency reachable
+        }
+        return list
     }
 
     private var merchantSection: some View {
@@ -166,7 +220,7 @@ public struct EditExpenseView: View {
         guard let amount = parsedAmount else { return }
         let trimmedMerchant = merchant.trimmingCharacters(in: .whitespacesAndNewlines)
         let trimmedNote = note.trimmingCharacters(in: .whitespacesAndNewlines)
-        onSave(amount, trimmedMerchant.isEmpty ? nil : trimmedMerchant,
+        onSave(amount, currency, trimmedMerchant.isEmpty ? nil : trimmedMerchant,
                trimmedNote.isEmpty ? nil : trimmedNote, category, date)
         dismiss()
     }

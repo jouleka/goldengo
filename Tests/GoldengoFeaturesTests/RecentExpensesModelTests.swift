@@ -33,5 +33,5 @@ private struct FailingReader: RecentExpensesReading {
     func dashboardSummary(in currency: CurrencyCode, rates: RateTable, now: Date, topCategoryLimit: Int) async throws -> DashboardSummary { throw Boom() }
     func deleteExpense(dedupeKey: String) async throws { throw Boom() }
     func restoreExpense(dedupeKey: String) async throws { throw Boom() }
-    func updateExpense(dedupeKey: String, amount: Decimal, merchant: String?, note: String?, categoryName: String?, date: Date) async throws { throw Boom() }
+    func updateExpense(dedupeKey: String, amount: Decimal, currency: CurrencyCode?, merchant: String?, note: String?, categoryName: String?, date: Date) async throws { throw Boom() }
 }

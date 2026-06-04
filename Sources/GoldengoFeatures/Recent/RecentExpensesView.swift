@@ -78,9 +78,8 @@ public struct RecentExpensesView: View {
             .sheet(item: $editing) { snap in
                 EditExpenseView(
                     snapshot: snap,
-                    currency: model.currency,
-                    onSave: { amt, m, n, c, d in
-                        Task { await model.update(snap, amount: amt, merchant: m, note: n, categoryName: c, date: d) }
+                    onSave: { amt, cur, m, n, c, d in
+                        Task { await model.update(snap, amount: amt, currency: cur, merchant: m, note: n, categoryName: c, date: d) }
                     },
                     onDelete: { deleteWithUndo(snap) }
                 )

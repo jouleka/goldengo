@@ -27,10 +27,11 @@ extension IngestionStore {
 
     /// Edit an existing expense's amount, merchant, note, category, and date. An empty/whitespace
     /// merchant, note, or category clears that field.
-    public func updateExpense(dedupeKey: String, amount: Decimal, merchant: String?,
-                              note: String? = nil, categoryName: String?, date: Date) throws {
+    public func updateExpense(dedupeKey: String, amount: Decimal, currency: CurrencyCode? = nil,
+                              merchant: String?, note: String? = nil, categoryName: String?, date: Date) throws {
         guard let r = try fetchActiveExpense(dedupeKey: dedupeKey) else { return }
         r.amount = amount
+        if let currency { r.currencyCode = currency.rawValue }   // nil = keep the existing currency
         let trimmedMerchant = merchant?.trimmingCharacters(in: .whitespacesAndNewlines)
         r.merchantName = (trimmedMerchant?.isEmpty ?? true) ? nil : trimmedMerchant
         let trimmedNote = note?.trimmingCharacters(in: .whitespacesAndNewlines)

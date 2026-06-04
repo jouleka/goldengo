@@ -10,7 +10,7 @@ public protocol RecentExpensesReading: Sendable {
     func dashboardSummary(in currency: CurrencyCode, rates: RateTable, now: Date, topCategoryLimit: Int) async throws -> DashboardSummary
     func deleteExpense(dedupeKey: String) async throws
     func restoreExpense(dedupeKey: String) async throws
-    func updateExpense(dedupeKey: String, amount: Decimal, merchant: String?, note: String?, categoryName: String?, date: Date) async throws
+    func updateExpense(dedupeKey: String, amount: Decimal, currency: CurrencyCode?, merchant: String?, note: String?, categoryName: String?, date: Date) async throws
 }
 
 extension IngestionStore: RecentExpensesReading {}

@@ -90,4 +90,21 @@ final class ExpenseEditingTests: XCTestCase {
         snap = try await store.snapshot(dedupeKey: key)
         XCTAssertNil(snap?.note)
     }
+
+    func test_updateExpense_changesCurrency() async throws {
+        // An expense logged in the wrong currency must be correctable from Edit — otherwise the only
+        // fix is delete + re-add. Passing nil leaves the currency untouched (other edit callers).
+        let store = try makeStore()
+        let key = try await store.logManual(amount: 12, currency: .all, merchant: nil, categoryName: nil)
+
+        try await store.updateExpense(dedupeKey: key, amount: 12, currency: .eur, merchant: nil,
+                                      categoryName: nil, date: .now)
+        var snap = try await store.snapshot(dedupeKey: key)
+        XCTAssertEqual(snap?.currencyCode, "EUR")
+
+        // nil currency = keep whatever it is now.
+        try await store.updateExpense(dedupeKey: key, amount: 12, merchant: nil, categoryName: nil, date: .now)
+        snap = try await store.snapshot(dedupeKey: key)
+        XCTAssertEqual(snap?.currencyCode, "EUR")
+    }
 }
