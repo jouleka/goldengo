@@ -53,10 +53,14 @@ struct LogExpenseIntent: AppIntent {
     @MainActor
     func perform() async throws -> some IntentResult {
         let store = GoldengoStore.shared()
-        let currency = SharedSummary().readPreferredCurrency().rawValue
+        let preferred = SharedSummary().readPreferredCurrency()
+        // Round the Double parameter to the currency's precision so floating point can't persist a
+        // value like 19.989999… (mirrors the in-app keypad's decimal handling).
+        var raw = Decimal(amount), amt = Decimal()
+        NSDecimalRound(&amt, &raw, preferred.fractionDigits, .plain)
         // Save and return NO dialog, so triggering it (e.g. via Back Tap) shows only the system's
         // brief auto-dismissing banner — there's no "Done" to tap.
-        _ = try await ExpenseLogging.log(amount: Decimal(amount), currencyCode: currency,
+        _ = try await ExpenseLogging.log(amount: amt, currencyCode: preferred.rawValue,
                                          merchant: nil, categoryName: category.rawValue, store: store)
         return .result()
     }

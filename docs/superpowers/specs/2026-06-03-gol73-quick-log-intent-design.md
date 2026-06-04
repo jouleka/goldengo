@@ -1,5 +1,7 @@
 # GOL-73 — Quick-log expense via App Intent (note + amount, no app launch)
 
+> **Superseded during implementation.** The shipped quick-log uses a **category tap-list** (not a free-text note), the intent + `AppShortcutsProvider` live in the **app target** (App Shortcuts can't register from a package), and `perform()` returns **no dialog** (silent save). This doc captures the initial design only — see the GOL-73 commits for the final shape.
+
 **Ticket:** [GOL-73](https://mysigner.youtrack.cloud/issue/GOL-73).
 **Status:** design approved; pending spec review.
 **Date:** 2026-06-03.

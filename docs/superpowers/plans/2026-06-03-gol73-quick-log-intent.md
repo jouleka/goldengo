@@ -1,5 +1,7 @@
 # Quick-log expense via App Intent (GOL-73) Implementation Plan
 
+> **Superseded during implementation** — the shipped feature uses a category tap-list, the intent lives in the app target (App Shortcuts can't register from a package), and the result is silent (no dialog). This early plan describes the note+amount approach; see the GOL-73 commits for the final shape.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Let the user log an expense from a trigger of their choice — two system prompts ("What's it for?" then "Amount?") — saved in the preferred currency without opening the app.
