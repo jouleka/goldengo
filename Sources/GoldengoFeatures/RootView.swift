@@ -89,7 +89,12 @@ public struct RootView: View {
             if newTab == 4 { Task { await subsModel.load() } }
         }
         .onChange(of: scenePhase) { _, newPhase in
-            if newPhase == .active { applyPendingTab() }
+            if newPhase == .active {
+                applyPendingTab()
+                // An expense may have been logged via the Quick-Log shortcut while we were
+                // backgrounded; reload so it appears on Home without a manual pull-to-refresh.
+                Task { await recentModel.load() }
+            }
         }
         .onOpenURL { url in
             if let tab = Self.tab(forDeepLink: url) { route(toTab: tab) }
