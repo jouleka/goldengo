@@ -11,7 +11,7 @@ final class RecentExpensesModelTests: XCTestCase {
         let m = RecentExpensesModel(store: store, currency: .all)
         await m.load()
         XCTAssertEqual(m.rows.count, 1)
-        XCTAssertEqual(m.todayTotalText, "L 250")
+        XCTAssertEqual(m.todayTotalText, "ALL 250")
         XCTAssertNotNil(m.summary)
         XCTAssertFalse(m.loadFailed)
     }

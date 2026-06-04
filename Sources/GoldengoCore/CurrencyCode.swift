@@ -21,9 +21,10 @@ public struct CurrencyCode: Hashable, Sendable, Codable {
     private static let displayZeroDigit: Set<String> = isoZeroDigit.union(["ALL"])
 
     /// Unambiguous display symbols; codes that share a glyph (e.g. CAD/AUD/SGD all "$") are left
-    /// to fall back to the ISO code so the user is never shown an ambiguous symbol.
+    /// to fall back to the ISO code so the user is never shown an ambiguous symbol. Lek shows as its
+    /// code "ALL" (not the rarely-recognised "L") by product choice.
     private static let symbols: [String: String] = [
-        "ALL": "L", "EUR": "€", "USD": "$", "GBP": "£", "JPY": "¥", "INR": "₹",
+        "EUR": "€", "USD": "$", "GBP": "£", "JPY": "¥", "INR": "₹",
         "RUB": "₽", "TRY": "₺", "BRL": "R$", "KRW": "₩", "CHF": "Fr", "PLN": "zł", "THB": "฿",
         "VND": "₫", "UAH": "₴", "ILS": "₪", "PHP": "₱", "NGN": "₦", "ZAR": "R"
     ]

@@ -4,7 +4,7 @@ import XCTest
 final class MoneyTests: XCTestCase {
     func test_lek_formatsWithSymbol_noDecimals_groupingSeparator() {
         let m = Money(amount: 1500, currency: .all)
-        XCTAssertEqual(m.formatted(), "L 1,500")
+        XCTAssertEqual(m.formatted(), "ALL 1,500")   // lek shows its ISO code, not "L" (product choice)
     }
 
     func test_eur_formatsWithSymbol_twoDecimals() {
@@ -23,7 +23,7 @@ final class MoneyTests: XCTestCase {
 
     func test_negativeLek_placesSignBeforeSymbol() {
         let m = Money(amount: -1500, currency: .all)
-        XCTAssertEqual(m.formatted(), "-L 1,500")
+        XCTAssertEqual(m.formatted(), "-ALL 1,500")
     }
 
     func test_negativeEur_placesSignBeforeSymbol_twoDecimals() {

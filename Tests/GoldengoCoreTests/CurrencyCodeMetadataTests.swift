@@ -32,7 +32,7 @@ final class CurrencyCodeMetadataTests: XCTestCase {
     func test_symbol_knownAndUnknownFallback() {
         XCTAssertEqual(CurrencyCode("USD").symbol, "$")
         XCTAssertEqual(CurrencyCode("JPY").symbol, "¥")
-        XCTAssertEqual(CurrencyCode.all.symbol, "L")
+        XCTAssertEqual(CurrencyCode.all.symbol, "ALL")  // lek shows its ISO code, not the ambiguous "L"
         XCTAssertEqual(CurrencyCode("ZZZ").symbol, "ZZZ") // unknown → ISO code
         // Ambiguous glyphs fall back to the ISO code: ¥ is shared by yen and renminbi, so CNY
         // must NOT render as ¥ (same rule that excludes CAD/AUD/SGD's "$").
