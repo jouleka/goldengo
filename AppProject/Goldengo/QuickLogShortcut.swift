@@ -66,6 +66,37 @@ struct LogExpenseIntent: AppIntent {
     }
 }
 
+/// A silent action wired into an iOS "Transaction" Personal Automation: every in-store Apple Pay tap
+/// feeds it the amount (+ merchant) and it logs the expense without opening the app. A plain AppIntent
+/// (not an AppShortcut) so it appears in the Shortcuts action picker. Reuses ExpenseLogging.log →
+/// merchant auto-categorizes (learned mapping → "Other") and feeds subscription detection.
+@available(iOS 17.0, *)
+struct LogPaymentIntent: AppIntent {
+    static let title: LocalizedStringResource = "Log Payment"
+    static let description = IntentDescription("Add a payment to Goldengo — wire this to an Apple Pay Transaction automation.")
+
+    @Parameter(title: "Amount") var amount: Double
+    @Parameter(title: "Merchant") var merchant: String?
+
+    init() {}
+
+    static var parameterSummary: some ParameterSummary {
+        Summary("Log a \(\.$amount) payment from \(\.$merchant)")
+    }
+
+    @MainActor
+    func perform() async throws -> some IntentResult {
+        let store = GoldengoStore.shared()
+        let preferred = SharedSummary().readPreferredCurrency()
+        var raw = Decimal(amount), amt = Decimal()
+        NSDecimalRound(&amt, &raw, preferred.fractionDigits, .plain)   // currency-precise; no float artifacts
+        let m = merchant?.trimmingCharacters(in: .whitespacesAndNewlines)
+        _ = try await ExpenseLogging.log(amount: amt, currencyCode: preferred.rawValue,
+                                         merchant: (m?.isEmpty ?? true) ? nil : m, categoryName: nil, store: store)
+        return .result()   // silent — the automation runs with no notification, no app launch
+    }
+}
+
 @available(iOS 17.0, *)
 struct GoldengoAppShortcuts: AppShortcutsProvider {
     static var appShortcuts: [AppShortcut] {
