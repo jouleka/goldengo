@@ -50,6 +50,19 @@ public struct SettingsView: View {
                     Text("Only you can assign the gesture (step 2) — iOS doesn't let apps set Back Tap.")
                         .font(.caption).foregroundStyle(.secondary)
                 }
+                Section("Apple Pay auto-log") {
+                    Text("Auto-add an expense every time you tap to pay in a store — set up an iOS automation once:")
+                        .font(.caption).foregroundStyle(.secondary)
+                    Button {
+                        if let url = URL(string: "shortcuts://") { openURL(url) }
+                    } label: {
+                        Label("Open Shortcuts", systemImage: "creditcard")
+                    }
+                    Label("Shortcuts → **Automation** tab → **＋** → **Transaction** → pick your card(s) → **Run Immediately** (turn off Notify).", systemImage: "1.circle.fill")
+                    Label("**Add Action** → search **Log Payment** → set **Amount** to the transaction's Amount (and **Merchant** to its Merchant) → Done.", systemImage: "2.circle.fill")
+                    Text("In-store taps only — online/web Apple Pay can't trigger it (use Import for those). iOS won't let an app set this up for you.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
                 Section("Privacy") {
                     Toggle("Show amounts on Lock Screen", isOn: $reveal)
                     Text("Off by default — your spending stays hidden on the Lock Screen widget.")
