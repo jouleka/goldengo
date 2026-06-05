@@ -7,16 +7,26 @@ struct GoldengoEntry: TimelineEntry { let date: Date; let totalText: String; let
 
 struct GoldengoProvider: TimelineProvider {
     func placeholder(in c: Context) -> GoldengoEntry {
-        .init(date: .now, totalText: "L 0", reveal: false)
+        .init(date: .now, totalText: SharedSummary().todayDisplayText(), reveal: false)
     }
     func getSnapshot(in c: Context, completion: @escaping (GoldengoEntry) -> Void) {
-        let snap = SharedSummary().read()
-        completion(.init(date: .now, totalText: snap.todayTotalText, reveal: snap.revealOnLockScreen))
+        let s = SharedSummary()
+        completion(.init(date: .now, totalText: s.todayDisplayText(), reveal: s.read().revealOnLockScreen))
     }
     func getTimeline(in c: Context, completion: @escaping (Timeline<GoldengoEntry>) -> Void) {
-        let snap = SharedSummary().read()
-        let e = GoldengoEntry(date: .now, totalText: snap.todayTotalText, reveal: snap.revealOnLockScreen)
-        completion(Timeline(entries: [e], policy: .after(.now.addingTimeInterval(900))))
+        let s = SharedSummary()
+        let reveal = s.read().revealOnLockScreen
+        let now = Date.now
+        let midnight = Calendar.current.nextDate(after: now,
+                                                 matching: DateComponents(hour: 0, minute: 0, second: 0),
+                                                 matchingPolicy: .nextTime) ?? now.addingTimeInterval(86_400)
+        // Two entries: today's total now, and 0 at midnight (the cache's date is no longer "today" by
+        // then, so todayDisplayText returns 0) — so it rolls over even without an exact-midnight refresh.
+        let entries = [
+            GoldengoEntry(date: now, totalText: s.todayDisplayText(now: now), reveal: reveal),
+            GoldengoEntry(date: midnight, totalText: s.todayDisplayText(now: midnight), reveal: reveal),
+        ]
+        completion(Timeline(entries: entries, policy: .after(midnight)))
     }
 }
 
