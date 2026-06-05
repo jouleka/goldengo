@@ -13,13 +13,17 @@ public struct SharedSummary {
     public static let reminderLeadDaysKey = "reminderLeadDays"
     public static let preferredCurrencyKey = "preferredCurrency"
     private static let totalKey = "todayTotalText"
+    private static let totalDateKey = "todayTotalDate"
     private static let pendingTabKey = "pendingTab"
 
     public init(suiteName: String? = SharedSummary.appGroupID) {
         defaults = suiteName.flatMap { UserDefaults(suiteName: $0) } ?? .standard
     }
 
-    public func writeTodayTotal(_ text: String) { defaults.set(text, forKey: Self.totalKey) }
+    public func writeTodayTotal(_ text: String, asOf date: Date = .now) {
+        defaults.set(text, forKey: Self.totalKey)
+        defaults.set(date, forKey: Self.totalDateKey)
+    }
     public func setRevealOnLockScreen(_ on: Bool) { defaults.set(on, forKey: Self.revealKey) }
 
     /// The user's preferred/display currency (ISO code). Defaults to lek when unset.
@@ -48,5 +52,17 @@ public struct SharedSummary {
     public func read() -> Snapshot {
         Snapshot(todayTotalText: defaults.string(forKey: Self.totalKey) ?? "—",
                  revealOnLockScreen: defaults.bool(forKey: Self.revealKey))
+    }
+
+    /// The total to show *for today*: the cached value if it was computed today, otherwise zero in the
+    /// preferred currency (a new day with nothing logged yet — or never written). The widget uses this
+    /// so it never shows a previous day's total.
+    public func todayDisplayText(now: Date = .now) -> String {
+        if let text = defaults.string(forKey: Self.totalKey),
+           let date = defaults.object(forKey: Self.totalDateKey) as? Date,
+           Calendar.current.isDate(date, inSameDayAs: now) {
+            return text
+        }
+        return Money(amount: 0, currency: readPreferredCurrency()).formatted()
     }
 }

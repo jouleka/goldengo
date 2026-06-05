@@ -51,4 +51,25 @@ final class SharedSummaryTests: XCTestCase {
         SharedSummary(suiteName: suite).setPreferredCurrency(CurrencyCode("USD"))
         XCTAssertEqual(SharedSummary(suiteName: suite).readPreferredCurrency(), CurrencyCode("USD"))
     }
+
+    func test_todayDisplayText_showsCachedTotal_whenStampedToday() {
+        let s = SharedSummary(suiteName: freshSuite())
+        let now = Date()
+        s.writeTodayTotal("ALL 500", asOf: now)
+        XCTAssertEqual(s.todayDisplayText(now: now), "ALL 500")
+    }
+
+    func test_todayDisplayText_showsZero_whenStampedAPreviousDay() {
+        // The bug: a total computed yesterday must not show as today's — a new day reads 0.
+        let s = SharedSummary(suiteName: freshSuite())
+        let today = Date()
+        let yesterday = Calendar.current.date(byAdding: .day, value: -1, to: today)!
+        s.writeTodayTotal("ALL 500", asOf: yesterday)
+        XCTAssertEqual(s.todayDisplayText(now: today), "ALL 0")   // lek = 0 decimals
+    }
+
+    func test_todayDisplayText_showsZero_whenNeverWritten() {
+        let s = SharedSummary(suiteName: freshSuite())
+        XCTAssertEqual(s.todayDisplayText(), "ALL 0")             // default preferred currency = lek
+    }
 }
