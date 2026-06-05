@@ -1,6 +1,9 @@
 import Foundation
 import SwiftData
 import GoldengoCore
+#if canImport(WidgetKit)
+import WidgetKit
+#endif
 
 public enum IngestOutcome: String, Sendable, Equatable { case inserted, merged }
 
@@ -98,6 +101,9 @@ public actor IngestionStore {
         let rates = ExchangeRateCache().load() ?? SeedRates.table
         let total = try todayTotal(in: display, rates: rates)
         SharedSummary().writeTodayTotal(Money(amount: total, currency: display).formatted())
+#if canImport(WidgetKit)
+        WidgetCenter.shared.reloadAllTimelines()   // every save path (incl. the Apple Pay automation) refreshes the widget
+#endif
     }
 
     private func makeSnapshot(_ r: ExpenseRecord) -> ExpenseSnapshot {
