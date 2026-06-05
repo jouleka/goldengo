@@ -85,15 +85,18 @@ struct LogPaymentIntent: AppIntent {
     }
 
     @MainActor
-    func perform() async throws -> some IntentResult {
+    func perform() async throws -> some IntentResult & ProvidesDialog {
         let store = GoldengoStore.shared()
         let preferred = SharedSummary().readPreferredCurrency()
         var raw = Decimal(amount), amt = Decimal()
         NSDecimalRound(&amt, &raw, preferred.fractionDigits, .plain)   // currency-precise; no float artifacts
         let m = merchant?.trimmingCharacters(in: .whitespacesAndNewlines)
-        _ = try await ExpenseLogging.log(amount: amt, currencyCode: preferred.rawValue,
-                                         merchant: (m?.isEmpty ?? true) ? nil : m, categoryName: nil, store: store)
-        return .result()   // silent — the automation runs with no notification, no app launch
+        let clean = (m?.isEmpty ?? true) ? nil : m
+        let summary = try await ExpenseLogging.log(amount: amt, currencyCode: preferred.rawValue,
+                                                   merchant: clean, categoryName: nil, store: store)
+        // A passive "Logged …" confirmation (no tap to dismiss): a Run-Immediately automation surfaces
+        // this as a brief banner so the user sees the payment was captured.
+        return .result(dialog: IntentDialog(stringLiteral: clean.map { "\(summary) — \($0)" } ?? summary))
     }
 }
 
@@ -105,6 +108,14 @@ struct GoldengoAppShortcuts: AppShortcutsProvider {
             phrases: ["Log an expense in \(.applicationName)", "Add a \(.applicationName) expense"],
             shortTitle: "Log Expense",
             systemImageName: "plus.circle"
+        )
+        // Registered as an App Shortcut too (not just a plain action) so it surfaces immediately in the
+        // Shortcuts action picker for the Apple Pay Transaction automation — plain AppIntents index slowly.
+        AppShortcut(
+            intent: LogPaymentIntent(),
+            phrases: ["Log a payment in \(.applicationName)", "Log a \(.applicationName) payment"],
+            shortTitle: "Log Payment",
+            systemImageName: "creditcard"
         )
     }
 }
