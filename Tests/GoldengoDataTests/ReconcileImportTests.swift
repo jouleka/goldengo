@@ -75,4 +75,20 @@ final class ReconcileImportTests: XCTestCase {
         let count = try await store.expenseCount()
         XCTAssertEqual(count, 2)
     }
+
+    func test_twoStatementRows_reconcileToDistinctCaptures_collapseToTwo() async throws {
+        let store = IngestionStore(modelContainer: try .goldengoInMemory())
+        _ = try await store.logAutomatic(amount: 300, currency: .all, merchant: "Coffee")
+        _ = try await store.logAutomatic(amount: 300, currency: .all, merchant: "Coffee")
+        // A real statement has BOTH coffees as rows; each must reconcile into a DIFFERENT capture
+        // (one-to-one), not pile onto the first — otherwise the second tap would be hidden.
+        let summary = try await store.importStatement(
+            [importedRow(amount: 300, merchant: "Coffee", daysAfterNow: 1),
+             importedRow(amount: 300, merchant: "Coffee", daysAfterNow: 1)],
+            fileName: "two-coffees.csv")
+        XCTAssertEqual(summary.deduped, 2, "Both rows reconcile into the two existing captures.")
+        XCTAssertEqual(summary.imported, 0)
+        let count = try await store.expenseCount()
+        XCTAssertEqual(count, 2, "Two taps + two statement rows collapse to exactly two records.")
+    }
 }

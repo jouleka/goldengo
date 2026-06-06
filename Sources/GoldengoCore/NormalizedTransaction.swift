@@ -24,9 +24,9 @@ public struct NormalizedTransaction: Hashable, Sendable {
         self.accountRef = accountRef
     }
 
-    /// Stable key for reconciliation. Prefers a provider id; otherwise a
-    /// day-granularity composite so a manual entry and its later-imported
-    /// statement row collapse to one record.
+    /// Stable key for reconciliation. Prefers a provider id; otherwise a day-granularity
+    /// composite so two import rows for the same transaction collapse to one. (Manual entries
+    /// use a unique key in `logManual`, so they are never auto-collapsed.)
     public var dedupeKey: String {
         if let id = externalID, !id.isEmpty { return "ext:\(id)" }
         let day = Self.dayFormatter.string(from: date)

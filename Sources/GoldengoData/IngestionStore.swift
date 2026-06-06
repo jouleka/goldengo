@@ -32,7 +32,9 @@ public actor IngestionStore {
     /// Insert a transaction, or merge it into the existing non-archived record with the
     /// same dedupeKey. Note: with composite keys (no external id) two genuinely distinct
     /// expenses sharing day+amount+merchant+account will merge — an accepted trade-off
-    /// (spec §6) in exchange for collapsing manual+import duplicates.
+    /// (spec §6) for collapsing import↔import duplicates. Manual entries use a unique key
+    /// (`logManual`), so they are never auto-collapsed; an imported row may also reconcile
+    /// into a recent `.automatic` capture (see `reconcileImportedAgainstAutomatic`).
     public func ingest(_ tx: NormalizedTransaction, source: ExpenseSource = .imported) throws -> IngestOutcome {
         let key = tx.dedupeKey
         var fd = FetchDescriptor<ExpenseRecord>(predicate: #Predicate { $0.dedupeKey == key && $0.isArchived == false })
@@ -83,6 +85,8 @@ public actor IngestionStore {
     private func reconcileImportedAgainstAutomatic(_ tx: NormalizedTransaction) throws -> ExpenseRecord? {
         let merchantNorm = MerchantNormalizer.normalize(tx.rawMerchant)
         guard !merchantNorm.isEmpty else { return nil }
+        // Calendar.current (not UTC like dedupeKey): the +1-day slack on `upper` absorbs tz skew,
+        // and any miss errs toward a kept duplicate — never a hidden expense.
         let cal = Calendar.current
         let postingDay = cal.startOfDay(for: tx.date)
         guard let lower = cal.date(byAdding: .day, value: -4, to: postingDay),
