@@ -3,11 +3,20 @@ import GoldengoData
 import GoldengoDesignSystem
 import GoldengoCore
 
+/// A statement file handed to the app via the Share Sheet / "Open in" → presented as the import
+/// sheet. Identifiable so `.sheet(item:)` re-presents for each distinct shared file.
+public struct ImportFile: Identifiable, Hashable {
+    public let id: String
+    public let url: URL
+    public init(url: URL) { self.url = url; self.id = url.absoluteString }
+}
+
 public struct RootView: View {
     private let store: IngestionStore
     @State private var selectedTab: Int = 1            // Home dashboard is the orienting landing screen.
     @State private var showSettings = false
     @State private var showImport = false
+    @State private var importFile: ImportFile?            // a statement shared into the app (Share / Open in)
     @Environment(\.scenePhase) private var scenePhase
     // Owned here (not inline in the tab) so Home can be refreshed when the user returns to it or
     // finishes an import — otherwise newly added/imported expenses don't appear until a manual reload.
@@ -81,6 +90,13 @@ public struct RootView: View {
         }) {
             ImportView(model: ImportModel(store: store))
         }
+        .sheet(item: $importFile, onDismiss: {
+            // Same post-import refresh as the picker path (new expenses + possible new recurring patterns).
+            Task { await recentModel.load() }
+            Task { await subsModel.load() }
+        }) { file in
+            ImportView(model: ImportModel(store: store), autoImport: file.url)
+        }
         .onAppear { applyPendingTab() }
         .task { await recentModel.load() }   // cold-launch load (Home is the landing tab)
         .onChange(of: selectedTab) { _, newTab in
@@ -97,9 +113,17 @@ public struct RootView: View {
             }
         }
         .onOpenURL { url in
-            if let tab = Self.tab(forDeepLink: url) { route(toTab: tab) }
+            if Self.isStatementFile(url) {
+                importFile = ImportFile(url: url)            // Share-to-Goldengo: import the shared file
+            } else if let tab = Self.tab(forDeepLink: url) {
+                route(toTab: tab)
+            }
         }
     }
+
+    /// A shared statement arrives as a `file://` URL (vs a `goldengo://` deep link). Extracted so
+    /// the routing branch is unit-testable and can't silently regress.
+    public nonisolated static func isStatementFile(_ url: URL) -> Bool { url.isFileURL }
 
     /// Maps a `goldengo://` deep link to a tab index (extracted so routing is unit-testable
     /// and can't silently regress). `quickadd` -> Add (0), `recent`/`home` -> Home (1),

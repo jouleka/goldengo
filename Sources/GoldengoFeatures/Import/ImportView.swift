@@ -6,8 +6,13 @@ import GoldengoDesignSystem
 public struct ImportView: View {
     @State private var model: ImportModel
     @State private var showingPicker = false
+    @State private var didAutoImport = false
+    private let autoImport: URL?
     @Environment(\.dismiss) private var dismiss
-    public init(model: ImportModel) { _model = State(initialValue: model) }
+    public init(model: ImportModel, autoImport: URL? = nil) {
+        _model = State(initialValue: model)
+        self.autoImport = autoImport
+    }
 
     public var body: some View {
         NavigationStack {
@@ -28,6 +33,13 @@ public struct ImportView: View {
             }
             .background(Color.goldengoBackground.ignoresSafeArea())
             .navigationTitle("Import")
+            .task {
+                // Share-to-Goldengo: import the handed-in file once, so the sheet opens straight
+                // onto the result card rather than an empty picker.
+                guard let autoImport, !didAutoImport else { return }
+                didAutoImport = true
+                await model.importFile(url: autoImport)
+            }
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Done") { dismiss() }
