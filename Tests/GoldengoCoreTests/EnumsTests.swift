@@ -9,6 +9,6 @@ final class EnumsTests: XCTestCase {
 
     func test_expenseSource_rawValues() {
         XCTAssertEqual(ExpenseSource.manual.rawValue, "manual")
-        XCTAssertEqual(Set(ExpenseSource.allCases), [.manual, .imported, .crypto])
+        XCTAssertEqual(Set(ExpenseSource.allCases), [.manual, .imported, .crypto, .automatic])
     }
 }
