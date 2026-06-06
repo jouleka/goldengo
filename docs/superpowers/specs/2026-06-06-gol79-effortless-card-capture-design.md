@@ -62,7 +62,7 @@ Two independent, on-device units that meet only at `IngestionStore`. **No new ap
 2. **Reconcile at import**, inside `IngestionStore.ingest(_:source:)` for `source == .imported`: when the existing dedupeKey lookup misses, run a cross-source lookup for a recent **`.automatic`** record matching on **all** of:
    - same `currencyCode`,
    - **exact** `amount` (no rate conversion),
-   - normalized-merchant match via the existing `MerchantNormalizer.normalize` (non-empty on both sides),
+   - **exact** equality of `MerchantNormalizer.normalize` (it uppercases and drops *purely-numeric* tokens — so "Spar" matches "SPAR 4471", but **not** "SPAR TIRANA"; location-word differences intentionally remain as deletable duplicates, the high-confidence bar), non-empty on both sides,
    - posting date within `swipeDay ≤ postingDay ≤ swipeDay + 4` (day granularity, UTC, matching `dedupeKey`'s formatter),
    - same `kind` (expense).
    If found → **reuse the existing merge** (provenance becomes `.imported`, first-seen amount/date/currency preserved, category/subscription links kept, `updatedAt` bumped) and return `.merged`. If not → insert (a visible, deletable possible-duplicate).
@@ -106,7 +106,8 @@ Unit B (inside ingest, source == .imported, after dedupeKey miss):
 ## Tests (TDD — each encodes *why*)
 
 `GoldengoDataTests` (Unit B — the heart):
-- **High-confidence merge:** `.automatic` (day D, 1500 ALL, "Spar") + import (D+2, 1500 ALL, "SPAR TIRANA") → **one** record, source `.imported`. *Why: the same purchase from two paths must not double-count.*
+- **High-confidence merge:** `.automatic` (day D, 1500 ALL, "Spar") + import (D+2, 1500 ALL, "SPAR 4471" — numeric terminal token dropped, both normalize to "SPAR") → **one** record, source `.imported`. *Why: the same purchase from two paths must not double-count.*
+- **Location-word difference stays a duplicate:** `.automatic` ("Spar") + import ("SPAR TIRANA", normalizes to "SPAR TIRANA" ≠ "SPAR") → **both kept**. *Why: the merchant bar is exact-normalized; a leftover deletable duplicate beats a wrong merge.*
 - **No false-merge of recurring spend:** two `.automatic` 300 ALL "Coffee" on D and D+1; import **one** 300 ALL coffee (D+2) → merges into **at most one**; the other survives; total count reflects every distinct purchase. *Why: never hide a real expense by collapsing distinct same-amount purchases.*
 - **Never touch manual:** hand-typed `.manual` 1500 ALL "Spar" + matching import → **both kept**, manual untouched. *Why: user-asserted entries are truth.*
 - **Currency guard:** `.automatic` 10 EUR vs import 10 ALL (same merchant/date) → **not merged**. *Why: same number, different money.*
