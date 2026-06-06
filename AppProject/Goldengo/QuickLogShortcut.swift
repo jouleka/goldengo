@@ -93,7 +93,8 @@ struct LogPaymentIntent: AppIntent {
         let m = merchant?.trimmingCharacters(in: .whitespacesAndNewlines)
         let clean = (m?.isEmpty ?? true) ? nil : m
         let summary = try await ExpenseLogging.log(amount: amt, currencyCode: preferred.rawValue,
-                                                   merchant: clean, categoryName: nil, store: store)
+                                                   merchant: clean, categoryName: nil, store: store,
+                                                   automatic: true)
         // A passive "Logged …" confirmation (no tap to dismiss): a Run-Immediately automation surfaces
         // this as a brief banner so the user sees the payment was captured.
         return .result(dialog: IntentDialog(stringLiteral: clean.map { "\(summary) — \($0)" } ?? summary))
