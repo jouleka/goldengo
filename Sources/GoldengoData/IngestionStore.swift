@@ -87,19 +87,22 @@ public actor IngestionStore {
         let postingDay = cal.startOfDay(for: tx.date)
         guard let lower = cal.date(byAdding: .day, value: -4, to: postingDay),
               let upper = cal.date(byAdding: .day, value: 1, to: postingDay) else { return nil }
-        let amt = tx.amount
         let cur = tx.currency.rawValue
         let kindRaw = tx.kind.rawValue
         let autoRaw = ExpenseSource.automatic.rawValue
+        // Filter currency/kind/source/date-window in the store; match amount + merchant IN MEMORY.
+        // (SwiftData/CoreData predicate translation of `Decimal` equality can crash at runtime, so
+        // `amount` must NOT appear in the #Predicate.)
         let fd = FetchDescriptor<ExpenseRecord>(
             predicate: #Predicate {
                 $0.isArchived == false && $0.sourceRaw == autoRaw && $0.kindRaw == kindRaw
-                    && $0.currencyCode == cur && $0.amount == amt
+                    && $0.currencyCode == cur
                     && $0.date >= lower && $0.date < upper
             },
             sortBy: [SortDescriptor(\.date, order: .forward)])
+        let amt = tx.amount
         let candidates = try modelContext.fetch(fd)
-        return candidates.first { MerchantNormalizer.normalize($0.merchantName) == merchantNorm }
+        return candidates.first { $0.amount == amt && MerchantNormalizer.normalize($0.merchantName) == merchantNorm }
     }
 
     public func expenseCount() throws -> Int {
