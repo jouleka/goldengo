@@ -130,11 +130,31 @@ public actor IngestionStore {
     @discardableResult
     public func logManual(amount: Decimal, currency: CurrencyCode,
                           merchant: String?, note: String? = nil, categoryName: String?) throws -> String {
-        let key = "manual:\(UUID().uuidString)"
+        try logEntry(amount: amount, currency: currency, merchant: merchant, note: note,
+                     categoryName: categoryName, source: .manual, keyPrefix: "manual")
+    }
+
+    /// Logs a hands-free auto-captured payment (e.g. the Apple Pay Transaction automation). Same
+    /// behavior as `logManual` but tagged `.automatic` so import reconciliation can safely merge a
+    /// later statement row into it, and the UI can label it "auto-logged". Always a distinct insert.
+    @discardableResult
+    public func logAutomatic(amount: Decimal, currency: CurrencyCode,
+                             merchant: String?, categoryName: String? = nil) throws -> String {
+        try logEntry(amount: amount, currency: currency, merchant: merchant, note: nil,
+                     categoryName: categoryName, source: .automatic, keyPrefix: "auto")
+    }
+
+    /// Shared insert for the user-facing log paths (`logManual`, `logAutomatic`). A unique
+    /// `<keyPrefix>:<uuid>` dedupeKey means these are never collapsed with each other — only an
+    /// imported statement row reconciles into an `.automatic` entry (see `ingest`).
+    @discardableResult
+    private func logEntry(amount: Decimal, currency: CurrencyCode, merchant: String?, note: String?,
+                          categoryName: String?, source: ExpenseSource, keyPrefix: String) throws -> String {
+        let key = "\(keyPrefix):\(UUID().uuidString)"
         let cleanNote = note?.trimmingCharacters(in: .whitespacesAndNewlines)
         let rec = ExpenseRecord(amount: amount, currencyCode: currency.rawValue, date: .now,
                                 merchantName: merchant, note: (cleanNote?.isEmpty ?? true) ? nil : cleanNote,
-                                kind: .expense, source: .manual, dedupeKey: key)
+                                kind: .expense, source: source, dedupeKey: key)
         if let categoryName, !categoryName.isEmpty {
             rec.category = try findOrCreateCategory(named: categoryName)
         } else {
