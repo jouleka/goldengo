@@ -28,6 +28,21 @@
       <key>CFBundleURLSchemes</key><array><string>goldengo</string></array>
     </dict>
   </array>
+  <key>CFBundleDocumentTypes</key>
+  <array>
+    <dict>
+      <key>CFBundleTypeName</key><string>Bank statement</string>
+      <key>CFBundleTypeRole</key><string>Viewer</string>
+      <key>LSHandlerRank</key><string>Alternate</string>
+      <key>LSItemContentTypes</key>
+      <array>
+        <string>com.adobe.pdf</string>
+        <string>public.comma-separated-values-text</string>
+        <string>public.plain-text</string>
+      </array>
+    </dict>
+  </array>
+  <key>LSSupportsOpeningDocumentsInPlace</key><true/>
   <key>NSAppTransportSecurity</key>
   <dict>
     <key>NSAllowsArbitraryLoads</key><false/>
