@@ -38,26 +38,7 @@ public struct ImportView: View {
                 allowedContentTypes: [.pdf, .commaSeparatedText, .plainText]
             ) { result in
                 guard case let .success(url) = result else { return }
-                Task {
-                    let scoped = url.startAccessingSecurityScopedResource()
-                    defer { if scoped { url.stopAccessingSecurityScopedResource() } }
-
-                    if let size = try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize,
-                       size > 10_000_000 {
-                        model.setError("File too large (max 10 MB).")
-                        return
-                    }
-
-                    if url.pathExtension.lowercased() == "pdf" {
-                        await model.importPDF(url: url, fileName: url.lastPathComponent)
-                    } else if let text = try? String(contentsOf: url, encoding: .utf8) {
-                        await model.importCSV(text: text, fileName: url.lastPathComponent)
-                    } else if let text = try? String(contentsOf: url, encoding: .isoLatin1) {
-                        await model.importCSV(text: text, fileName: url.lastPathComponent)
-                    } else {
-                        model.setError("Couldn't read the file (unsupported encoding).")
-                    }
-                }
+                Task { await model.importFile(url: url) }
             }
         }
     }

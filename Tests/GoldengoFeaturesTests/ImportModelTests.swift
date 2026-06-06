@@ -52,4 +52,37 @@ final class ImportModelTests: XCTestCase {
         let count = try await store.expenseCount()
         XCTAssertGreaterThanOrEqual(count, 1)
     }
+
+    // GOL-79: the single file-open entry point used by both the picker and Share-to-Goldengo.
+    func test_importFile_csv_importsRows() async throws {
+        let store = IngestionStore(modelContainer: try .goldengoInMemory())
+        let m = ImportModel(store: store, currency: .all)
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("gol79-\(UUID().uuidString).csv")
+        let csv = """
+        Date,Description,Amount,Reference
+        2026-05-30,SPAR TIRANA,-1500.00,tx1
+        """
+        try csv.write(to: url, atomically: true, encoding: .utf8)
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        await m.importFile(url: url)
+
+        XCTAssertEqual(m.resultText, "Imported 1, skipped 0 duplicates")
+        let count = try await store.expenseCount()
+        XCTAssertEqual(count, 1)
+    }
+
+    func test_importFile_tooLarge_reportsError() async throws {
+        let store = IngestionStore(modelContainer: try .goldengoInMemory())
+        let m = ImportModel(store: store, currency: .all)
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("gol79-big-\(UUID().uuidString).csv")
+        try Data(count: 10_000_001).write(to: url)
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        await m.importFile(url: url)
+
+        XCTAssertEqual(m.resultText, "File too large (max 10 MB).")
+    }
 }
