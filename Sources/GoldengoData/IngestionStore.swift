@@ -38,18 +38,14 @@ public actor IngestionStore {
         var fd = FetchDescriptor<ExpenseRecord>(predicate: #Predicate { $0.dedupeKey == key && $0.isArchived == false })
         fd.fetchLimit = 1
         if let existing = try modelContext.fetch(fd).first {
-            // Merge: refresh provenance/merchant but keep the first-seen amount/date/currency
-            // — an import confirming a manual entry must not silently rewrite what the user typed.
-            existing.sourceRaw = source.rawValue
-            existing.merchantName = tx.rawMerchant ?? existing.merchantName
-            existing.updatedAt = .now
-            // Back-fill the merchant default category if the record still has none
-            // (e.g. a manual entry made before the merchant->category mapping was learned).
-            if existing.category == nil {
-                existing.category = try defaultCategory(forMerchant: tx.rawMerchant)
-            }
-            try linkToConfirmedSubscription(existing)
-            try modelContext.save()
+            try merge(existing, with: tx, source: source)
+            return .merged
+        }
+        // Cross-source reconciliation: an imported statement row that is very likely the same
+        // purchase as a recent hands-free (.automatic) capture merges into it rather than
+        // double-counting. Conservative on purpose — see reconcileImportedAgainstAutomatic.
+        if source == .imported, let auto = try reconcileImportedAgainstAutomatic(tx) {
+            try merge(auto, with: tx, source: source)
             return .merged
         }
         let rec = ExpenseRecord(amount: tx.amount, currencyCode: tx.currency.rawValue,
@@ -60,6 +56,50 @@ public actor IngestionStore {
         try linkToConfirmedSubscription(rec)
         try modelContext.save()
         return .inserted
+    }
+
+    /// Merge an incoming transaction into an existing record: refresh provenance/merchant but keep
+    /// the first-seen amount/date/currency — an import confirming an earlier entry must not silently
+    /// rewrite it. Used by both the exact-dedupeKey path and cross-source reconciliation.
+    private func merge(_ existing: ExpenseRecord, with tx: NormalizedTransaction, source: ExpenseSource) throws {
+        existing.sourceRaw = source.rawValue
+        existing.merchantName = tx.rawMerchant ?? existing.merchantName
+        existing.updatedAt = .now
+        // Back-fill the merchant default category if the record still has none
+        // (e.g. a manual entry made before the merchant->category mapping was learned).
+        if existing.category == nil {
+            existing.category = try defaultCategory(forMerchant: tx.rawMerchant)
+        }
+        try linkToConfirmedSubscription(existing)
+        try modelContext.save()
+    }
+
+    /// Find a recent `.automatic` capture that is high-confidence the SAME purchase as an imported
+    /// row, or nil. High-confidence = same currency + exact amount + same kind + exact normalized
+    /// merchant (`MerchantNormalizer`, which drops numeric terminal tokens) + the swipe day within
+    /// `[postingDay - 4, postingDay]` (posting follows the swipe). Returns the earliest match so a
+    /// second imported row in the same statement reconciles against a different capture. Bias:
+    /// anything short of this stays a separate, deletable record — never hide a real expense.
+    private func reconcileImportedAgainstAutomatic(_ tx: NormalizedTransaction) throws -> ExpenseRecord? {
+        let merchantNorm = MerchantNormalizer.normalize(tx.rawMerchant)
+        guard !merchantNorm.isEmpty else { return nil }
+        let cal = Calendar.current
+        let postingDay = cal.startOfDay(for: tx.date)
+        guard let lower = cal.date(byAdding: .day, value: -4, to: postingDay),
+              let upper = cal.date(byAdding: .day, value: 1, to: postingDay) else { return nil }
+        let amt = tx.amount
+        let cur = tx.currency.rawValue
+        let kindRaw = tx.kind.rawValue
+        let autoRaw = ExpenseSource.automatic.rawValue
+        let fd = FetchDescriptor<ExpenseRecord>(
+            predicate: #Predicate {
+                $0.isArchived == false && $0.sourceRaw == autoRaw && $0.kindRaw == kindRaw
+                    && $0.currencyCode == cur && $0.amount == amt
+                    && $0.date >= lower && $0.date < upper
+            },
+            sortBy: [SortDescriptor(\.date, order: .forward)])
+        let candidates = try modelContext.fetch(fd)
+        return candidates.first { MerchantNormalizer.normalize($0.merchantName) == merchantNorm }
     }
 
     public func expenseCount() throws -> Int {
