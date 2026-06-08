@@ -97,4 +97,24 @@ final class ReceiptParserTests: XCTestCase {
         let lines = [line("SPAR", y: 0.9), line("TOTALI 1200", y: 0.2)]
         XCTAssertNil(ReceiptParser.parse(lines, currency: .all).date)
     }
+
+    // Guards against the worst failure mode: a non-price number winning the no-keyword fallback.
+    func test_amount_ignoresDateTokenInFallback() {
+        let lines = [
+            line("Cafe Elida", y: 0.95),
+            line("30.05.2025", y: 0.30),   // a date, NOT the total
+            line("1200", y: 0.15),         // the real (unlabeled) total
+        ]
+        XCTAssertEqual(ReceiptParser.parse(lines, currency: .all).amount, 1200,
+                       "A date in the lower half must never be mistaken for the total.")
+    }
+
+    func test_amount_ignoresLongIdTokenInFallback() {
+        let lines = [
+            line("NIPT 1234567890", y: 0.30),   // Albanian tax id on the footer
+            line("950", y: 0.15),
+        ]
+        XCTAssertEqual(ReceiptParser.parse(lines, currency: .all).amount, 950,
+                       "A long id/code must never be mistaken for the total.")
+    }
 }

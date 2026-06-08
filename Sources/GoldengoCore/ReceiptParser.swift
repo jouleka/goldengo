@@ -55,12 +55,19 @@ public enum ReceiptParser {
         return re.firstMatch(in: text, range: NSRange(location: 0, length: (text as NSString).length)) != nil
     }
 
-    /// Every parseable money amount in a string (currency symbols/letters ignored).
+    /// Every parseable money amount in a string. Currency symbols/letters are ignored; tokens that
+    /// are clearly NOT prices are rejected so they can't win the `.max()` fallback:
+    ///  - date-shaped tokens (e.g. "30.05.2025" would collapse to 30052025), and
+    ///  - over-long digit runs (tax ids / phone numbers / codes — a receipt total isn't 8+ digits).
     static func amounts(in text: String, digits: Int) -> [Decimal] {
         guard let re = try? NSRegularExpression(pattern: #"\d[\d.,]*\d|\d"#) else { return [] }
         let ns = text as NSString
-        return re.matches(in: text, range: NSRange(location: 0, length: ns.length))
-            .compactMap { parseAmount(ns.substring(with: $0.range), fractionDigits: digits) }
+        return re.matches(in: text, range: NSRange(location: 0, length: ns.length)).compactMap { m -> Decimal? in
+            let token = ns.substring(with: m.range)
+            if dateString(in: token) != nil { return nil }
+            if token.filter(\.isNumber).count > 7 { return nil }
+            return parseAmount(token, fractionDigits: digits)
+        }
     }
 
     /// Parse one numeric token to Decimal, resolving `,`/`.` as decimal vs. thousands separators.
