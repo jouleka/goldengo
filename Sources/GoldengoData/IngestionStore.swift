@@ -176,9 +176,10 @@ public actor IngestionStore {
     /// same-day purchases are never collapsed. Returns the new record's dedupeKey.
     @discardableResult
     public func logManual(amount: Decimal, currency: CurrencyCode,
-                          merchant: String?, note: String? = nil, categoryName: String?) throws -> String {
+                          merchant: String?, note: String? = nil, categoryName: String?,
+                          date: Date = .now) throws -> String {
         try logEntry(amount: amount, currency: currency, merchant: merchant, note: note,
-                     categoryName: categoryName, source: .manual, keyPrefix: "manual")
+                     categoryName: categoryName, source: .manual, keyPrefix: "manual", date: date)
     }
 
     /// Logs a hands-free auto-captured payment (e.g. the Apple Pay Transaction automation). Same
@@ -196,10 +197,11 @@ public actor IngestionStore {
     /// imported statement row reconciles into an `.automatic` entry (see `ingest`).
     @discardableResult
     private func logEntry(amount: Decimal, currency: CurrencyCode, merchant: String?, note: String?,
-                          categoryName: String?, source: ExpenseSource, keyPrefix: String) throws -> String {
+                          categoryName: String?, source: ExpenseSource, keyPrefix: String,
+                          date: Date = .now) throws -> String {
         let key = "\(keyPrefix):\(UUID().uuidString)"
         let cleanNote = note?.trimmingCharacters(in: .whitespacesAndNewlines)
-        let rec = ExpenseRecord(amount: amount, currencyCode: currency.rawValue, date: .now,
+        let rec = ExpenseRecord(amount: amount, currencyCode: currency.rawValue, date: date,
                                 merchantName: merchant, note: (cleanNote?.isEmpty ?? true) ? nil : cleanNote,
                                 kind: .expense, source: source, dedupeKey: key)
         if let categoryName, !categoryName.isEmpty {

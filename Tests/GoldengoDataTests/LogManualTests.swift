@@ -57,4 +57,14 @@ final class LogManualTests: XCTestCase {
         let snap = try await store.snapshot(dedupeKey: key)
         XCTAssertNil(snap?.note)
     }
+
+    func test_logManual_persistsExplicitDate() async throws {
+        // A scanned/back-dated receipt must keep the receipt's date, not "now".
+        let store = IngestionStore(modelContainer: try .goldengoInMemory())
+        let past = Date(timeIntervalSince1970: 1_700_000_000)   // 2023-11-14
+        _ = try await store.logManual(amount: 500, currency: .all, merchant: "Spar",
+                                      categoryName: nil, date: past)
+        let recents = try await store.recentExpenses(limit: 1)
+        XCTAssertEqual(recents.first?.date, past)
+    }
 }
