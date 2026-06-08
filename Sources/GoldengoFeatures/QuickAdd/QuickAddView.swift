@@ -11,6 +11,10 @@ public struct QuickAddView: View {
     @State private var showAdded = false
     @State private var showCurrencyPicker = false
     @FocusState private var noteFocused: Bool
+#if os(iOS)
+    @State private var showScanner = false
+    @State private var scanModel: ReceiptScanModel?
+#endif
     public init(model: QuickAddModel) { _model = State(initialValue: model) }
 
     private var keys: [String] {
@@ -25,6 +29,9 @@ public struct QuickAddView: View {
             categoryChips
             Spacer(minLength: 0)
             keypad
+#if os(iOS)
+            scanReceiptButton
+#endif
             addButton
         }
         .padding(.horizontal, GoldengoTheme.Spacing.l)
@@ -45,6 +52,23 @@ public struct QuickAddView: View {
                 )
             }
         }
+#if os(iOS)
+        .fullScreenCover(isPresented: $showScanner) {
+            DocumentScannerView(
+                onScan: { cg in
+                    showScanner = false
+                    let m = ReceiptScanModel(store: model.store, currency: model.currency)
+                    scanModel = m
+                    Task { await m.handle(cgImage: cg) }
+                },
+                onCancel: { showScanner = false }
+            )
+            .ignoresSafeArea()
+        }
+        .sheet(item: $scanModel) { m in
+            ReceiptReviewView(model: m, onDone: { scanModel = nil })
+        }
+#endif
         .alert("Couldn't save", isPresented: Binding(
             get: { model.errorText != nil },
             set: { if !$0 { model.errorText = nil } }
@@ -245,4 +269,18 @@ public struct QuickAddView: View {
     }
 
     private func tap(_ k: String) { k == "⌫" ? model.backspace() : model.tap(k) }
+
+#if os(iOS)
+    @ViewBuilder private var scanReceiptButton: some View {
+        if DocumentScannerView.isSupported {
+            Button { showScanner = true } label: {
+                Label("Scan receipt", systemImage: "doc.viewfinder")
+                    .font(.subheadline.weight(.medium))
+                    .frame(maxWidth: .infinity, minHeight: 44)
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(GoldengoTheme.accent)
+        }
+    }
+#endif
 }
