@@ -11,6 +11,8 @@ public struct SettingsView: View {
     private var leadDays: Int = 1
     @AppStorage(SharedSummary.preferredCurrencyKey, store: UserDefaults(suiteName: SharedSummary.appGroupID))
     private var preferredCode: String = "ALL"
+    @AppStorage(SharedSummary.ritualEnabledKey, store: UserDefaults(suiteName: SharedSummary.appGroupID))
+    private var ritualEnabled: Bool = false
     @Environment(\.dismiss) private var dismiss
     @Environment(\.openURL) private var openURL
 
@@ -76,6 +78,11 @@ public struct SettingsView: View {
                     Text("Get a local notification before a confirmed subscription's next charge.")
                         .font(.caption).foregroundStyle(.secondary)
                 }
+                Section("Daily check-in") {
+                    Toggle("Morning + evening check-in", isOn: $ritualEnabled)
+                    Text("A morning intention you set for yourself, surfaced back to you at night with a calm recap. Two gentle nudges a day.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
             }
             .navigationTitle("Settings")
             .toolbar {
@@ -93,6 +100,19 @@ public struct SettingsView: View {
                         if await LocalNotificationScheduler.requestAuthorization() == false { remind = false }
                     } else {
                         await LocalNotificationScheduler.cancelAll()
+                    }
+                }
+            }
+            // Enabling requests notification permission then schedules the two daily nudges; if
+            // permission is denied we leave the toggle ON (the screens still self-present on app
+            // open — notifications are just a bonus). Disabling cancels only the ritual requests.
+            .onChange(of: ritualEnabled) { _, on in
+                Task { @MainActor in
+                    if on {
+                        await LocalNotificationScheduler.requestAuthorization()
+                        await LocalNotificationScheduler.scheduleRitual()
+                    } else {
+                        await LocalNotificationScheduler.cancelRitual()
                     }
                 }
             }
