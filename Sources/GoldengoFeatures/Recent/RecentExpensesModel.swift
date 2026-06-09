@@ -23,12 +23,11 @@ public final class RecentExpensesModel {
     public func load() async {
         do {
             let rates = ExchangeRateCache().load() ?? SeedRates.table
-            let fetched = try await reader.recentExpenses(limit: 50)
-            let total = try await reader.todayTotal(in: currency, rates: rates)
-            rows = fetched
-            todayTotalText = Money(amount: total, currency: currency).formatted()
-            summary = try await reader.dashboardSummary(in: currency, rates: rates, now: .now, topCategoryLimit: 4)
-            ghosts = (try? await reader.rhythmGhosts(now: .now)) ?? []
+            let data = try await reader.homeData(in: currency, rates: rates, now: .now, topCategoryLimit: 4)
+            rows = data.rows
+            todayTotalText = Money(amount: data.todayTotal, currency: currency).formatted()
+            summary = data.summary
+            ghosts = data.ghosts
             loadFailed = false
         } catch {
             // Keep any previously-loaded rows on screen; surface the failure so the user can retry.
