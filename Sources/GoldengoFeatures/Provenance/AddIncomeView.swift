@@ -1,6 +1,7 @@
 import SwiftUI
 import GoldengoDesignSystem
 import GoldengoCore
+import GoldengoData
 
 /// Minimal income capture: amount, currency (so a EUR remittance can be logged), source name
 /// with suggestions, date.
@@ -24,6 +25,15 @@ public struct AddIncomeView: View {
     private var amount: Decimal { Decimal(string: amountString) ?? 0 }
     private var canSave: Bool { amount > 0 && !sourceName.trimmingCharacters(in: .whitespaces).isEmpty }
 
+    private var availableCurrencies: [CurrencyCode] {
+        CurrencyCatalog.selectable(from: ExchangeRateCache().load() ?? SeedRates.table)
+    }
+    private var currencyLabel: String {
+        let c = CurrencyCode(currencyCode)
+        let n = Locale.current.localizedString(forCurrencyCode: c.rawValue) ?? c.rawValue
+        return "\(c.symbol) · \(n)"
+    }
+
     public var body: some View {
         NavigationStack {
             Form {
@@ -36,10 +46,10 @@ public struct AddIncomeView: View {
                         .font(.title2.weight(.semibold))
                 }
                 Section("Currency") {
-                    Picker("Currency", selection: $currencyCode) {
-                        ForEach(CurrencyCode.popular, id: \.rawValue) { c in
-                            Text("\(c.symbol)  \(c.rawValue)").tag(c.rawValue)
-                        }
+                    NavigationLink {
+                        CurrencyPickerView(available: availableCurrencies, selectedCode: $currencyCode)
+                    } label: {
+                        LabeledContent("Currency", value: currencyLabel)
                     }
                 }
                 Section("From") {
