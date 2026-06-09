@@ -76,4 +76,39 @@ public enum LocalNotificationScheduler {
             withIdentifiers: pending.map(\.identifier).filter { $0.hasPrefix(prefix) })
         #endif
     }
+
+    private static let ritualPrefix = "ritual:"
+
+    /// Schedule the two daily check-in nudges (08:00 morning, 21:00 evening), repeating.
+    /// Idempotent: clears our prior ritual requests first. Best-effort no-op when notifications
+    /// aren't authorized/available. Leaves `sub-reminder:` requests untouched (distinct prefix).
+    public static func scheduleRitual() async {
+        #if canImport(UserNotifications)
+        let center = UNUserNotificationCenter.current()
+        let pending = await center.pendingNotificationRequests()
+        center.removePendingNotificationRequests(
+            withIdentifiers: pending.map(\.identifier).filter { $0.hasPrefix(ritualPrefix) })
+
+        func add(_ id: String, hour: Int, title: String, body: String) async {
+            let content = UNMutableNotificationContent()
+            content.title = title; content.body = body; content.sound = .default
+            var comps = DateComponents(); comps.hour = hour; comps.minute = 0
+            let trigger = UNCalendarNotificationTrigger(dateMatching: comps, repeats: true)
+            try? await center.add(UNNotificationRequest(identifier: ritualPrefix + id,
+                                                        content: content, trigger: trigger))
+        }
+        await add("morning", hour: 8, title: "Set today's intention", body: "What's today about?")
+        await add("evening", hour: 21, title: "Close your day", body: "A calm look back at today.")
+        #endif
+    }
+
+    /// Cancel both daily ritual nudges (leaves subscription reminders intact).
+    public static func cancelRitual() async {
+        #if canImport(UserNotifications)
+        let center = UNUserNotificationCenter.current()
+        let pending = await center.pendingNotificationRequests()
+        center.removePendingNotificationRequests(
+            withIdentifiers: pending.map(\.identifier).filter { $0.hasPrefix(ritualPrefix) })
+        #endif
+    }
 }
