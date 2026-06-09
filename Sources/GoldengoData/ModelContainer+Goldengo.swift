@@ -9,7 +9,7 @@ public extension ModelContainer {
     static var goldengoSchema: Schema {
         Schema([
             ExpenseRecord.self, CategoryRecord.self, AccountRecord.self, MerchantRecord.self,
-            ImportBatch.self, SubscriptionRecord.self,
+            ImportBatch.self, SubscriptionRecord.self, SourceRecord.self,
         ])
     }
 

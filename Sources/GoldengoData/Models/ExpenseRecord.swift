@@ -20,6 +20,9 @@ public final class ExpenseRecord {
     // Confirmed subscription this charge was auto-matched to (inverse declared on SubscriptionRecord).
     // Left defaulting to nil; set by the auto-match linker, not in init.
     public var subscription: SubscriptionRecord?
+    // The named money source this INCOME record belongs to (nil for expenses + un-sourced income).
+    // Set by logIncome, not in init. Inverse declared on SourceRecord.incomes.
+    public var provenanceSource: SourceRecord?
 
     public init(amount: Decimal = 0, currencyCode: String = "ALL", date: Date = .now,
                 merchantName: String? = nil, note: String? = nil,
