@@ -21,6 +21,10 @@ public struct ExpenseSnapshot: Sendable, Equatable, Identifiable {
     /// Short "funded by …" label from provenance FIFO (nil for expenses with no named source and for
     /// income rows). Populated by `recentExpenses`; defaults nil so other constructors are unaffected.
     public var fundedBy: String? = nil
+    /// Palette slot of the (first) funding source — tints the funded-by chip to match the Sources tab.
+    public var fundedByColorIndex: Int? = nil
+    /// The user-chosen funding source pin (GOL-89); nil = automatic FIFO. Preselects the edit sheet.
+    public var fundedBySourceID: String? = nil
 
     /// Stable identity for `.sheet(item:)` / `ForEach` — the dedupeKey uniquely identifies the row.
     public var id: String { dedupeKey }
@@ -70,7 +74,7 @@ public actor IngestionStore {
             currencyCode: displayCurrency.rawValue,
             rates: rates,
             inflowKeys: inflows.map { "\($0.id)|\($0.date.timeIntervalSinceReferenceDate)|\($0.amount)|\($0.currency.rawValue)|\($0.sourceID)" }.sorted(),
-            outflowKeys: outflows.map { "\($0.id)|\($0.date.timeIntervalSinceReferenceDate)|\($0.amount)|\($0.currency.rawValue)" }.sorted())
+            outflowKeys: outflows.map { "\($0.id)|\($0.date.timeIntervalSinceReferenceDate)|\($0.amount)|\($0.currency.rawValue)|\($0.pinnedSourceID ?? "")" }.sorted())
     }
 
     /// Insert a transaction, or merge it into the existing non-archived record with the
@@ -165,14 +169,17 @@ public actor IngestionStore {
     }
 
     public func recentExpenses(limit: Int = 20) throws -> [ExpenseSnapshot] {
-        let labels = try fundingLabels(displayCurrency: SharedSummary().readPreferredCurrency())
+        let tags = try fundingLabels(displayCurrency: SharedSummary().readPreferredCurrency())
         var fd = FetchDescriptor<ExpenseRecord>(
             predicate: #Predicate { $0.isArchived == false },
             sortBy: [SortDescriptor(\.date, order: .reverse)])
         fd.fetchLimit = limit
         return try modelContext.fetch(fd).map { r in
             var snap = makeSnapshot(r)
-            if r.kindRaw == TransactionKind.expense.rawValue { snap.fundedBy = labels[r.dedupeKey] }
+            if r.kindRaw == TransactionKind.expense.rawValue {
+                snap.fundedBy = tags[r.dedupeKey]?.label
+                snap.fundedByColorIndex = tags[r.dedupeKey]?.colorIndex
+            }
             return snap
         }
     }
@@ -203,10 +210,12 @@ public actor IngestionStore {
     }
 
     func makeSnapshot(_ r: ExpenseRecord) -> ExpenseSnapshot {
-        ExpenseSnapshot(dedupeKey: r.dedupeKey, amount: r.amount, currencyCode: r.currencyCode,
-                        source: r.source, categoryName: r.category?.name,
-                        date: r.date, merchantName: r.merchantName, note: r.note, kind: r.kind,
-                        subscriptionName: r.subscription?.displayName)
+        var snap = ExpenseSnapshot(dedupeKey: r.dedupeKey, amount: r.amount, currencyCode: r.currencyCode,
+                                   source: r.source, categoryName: r.category?.name,
+                                   date: r.date, merchantName: r.merchantName, note: r.note, kind: r.kind,
+                                   subscriptionName: r.subscription?.displayName)
+        snap.fundedBySourceID = r.fundedBySourceID
+        return snap
     }
 
     /// Link an expense-kind record to a CONFIRMED subscription with the same normalized merchant + currency.

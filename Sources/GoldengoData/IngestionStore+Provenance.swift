@@ -17,6 +17,23 @@ public struct ProvenanceSnapshot: Sendable, Equatable {
     public let displayCurrencyCode: String
 }
 
+/// A row's funded-by chip content: the joined source names + the first source's palette slot
+/// (so the chip's dot matches the Sources tab's color for that source).
+public struct FundingTag: Sendable, Equatable {
+    public let label: String
+    public let colorIndex: Int?
+}
+
+/// A pickable funding source for the edit sheet's "Paid from" chips (GOL-89).
+public struct FundingSourceOption: Sendable, Equatable, Identifiable {
+    public let id: String
+    public let name: String
+    public let colorIndex: Int
+    public init(id: String, name: String, colorIndex: Int) {
+        self.id = id; self.name = name; self.colorIndex = colorIndex
+    }
+}
+
 extension IngestionStore {
     /// Find-or-create a source by case-insensitive name (mirrors findOrCreateCategory), then insert a
     /// linked `.income` record. A cash withdrawal / remittance / pay is just a named inflow.
@@ -66,23 +83,27 @@ extension IngestionStore {
                                   displayCurrencyCode: displayCurrency.rawValue)
     }
 
-    /// dedupeKey -> "funded by" label (e.g. "Sister" or "Sister, Cash"), for expense rows.
-    func fundingLabels(displayCurrency: CurrencyCode) throws -> [String: String] {
+    /// dedupeKey -> funding tag ("Sister" / "Sister, Cash" + chip color), for expense rows.
+    func fundingLabels(displayCurrency: CurrencyCode) throws -> [String: FundingTag] {
         let table = ExchangeRateCache().load() ?? SeedRates.table
         let (alloc, sources) = try compute(rates: table, displayCurrency: displayCurrency)
         return fundingLabelMap(alloc: alloc, sources: sources)
     }
 
-    /// Map a finished allocation + its sources into per-outflow "funded by" label strings.
-    /// Internal so `homeData` can reuse it from its single shared fetch.
-    func fundingLabelMap(alloc: ProvenanceAllocator.Allocation, sources: [SourceRecord]) -> [String: String] {
+    /// Map a finished allocation + its sources into per-outflow funding tags (label + chip color —
+    /// the FIRST funding segment's source sets the dot). Internal so `homeData` can reuse it from
+    /// its single shared fetch.
+    func fundingLabelMap(alloc: ProvenanceAllocator.Allocation, sources: [SourceRecord]) -> [String: FundingTag] {
         let nameByID = Dictionary(uniqueKeysWithValues: sources.map { ($0.id, $0.name) })
-        var labels: [String: String] = [:]
+        let colorByID = Dictionary(uniqueKeysWithValues: sources.map { ($0.id, $0.colorIndex) })
+        var tags: [String: FundingTag] = [:]
         for (outflowID, segs) in alloc.fundingByOutflow {
             let names = segs.compactMap { nameByID[$0.sourceID] }
-            if !names.isEmpty { labels[outflowID] = names.joined(separator: ", ") }
+            guard !names.isEmpty else { continue }
+            tags[outflowID] = FundingTag(label: names.joined(separator: ", "),
+                                         colorIndex: segs.first.flatMap { colorByID[$0.sourceID] })
         }
-        return labels
+        return tags
     }
 
     /// Build allocator inputs (income → inflows, expense → outflows) from non-archived records.
@@ -99,7 +120,8 @@ extension IngestionStore {
                                      currency: CurrencyCode(r.currencyCode), date: r.date))
             } else if r.kindRaw == expenseRaw {
                 outflows.append(.init(id: r.dedupeKey, amount: r.amount,
-                                      currency: CurrencyCode(r.currencyCode), date: r.date))
+                                      currency: CurrencyCode(r.currencyCode), date: r.date,
+                                      pinnedSourceID: r.fundedBySourceID))
             }
         }
         return (inflows, outflows)

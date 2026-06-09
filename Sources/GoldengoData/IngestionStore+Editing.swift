@@ -25,11 +25,15 @@ extension IngestionStore {
         try modelContext.save()
     }
 
-    /// Edit an existing expense's amount, merchant, note, category, and date. An empty/whitespace
-    /// merchant, note, or category clears that field.
+    /// Edit an existing expense's amount, merchant, note, category, date, and funding pin. An
+    /// empty/whitespace merchant, note, or category clears that field. `fundedBySourceID` is the
+    /// FINAL pin value, always applied (nil = automatic FIFO) — the edit sheet knows the full state,
+    /// so callers pass the row's current pin to keep it, or the new selection.
     public func updateExpense(dedupeKey: String, amount: Decimal, currency: CurrencyCode? = nil,
-                              merchant: String?, note: String? = nil, categoryName: String?, date: Date) throws {
+                              merchant: String?, note: String? = nil, categoryName: String?, date: Date,
+                              fundedBySourceID: String? = nil) throws {
         guard let r = try fetchActiveExpense(dedupeKey: dedupeKey) else { return }
+        r.fundedBySourceID = fundedBySourceID
         r.amount = amount
         if let currency { r.currencyCode = currency.rawValue }   // nil = keep the existing currency
         let trimmedMerchant = merchant?.trimmingCharacters(in: .whitespacesAndNewlines)

@@ -8,6 +8,9 @@ public struct HomeData: Sendable {
     public let todayTotal: Decimal          // displayCurrency
     public let summary: DashboardSummary
     public let ghosts: [RhythmGhost]
+    /// Named sources for the edit sheet's "Paid from" chips (GOL-89) — rides the source fetch
+    /// homeData already does for funding labels, so the picker costs no extra round-trip.
+    public let sources: [FundingSourceOption]
 }
 
 extension IngestionStore {
@@ -31,12 +34,15 @@ extension IngestionStore {
         let (inflows, outflows) = buildAllocatorInputs(from: all)
         let alloc = allocateCached(inflows: inflows, outflows: outflows, rates: rates,
                                    displayCurrency: SharedSummary().readPreferredCurrency())
-        let labels = fundingLabelMap(alloc: alloc, sources: sources)
+        let tags = fundingLabelMap(alloc: alloc, sources: sources)
 
-        // Recent 50 (both kinds, already date-desc); attach fundedBy to expense rows.
+        // Recent 50 (both kinds, already date-desc); attach the funding tag to expense rows.
         let rows: [ExpenseSnapshot] = all.prefix(50).map { r in
             var snap = makeSnapshot(r)
-            if r.kindRaw == expenseRaw { snap.fundedBy = labels[r.dedupeKey] }
+            if r.kindRaw == expenseRaw {
+                snap.fundedBy = tags[r.dedupeKey]?.label
+                snap.fundedByColorIndex = tags[r.dedupeKey]?.colorIndex
+            }
             return snap
         }
 
@@ -57,6 +63,11 @@ extension IngestionStore {
         // Ghosts — best-effort so a rhythm failure never blanks the dashboard (matches load()'s try?).
         let ghosts = (try? rhythmGhosts(from: all.filter { $0.kindRaw == expenseRaw }, now: now)) ?? []
 
-        return HomeData(rows: rows, todayTotal: todayTotal, summary: summary, ghosts: ghosts)
+        let options = sources
+            .map { FundingSourceOption(id: $0.id, name: $0.name, colorIndex: $0.colorIndex) }
+            .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+
+        return HomeData(rows: rows, todayTotal: todayTotal, summary: summary, ghosts: ghosts,
+                        sources: options)
     }
 }

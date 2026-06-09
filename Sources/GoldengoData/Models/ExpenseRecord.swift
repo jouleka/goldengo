@@ -23,6 +23,10 @@ public final class ExpenseRecord {
     // The named money source this INCOME record belongs to (nil for expenses + un-sourced income).
     // Set by logIncome, not in init. Inverse declared on SourceRecord.incomes.
     public var provenanceSource: SourceRecord?
+    // GOL-89: the user-chosen funding source for this EXPENSE (the "pin"); nil = automatic FIFO.
+    // A plain SourceRecord.id string — NOT the provenanceSource relationship, whose inverse feeds
+    // source inflow totals (income-only). Additive optional → lightweight CloudKit-safe migration.
+    public var fundedBySourceID: String?
 
     public init(amount: Decimal = 0, currencyCode: String = "ALL", date: Date = .now,
                 merchantName: String? = nil, note: String? = nil,

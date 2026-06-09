@@ -15,6 +15,8 @@ public final class RecentExpensesModel {
     /// list (errors used to be swallowed with `try?`).
     public private(set) var loadFailed = false
     public private(set) var ghosts: [RhythmGhost] = []
+    /// Named sources for the edit sheet's "Paid from" chips (GOL-89); rides along in homeData.
+    public private(set) var fundingSources: [FundingSourceOption] = []
 
     public init(store: any RecentExpensesReading, currency: CurrencyCode = .all) {
         self.reader = store; self.currency = currency
@@ -28,6 +30,7 @@ public final class RecentExpensesModel {
             todayTotalText = Money(amount: data.todayTotal, currency: currency).formatted()
             summary = data.summary
             ghosts = data.ghosts
+            fundingSources = data.sources
             loadFailed = false
         } catch {
             // Keep any previously-loaded rows on screen; surface the failure so the user can retry.
@@ -56,11 +59,15 @@ public final class RecentExpensesModel {
         await load()
     }
 
-    /// Apply an edit to an expense, then reload so the change is reflected.
+    /// Apply an edit to an expense, then reload so the change is reflected. `fundedBySourceID` is the
+    /// FINAL funding pin (nil = automatic FIFO) — callers pass the sheet's selection, which starts
+    /// from the row's current pin, so an untouched picker leaves the pin unchanged.
     public func update(_ snapshot: ExpenseSnapshot, amount: Decimal, currency: CurrencyCode? = nil,
-                       merchant: String?, note: String? = nil, categoryName: String?, date: Date) async {
+                       merchant: String?, note: String? = nil, categoryName: String?, date: Date,
+                       fundedBySourceID: String? = nil) async {
         try? await reader.updateExpense(dedupeKey: snapshot.dedupeKey, amount: amount, currency: currency,
-                                        merchant: merchant, note: note, categoryName: categoryName, date: date)
+                                        merchant: merchant, note: note, categoryName: categoryName, date: date,
+                                        fundedBySourceID: fundedBySourceID)
         await load()
     }
 
