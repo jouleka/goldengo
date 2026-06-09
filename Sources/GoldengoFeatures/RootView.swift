@@ -23,12 +23,14 @@ public struct RootView: View {
     @State private var recentModel: RecentExpensesModel
     @State private var subsModel: SubscriptionsModel
     @State private var quickAddModel: QuickAddModel
+    @State private var sourcesModel: SourcesModel
     public init(store: IngestionStore) {
         self.store = store
         let preferred = SharedSummary().readPreferredCurrency()
         _recentModel = State(initialValue: RecentExpensesModel(store: store, currency: preferred))
         _subsModel = State(initialValue: SubscriptionsModel(store: store))
         _quickAddModel = State(initialValue: QuickAddModel(store: store, currency: preferred))
+        _sourcesModel = State(initialValue: SourcesModel(store: store, currency: preferred))
     }
 
     /// Settings (2) and Import (3) live behind the Home toolbar as sheets rather than permanent
@@ -72,6 +74,9 @@ public struct RootView: View {
             SubscriptionsView(model: subsModel)
                 .tabItem { Label("Subscriptions", systemImage: "arrow.triangle.2.circlepath") }
                 .tag(4)
+            SourcesView(model: sourcesModel)
+                .tabItem { Label("Sources", systemImage: "circle.grid.2x2") }
+                .tag(5)
         }
         .tint(GoldengoTheme.accent)
         .sheet(isPresented: $showSettings, onDismiss: {
@@ -81,7 +86,8 @@ public struct RootView: View {
             let changed = recentModel.currency != preferred
             quickAddModel.currency = preferred
             recentModel.currency = preferred
-            if changed { Task { await recentModel.load() } }
+            sourcesModel.currency = preferred
+            if changed { Task { await recentModel.load() }; Task { await sourcesModel.load() } }
         }) { SettingsView() }
         .sheet(isPresented: $showImport, onDismiss: {
             // A statement import adds expenses AND may form new recurring patterns — refresh both.
@@ -103,6 +109,7 @@ public struct RootView: View {
             // Reload the destination tab's data on entry so adds/imports show without a manual refresh.
             if newTab == 1 { Task { await recentModel.load() } }
             if newTab == 4 { Task { await subsModel.load() } }
+            if newTab == 5 { Task { await sourcesModel.load() } }
         }
         .onChange(of: scenePhase) { _, newPhase in
             if newPhase == .active {
