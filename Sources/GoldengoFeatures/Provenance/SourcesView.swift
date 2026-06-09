@@ -14,12 +14,13 @@ public struct SourcesView: View {
                 ForEach(model.snapshot?.sources ?? []) { b in
                     VStack(alignment: .leading, spacing: 6) {
                         HStack {
+                            Circle().fill(model.color(b)).frame(width: 9, height: 9)
                             Text(b.name).font(.subheadline.weight(.semibold))
                             Spacer()
                             Text(model.remainingText(b)).font(.subheadline.weight(.medium))
                         }
                         ProgressView(value: model.fraction(b))
-                            .tint(GoldengoTheme.accent)
+                            .tint(model.color(b))
                     }
                     .padding(.vertical, 4)
                     .listRowBackground(Color.clear)

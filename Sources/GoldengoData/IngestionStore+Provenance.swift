@@ -40,7 +40,9 @@ extension IngestionStore {
         if let existing = all.first(where: { $0.name.caseInsensitiveCompare(name) == .orderedSame }) {
             return existing
         }
-        let colorIndex = all.count % 8
+        // Lowest unused palette slot among live sources → distinct colors until all 8 are taken.
+        let used = Set(all.map(\.colorIndex))
+        let colorIndex = (0..<8).first { !used.contains($0) } ?? (all.count % 8)
         let s = SourceRecord(name: name, currencyCode: currency.rawValue, colorIndex: colorIndex)
         modelContext.insert(s)
         return s

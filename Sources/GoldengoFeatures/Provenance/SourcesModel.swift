@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import SwiftUI
 import GoldengoCore
 import GoldengoData
 
@@ -40,5 +41,12 @@ public final class SourcesModel {
     public func unaccountedText() -> String? {
         guard let s = snapshot, s.unaccounted > 0 else { return nil }
         return Money(amount: s.unaccounted, currency: CurrencyCode(s.displayCurrencyCode)).formatted()
+    }
+
+    private static let palette: [Color] = [.blue, .teal, .green, .orange, .pink, .purple, .indigo, .brown]
+    /// A stable, distinct color per source (by its colorIndex) — the "distinctly-colored source".
+    public func color(_ b: SourceBalance) -> Color {
+        let n = Self.palette.count
+        return Self.palette[((b.colorIndex % n) + n) % n]
     }
 }
