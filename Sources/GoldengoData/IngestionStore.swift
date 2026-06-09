@@ -32,6 +32,45 @@ public struct ExpenseSnapshot: Sendable, Equatable, Identifiable {
 
 @ModelActor
 public actor IngestionStore {
+    // MARK: FIFO allocation cache (GOL-86)
+    // Memoize the ProvenanceAllocator result. The allocation depends ONLY on the provenance inputs +
+    // display currency + rate date, so we key the cache on a content fingerprint of those — it can
+    // never serve stale data: any local edit/delete/add-income, a date reorder, a currency/rate
+    // change, or a CloudKit remote merge changes the fingerprint and forces a recompute. Internal (not
+    // private) so the cross-file +Provenance / +HomeData extensions can call allocateCached.
+    struct LedgerFingerprint: Equatable {
+        let currencyCode: String
+        let ratesAsOf: Date
+        let inflowKeys: [String]
+        let outflowKeys: [String]
+    }
+    private var cachedAllocation: (fingerprint: LedgerFingerprint, allocation: ProvenanceAllocator.Allocation)?
+    /// Test observability only: number of times the allocator actually ran (i.e. cache misses).
+    private(set) var allocationComputeCount = 0
+
+    /// Reuse the cached allocation when the inputs+currency+rate-date are identical, else recompute.
+    func allocateCached(inflows: [ProvenanceAllocator.Inflow], outflows: [ProvenanceAllocator.Outflow],
+                        rates: RateTable, displayCurrency: CurrencyCode) -> ProvenanceAllocator.Allocation {
+        let fp = fingerprint(inflows: inflows, outflows: outflows, rates: rates, displayCurrency: displayCurrency)
+        if let cached = cachedAllocation, cached.fingerprint == fp { return cached.allocation }
+        let alloc = ProvenanceAllocator.allocate(inflows: inflows, outflows: outflows,
+                                                 rates: rates, displayCurrency: displayCurrency)
+        cachedAllocation = (fp, alloc)
+        allocationComputeCount += 1
+        return alloc
+    }
+
+    /// Order-independent content fingerprint of the allocator inputs (keys sorted so a different fetch
+    /// order — e.g. Home's date-desc vs Sources' unsorted — still hits the same cache entry).
+    private func fingerprint(inflows: [ProvenanceAllocator.Inflow], outflows: [ProvenanceAllocator.Outflow],
+                             rates: RateTable, displayCurrency: CurrencyCode) -> LedgerFingerprint {
+        LedgerFingerprint(
+            currencyCode: displayCurrency.rawValue,
+            ratesAsOf: rates.asOf,
+            inflowKeys: inflows.map { "\($0.id)|\($0.date.timeIntervalSinceReferenceDate)|\($0.amount)|\($0.currency.rawValue)|\($0.sourceID)" }.sorted(),
+            outflowKeys: outflows.map { "\($0.id)|\($0.date.timeIntervalSinceReferenceDate)|\($0.amount)|\($0.currency.rawValue)" }.sorted())
+    }
+
     /// Insert a transaction, or merge it into the existing non-archived record with the
     /// same dedupeKey. Note: with composite keys (no external id) two genuinely distinct
     /// expenses sharing day+amount+merchant+account will merge — an accepted trade-off

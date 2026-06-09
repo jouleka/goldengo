@@ -79,15 +79,12 @@ extension IngestionStore {
         return labels
     }
 
-    /// Build allocator inputs from non-archived records and run it. Shared by snapshot + labels.
-    private func compute(rates: RateTable, displayCurrency: CurrencyCode)
-        throws -> (ProvenanceAllocator.Allocation, [SourceRecord]) {
-        let sources = try modelContext.fetch(FetchDescriptor<SourceRecord>(
-            predicate: #Predicate { $0.isArchived == false }))
+    /// Build allocator inputs (income → inflows, expense → outflows) from non-archived records.
+    /// Internal so `homeData` can reuse a single shared fetch instead of re-fetching.
+    func buildAllocatorInputs(from records: [ExpenseRecord])
+        -> (inflows: [ProvenanceAllocator.Inflow], outflows: [ProvenanceAllocator.Outflow]) {
         let incomeRaw = TransactionKind.income.rawValue
         let expenseRaw = TransactionKind.expense.rawValue
-        let records = try modelContext.fetch(FetchDescriptor<ExpenseRecord>(
-            predicate: #Predicate { $0.isArchived == false }))
         var inflows: [ProvenanceAllocator.Inflow] = []
         var outflows: [ProvenanceAllocator.Outflow] = []
         for r in records {
@@ -99,8 +96,20 @@ extension IngestionStore {
                                       currency: CurrencyCode(r.currencyCode), date: r.date))
             }
         }
-        let alloc = ProvenanceAllocator.allocate(inflows: inflows, outflows: outflows,
-                                                 rates: rates, displayCurrency: displayCurrency)
+        return (inflows, outflows)
+    }
+
+    /// Build allocator inputs from non-archived records and run it (via the fingerprint cache).
+    /// Shared by snapshot + labels.
+    private func compute(rates: RateTable, displayCurrency: CurrencyCode)
+        throws -> (ProvenanceAllocator.Allocation, [SourceRecord]) {
+        let sources = try modelContext.fetch(FetchDescriptor<SourceRecord>(
+            predicate: #Predicate { $0.isArchived == false }))
+        let records = try modelContext.fetch(FetchDescriptor<ExpenseRecord>(
+            predicate: #Predicate { $0.isArchived == false }))
+        let (inflows, outflows) = buildAllocatorInputs(from: records)
+        let alloc = allocateCached(inflows: inflows, outflows: outflows,
+                                   rates: rates, displayCurrency: displayCurrency)
         return (alloc, sources)
     }
 }
