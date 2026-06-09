@@ -21,6 +21,7 @@ public struct SourcesView: View {
                         }
                         ProgressView(value: model.fraction(b))
                             .tint(model.color(b))
+                            .animation(.snappy, value: model.fraction(b))
                     }
                     .padding(.vertical, 4)
                     .listRowBackground(Color.clear)
