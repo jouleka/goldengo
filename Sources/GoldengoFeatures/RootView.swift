@@ -55,11 +55,15 @@ public struct RootView: View {
         }
     }
 
-    /// Show the soft-landing if we've been away long enough, then reset `lastSeen` so a same-session
-    /// re-activation (e.g. dismissing a system alert) can't re-fire it.
+    /// Show the soft-landing if we've been away long enough. Called from the cold-launch `.task` AND
+    /// `.onChange(scenePhase) == .active` (the former is needed because onChange misses the initial
+    /// cold-launch `.active`). Re-runs are safe two ways: the `reEntryPrompt == nil` guard blocks any
+    /// re-present, and the unconditional `setLastSeen()` reset (load-bearing — don't remove) makes any
+    /// later same-session `.active` a 0-day no-op and also seeds the baseline on first-ever launch.
     private func checkReEntry() {
         let summary = SharedSummary()
-        if let days = ReEntryPolicy.daysAway(lastSeen: summary.readLastSeen()),
+        if reEntryPrompt == nil,
+           let days = ReEntryPolicy.daysAway(lastSeen: summary.readLastSeen()),
            days >= ReEntryPolicy.thresholdDays {
             reEntryPrompt = ReEntryPrompt(days: days)
         }

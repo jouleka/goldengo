@@ -47,7 +47,7 @@ A single calm screen (presented as a `.fullScreenCover`): a gentle icon (e.g. `s
   - `.background` → `SharedSummary().setLastSeen()`.
   - `.active` → existing reload, **plus**: `if let d = ReEntryPolicy.daysAway(lastSeen: SharedSummary().readLastSeen()), d >= ReEntryPolicy.thresholdDays { reEntryPrompt = .init(days: d) }`, then `SharedSummary().setLastSeen()` (reset so it won't re-fire this session).
 - `.fullScreenCover(item: $reEntryPrompt) { p in ReEntryView(daysAway: p.days) { reEntryPrompt = nil } }`.
-- Also seed `setLastSeen()` once on first appear if none exists (so the very first launch establishes a baseline and never shows the landing).
+- First-ever launch (no `lastSeen`) shows nothing (`daysAway` is nil), and `checkReEntry`'s unconditional `setLastSeen()` tail seeds the baseline. That reset is **load-bearing** — it makes any later same-session `.active` a 0-day no-op — and a `reEntryPrompt == nil` guard additionally makes a re-present impossible regardless of `.task`/`.onChange` fire ordering.
 
 ## Data flow
 ```
