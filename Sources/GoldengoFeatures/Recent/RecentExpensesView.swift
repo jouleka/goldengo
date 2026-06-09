@@ -92,6 +92,7 @@ public struct RecentExpensesView: View {
 #endif
                 Button("Add") {
                     let amt = Decimal(string: adjustAmount) ?? g.amount
+                    GoldengoHaptics.spendLanded()
                     Task { await model.confirm(g, amount: amt) }
                 }
                 Button("Cancel", role: .cancel) { }
@@ -357,7 +358,7 @@ public struct RecentExpensesView: View {
 
     /// A pre-drafted daily "usual" — tap to log at the median (today); long-press → Adjust amount.
     private func ghostRow(_ g: RhythmGhost) -> some View {
-        Button { Task { await model.confirm(g) } } label: {
+        Button { GoldengoHaptics.spendLanded(); Task { await model.confirm(g) } } label: {
             HStack(spacing: GoldengoTheme.Spacing.m) {
                 Image(systemName: GoldengoCategoryIcon.symbol(for: g.categoryName))
                     .font(.subheadline).foregroundStyle(.secondary)

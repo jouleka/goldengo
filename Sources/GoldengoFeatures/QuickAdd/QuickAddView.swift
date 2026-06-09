@@ -87,19 +87,13 @@ public struct QuickAddView: View {
         // Fire only on a *new* save (not on returning to this tab), so the confirmation isn't replayed.
         .onChange(of: model.savedCount) { _, newCount in
             guard newCount > 0 else { return }
-            successHaptic()
+            GoldengoHaptics.spendLanded()
             withAnimation(.snappy) { showAdded = true }
             Task {
                 try? await Task.sleep(for: .seconds(1.4))
                 if model.savedCount == newCount { withAnimation(.snappy) { showAdded = false } }
             }
         }
-    }
-
-    private func successHaptic() {
-#if canImport(UIKit)
-        UINotificationFeedbackGenerator().notificationOccurred(.success)
-#endif
     }
 
     // MARK: - Amount

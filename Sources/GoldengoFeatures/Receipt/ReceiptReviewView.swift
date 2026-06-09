@@ -78,6 +78,7 @@ public struct ReceiptReviewView: View {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") {
                         amountFocused = false; merchantFocused = false
+                        GoldengoHaptics.spendLanded()
                         Task { await model.save(); onDone() }
                     }
                     .disabled(!model.canSave)
