@@ -14,6 +14,10 @@ public struct ImportFile: Identifiable, Hashable {
 /// Drives the Re-entry `.fullScreenCover(item:)` (Int? isn't Identifiable on its own).
 public struct ReEntryPrompt: Identifiable { public let id = UUID(); public let days: Int }
 
+/// Drives the ritual `.sheet(item:)` (RitualPrompt isn't Identifiable, and we need a fresh identity
+/// per presentation). Only `.morning`/`.evening` are ever wrapped (never `.none`).
+public struct RitualSheet: Identifiable { public let id = UUID(); public let kind: RitualPrompt }
+
 public struct RootView: View {
     private let store: IngestionStore
     @State private var selectedTab: Int = 1            // Home dashboard is the orienting landing screen.
@@ -21,6 +25,7 @@ public struct RootView: View {
     @State private var showImport = false
     @State private var importFile: ImportFile?            // a statement shared into the app (Share / Open in)
     @State private var reEntryPrompt: ReEntryPrompt?      // welcome-back soft-landing after a gap
+    @State private var ritualSheet: RitualSheet?          // daily check-in (GOL-85), opt-in
     @Environment(\.scenePhase) private var scenePhase
     // Owned here (not inline in the tab) so Home can be refreshed when the user returns to it or
     // finishes an import — otherwise newly added/imported expenses don't appear until a manual reload.
@@ -68,6 +73,20 @@ public struct RootView: View {
             reEntryPrompt = ReEntryPrompt(days: days)
         }
         summary.setLastSeen()
+    }
+
+    /// Present the daily check-in sheet if one is due. Re-entry takes precedence (if its soft-landing
+    /// is showing this activation, skip the ritual). Opt-in gated. Called right after `checkReEntry()`
+    /// in both the cold-launch `.task` and `.onChange(scenePhase) == .active`. The `ritualSheet == nil`
+    /// guard + the once-per-day intention/reflected dates make re-presenting within a day impossible.
+    private func checkRitual() {
+        guard reEntryPrompt == nil, ritualSheet == nil else { return }
+        let summary = SharedSummary()
+        guard summary.ritualEnabled() else { return }
+        let prompt = RitualPolicy.prompt(now: .now,
+                                         intentionDate: summary.readIntentionDate(),
+                                         reflectedDate: summary.readReflectedDate())
+        if prompt != .none { ritualSheet = RitualSheet(kind: prompt) }
     }
 
     public var body: some View {
@@ -127,9 +146,19 @@ public struct RootView: View {
             ReEntryView(daysAway: prompt.days) { reEntryPrompt = nil }
         }
 #endif
+        .sheet(item: $ritualSheet) { s in
+            if s.kind == .morning {
+                MorningView(onDone: { ritualSheet = nil })
+            } else {
+                EveningView(model: EveningModel(store: store,
+                                                currency: SharedSummary().readPreferredCurrency()),
+                            onDone: { ritualSheet = nil })
+            }
+        }
         .onAppear { applyPendingTab() }
         .task {
             checkReEntry()            // cold-launch re-entry check (onChange(scenePhase) misses the initial .active)
+            checkRitual()             // then the daily check-in (Re-entry takes precedence)
             await recentModel.load()  // Home is the landing tab
         }
         .onChange(of: selectedTab) { _, newTab in
@@ -142,6 +171,7 @@ public struct RootView: View {
             switch newPhase {
             case .active:
                 checkReEntry()
+                checkRitual()
                 applyPendingTab()
                 // An expense may have been logged via the Quick-Log shortcut while we were
                 // backgrounded; reload so it appears on Home without a manual pull-to-refresh.
