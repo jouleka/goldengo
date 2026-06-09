@@ -61,7 +61,8 @@ final class RecentExpensesEditingTests: XCTestCase {
         _ = try await store.logManual(amount: 250, currency: .all, merchant: "Coffee", categoryName: "Coffee")
         let m = RecentExpensesModel(store: store, currency: .all)
         await m.load()
-        await m.update(m.rows[0], amount: 300, merchant: "Cafe", categoryName: "Food", date: m.rows[0].date)
+        await m.update(m.rows[0], amount: 300, merchant: "Cafe", categoryName: "Food", date: m.rows[0].date,
+                       fundedBySourceID: m.rows[0].fundedBySourceID)   // keep the pin (here: none)
         XCTAssertEqual(m.rows.first?.amount, 300)
         XCTAssertEqual(m.rows.first?.merchantName, "Cafe")
         XCTAssertEqual(m.rows.first?.categoryName, "Food")

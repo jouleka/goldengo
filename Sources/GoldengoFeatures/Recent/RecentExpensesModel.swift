@@ -64,7 +64,7 @@ public final class RecentExpensesModel {
     /// from the row's current pin, so an untouched picker leaves the pin unchanged.
     public func update(_ snapshot: ExpenseSnapshot, amount: Decimal, currency: CurrencyCode? = nil,
                        merchant: String?, note: String? = nil, categoryName: String?, date: Date,
-                       fundedBySourceID: String? = nil) async {
+                       fundedBySourceID: String?) async {
         try? await reader.updateExpense(dedupeKey: snapshot.dedupeKey, amount: amount, currency: currency,
                                         merchant: merchant, note: note, categoryName: categoryName, date: date,
                                         fundedBySourceID: fundedBySourceID)
