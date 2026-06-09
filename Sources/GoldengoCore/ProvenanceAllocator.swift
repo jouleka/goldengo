@@ -12,8 +12,13 @@ public enum ProvenanceAllocator {
     }
     public struct Outflow: Sendable, Equatable {
         public let id: String; public let amount: Decimal; public let currency: CurrencyCode; public let date: Date
-        public init(id: String, amount: Decimal, currency: CurrencyCode, date: Date) {
+        /// The user-chosen funding source (GOL-89 "pin"); nil = automatic FIFO. Defaulted so
+        /// existing call sites are unchanged.
+        public let pinnedSourceID: String?
+        public init(id: String, amount: Decimal, currency: CurrencyCode, date: Date,
+                    pinnedSourceID: String? = nil) {
             self.id = id; self.amount = amount; self.currency = currency; self.date = date
+            self.pinnedSourceID = pinnedSourceID
         }
     }
     public struct FundingSegment: Sendable, Equatable {
@@ -36,11 +41,11 @@ public enum ProvenanceAllocator {
         var fundingByOutflow: [String: [FundingSegment]] = [:]
         var unaccounted: Decimal = 0
 
-        for out in outflows.sorted(by: { ($0.date, $0.id) < ($1.date, $1.id) }) {
+        /// Draw `out`'s need from `eligible` lots in order; record segments and any unfunded remainder.
+        func draw(_ out: Outflow, from eligible: (Inflow) -> Bool) {
             var need = out.amount                                  // remaining need, in out.currency
             var segs: [FundingSegment] = []
-            // Only lots received on/before the spend can fund it — money from the future can't fund the past.
-            for lot in lots where need > 0 && lot.date <= out.date {
+            for lot in lots where need > 0 && eligible(lot) {
                 let lotRem = remaining[lot.id] ?? 0
                 if lotRem <= 0 { continue }
                 guard let lotRemInOut = try? conv.convert(lotRem, from: lot.currency, to: out.currency) else { continue }
@@ -57,6 +62,21 @@ public enum ProvenanceAllocator {
                 unaccounted += (try? conv.convert(need, from: out.currency, to: displayCurrency)) ?? need
             }
             if !segs.isEmpty { fundingByOutflow[out.id] = merge(segs) }
+        }
+
+        let ordered = outflows.sorted { ($0.date, $0.id) < ($1.date, $1.id) }
+
+        // Pass 1 — PINNED spends (GOL-89): the user explicitly chose the source, so pins reserve
+        // their money before automatic allocation, draw ONLY from that source (a shortfall surfaces
+        // as Unaccounted — never a silent fallback), and ignore the no-retroactive date rule
+        // (logging order must not fight an explicit statement of origin).
+        for out in ordered where out.pinnedSourceID != nil {
+            draw(out, from: { $0.sourceID == out.pinnedSourceID })
+        }
+        // Pass 2 — automatic FIFO for the rest: oldest lot first, and only lots received on/before
+        // the spend can fund it — money from the future can't fund the past.
+        for out in ordered where out.pinnedSourceID == nil {
+            draw(out, from: { $0.date <= out.date })
         }
 
         var remainingBySource: [String: Decimal] = [:]
