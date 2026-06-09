@@ -350,6 +350,10 @@ public struct RecentExpensesView: View {
                 }
                 Text(r.categoryName ?? "Other")
                     .font(.caption).foregroundStyle(.secondary)
+                if let fundedBy = r.fundedBy {
+                    Label("funded by \(fundedBy)", systemImage: "arrow.down.left.circle")
+                        .font(.caption2).foregroundStyle(.secondary).labelStyle(.titleAndIcon)
+                }
             }
             Spacer()
             if r.kind == .income {
