@@ -18,6 +18,9 @@ public struct ExpenseSnapshot: Sendable, Equatable, Identifiable {
     public var note: String?
     public var kind: TransactionKind
     public var subscriptionName: String?
+    /// Short "funded by …" label from provenance FIFO (nil for expenses with no named source and for
+    /// income rows). Populated by `recentExpenses`; defaults nil so other constructors are unaffected.
+    public var fundedBy: String? = nil
 
     /// Stable identity for `.sheet(item:)` / `ForEach` — the dedupeKey uniquely identifies the row.
     public var id: String { dedupeKey }
@@ -121,11 +124,16 @@ public actor IngestionStore {
     }
 
     public func recentExpenses(limit: Int = 20) throws -> [ExpenseSnapshot] {
+        let labels = try fundingLabels(displayCurrency: SharedSummary().readPreferredCurrency())
         var fd = FetchDescriptor<ExpenseRecord>(
             predicate: #Predicate { $0.isArchived == false },
             sortBy: [SortDescriptor(\.date, order: .reverse)])
         fd.fetchLimit = limit
-        return try modelContext.fetch(fd).map(makeSnapshot)
+        return try modelContext.fetch(fd).map { r in
+            var snap = makeSnapshot(r)
+            if r.kindRaw == TransactionKind.expense.rawValue { snap.fundedBy = labels[r.dedupeKey] }
+            return snap
+        }
     }
 
     /// Sum of today's expense-kind amounts, each converted into `displayCurrency` via `rates`.
