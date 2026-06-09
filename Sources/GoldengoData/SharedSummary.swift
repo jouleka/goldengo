@@ -36,6 +36,11 @@ public struct SharedSummary {
         defaults.set(code.rawValue, forKey: Self.preferredCurrencyKey)
     }
 
+    public static let lastSeenKey = "lastSeen"
+    /// When the app was last foregrounded/backgrounded — drives the Re-entry soft-landing (GOL-84).
+    public func setLastSeen(_ date: Date = .now) { defaults.set(date, forKey: Self.lastSeenKey) }
+    public func readLastSeen() -> Date? { defaults.object(forKey: Self.lastSeenKey) as? Date }
+
     public func setPendingTab(_ tab: Int?) {
         if let tab {
             defaults.set(tab, forKey: Self.pendingTabKey)
