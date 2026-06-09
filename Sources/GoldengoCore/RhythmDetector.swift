@@ -72,6 +72,7 @@ public enum RhythmDetector {
         for i in 1..<series.count {
             gaps.append(calendar.dateComponents([.day], from: series[i - 1].date, to: series[i].date).day ?? 0)
         }
+        guard !gaps.isEmpty else { return nil }   // defensive: never index an empty gap array
         let sortedGaps = gaps.sorted()
         guard sortedGaps[sortedGaps.count / 2] == 1 else { return nil }            // daily median
         guard gaps.filter({ $0 <= options.maxGap }).count >= max(1, gaps.count * 2 / 3) else { return nil }

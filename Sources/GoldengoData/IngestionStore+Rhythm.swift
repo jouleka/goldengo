@@ -24,7 +24,10 @@ extension IngestionStore {
         }
         let patterns = RhythmDetector.detect(occurrences, options: .init(now: now))
 
-        // Merchants already logged today (local day) → suppress (no double-count).
+        // Merchants already logged today → suppress (no double-count). Deliberately the LOCAL day
+        // (the user's "today"), even though RhythmDetector groups by UTC day — don't "align" them:
+        // confirmRhythmGhost writes date:.now, so a just-confirmed ghost is always caught by this
+        // local-day filter on the next recompute (the suppression invariant).
         let startOfToday = Calendar.current.startOfDay(for: now)
         let loggedTodayMerchants = Set(expenses
             .filter { $0.date >= startOfToday }
