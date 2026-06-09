@@ -13,6 +13,7 @@ public protocol RecentExpensesReading: Sendable {
     func updateExpense(dedupeKey: String, amount: Decimal, currency: CurrencyCode?, merchant: String?, note: String?, categoryName: String?, date: Date) async throws
     func rhythmGhosts(now: Date) async throws -> [RhythmGhost]
     func confirmRhythmGhost(_ ghost: RhythmGhost, amount: Decimal) async throws
+    func homeData(in currency: CurrencyCode, rates: RateTable, now: Date, topCategoryLimit: Int) async throws -> HomeData
 }
 
 extension IngestionStore: RecentExpensesReading {}
