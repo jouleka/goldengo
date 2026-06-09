@@ -71,6 +71,9 @@ public struct RootView: View {
            let days = ReEntryPolicy.daysAway(lastSeen: summary.readLastSeen()),
            days >= ReEntryPolicy.thresholdDays {
             reEntryPrompt = ReEntryPrompt(days: days)
+            // Re-entry takes precedence: drop any ritual sheet left open across the background gap so
+            // the .fullScreenCover never stacks on a leftover .sheet (which would wedge the modal stack).
+            ritualSheet = nil
         }
         summary.setLastSeen()
     }

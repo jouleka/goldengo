@@ -63,10 +63,7 @@ public struct EveningView: View {
                 Text("You were trying. Rest well.")
                     .font(.body).foregroundStyle(.secondary)
 
-                Button {
-                    model.markReflected()
-                    onDone()
-                } label: {
+                Button(action: onDone) {
                     Text("Done").font(.headline).frame(maxWidth: .infinity, minHeight: 54)
                 }
                 .background(GoldengoTheme.accent).foregroundStyle(.black)
@@ -76,5 +73,8 @@ public struct EveningView: View {
         }
         .background(Color.goldengoBackground.ignoresSafeArea())
         .task { await model.load() }
+        // Mark the night closed on ANY dismissal — Done OR an interactive swipe-down — so a
+        // swiped-away reflection is not re-presented later the same evening session.
+        .onDisappear { model.markReflected() }
     }
 }

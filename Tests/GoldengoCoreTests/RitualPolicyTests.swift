@@ -35,10 +35,24 @@ final class RitualPolicyTests: XCTestCase {
         let r = RitualPolicy.prompt(now: now, intentionDate: at(8), reflectedDate: at(20), calendar: cal)
         XCTAssertEqual(r, .none)
     }
-    func test_eveningWrapAround_oneAM_isEvening() {
-        // 01:00 — past midnight is still "evening" (18:00..04:00). reflectedDate is the prior evening,
-        // so on this new calendar day it is NOT reflected-today → .evening.
-        let r = RitualPolicy.prompt(now: at(1), intentionDate: nil, reflectedDate: at(22, day: 8), calendar: cal)
+    func test_eveningWrapAround_oneAM_notReflected_isEvening() {
+        // 01:00 is inside the evening window (18:00..04:00, wraps midnight); nothing reflected
+        // this session → .evening. (Pure window-membership: reflectedDate nil.)
+        let r = RitualPolicy.prompt(now: at(1), intentionDate: nil, reflectedDate: nil, calendar: cal)
+        XCTAssertEqual(r, .evening)
+    }
+    func test_evening_suppressed_postMidnight_sameSession() {
+        // Reflected at 23:00 day 9, re-opened at 01:00 day 10 the SAME continuous night → the
+        // reflection is within this evening session (started 18:00 day 9) → suppressed → .none.
+        // (Regression guard for the calendar-day-vs-session boundary bug.)
+        let r = RitualPolicy.prompt(now: at(1, day: 10), intentionDate: nil,
+                                    reflectedDate: at(23, day: 9), calendar: cal)
+        XCTAssertEqual(r, .none)
+    }
+    func test_evening_eligibleAgain_nextNight() {
+        // Reflected last night at 20:00 (day 9); tonight at 21:00 (day 10) is a NEW session → .evening.
+        let r = RitualPolicy.prompt(now: at(21, day: 10), intentionDate: nil,
+                                    reflectedDate: at(20, day: 9), calendar: cal)
         XCTAssertEqual(r, .evening)
     }
     func test_midday_outOfBothWindows_returnsNone() {
@@ -52,5 +66,13 @@ final class RitualPolicyTests: XCTestCase {
     func test_boundary_hour18_isEvening() {        // eveningStartHour == 18 (inclusive)
         let r = RitualPolicy.prompt(now: at(18), intentionDate: nil, reflectedDate: nil, calendar: cal)
         XCTAssertEqual(r, .evening)
+    }
+    func test_boundary_hour3_isEvening_hour4_isNone() {   // evening end: hour < 4, so 3 in / 4 out
+        XCTAssertEqual(RitualPolicy.prompt(now: at(3), intentionDate: nil, reflectedDate: nil, calendar: cal), .evening)
+        XCTAssertEqual(RitualPolicy.prompt(now: at(4), intentionDate: nil, reflectedDate: nil, calendar: cal), .none)
+    }
+    func test_boundary_hour5_isMorning() {               // morning start: 5..<12 (inclusive at 5)
+        let r = RitualPolicy.prompt(now: at(5), intentionDate: nil, reflectedDate: nil, calendar: cal)
+        XCTAssertEqual(r, .morning)
     }
 }
