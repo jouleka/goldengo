@@ -18,6 +18,12 @@ extension IngestionStore {
         let expenseRaw = TransactionKind.expense.rawValue
         let expenses = try modelContext.fetch(FetchDescriptor<ExpenseRecord>(
             predicate: #Predicate { $0.isArchived == false && $0.kindRaw == expenseRaw }))
+        return try rhythmGhosts(from: expenses, now: now)
+    }
+
+    /// Derive ghosts from already-fetched non-archived expense records. Internal so `homeData` can
+    /// reuse its single shared fetch. Batches the per-ghost merchant-category lookup into ONE fetch.
+    func rhythmGhosts(from expenses: [ExpenseRecord], now: Date) throws -> [RhythmGhost] {
         let occurrences = expenses.map {
             TransactionOccurrence(id: $0.dedupeKey, date: $0.date, amount: abs($0.amount),
                                   currency: CurrencyCode($0.currencyCode), merchant: $0.merchantName)
@@ -32,12 +38,19 @@ extension IngestionStore {
         let loggedTodayMerchants = Set(expenses
             .filter { $0.date >= startOfToday }
             .map { MerchantNormalizer.normalize($0.merchantName) })
+        let surfaced = patterns.filter { !loggedTodayMerchants.contains($0.normalizedMerchant) }
 
-        return patterns.compactMap { p in
-            guard !loggedTodayMerchants.contains(p.normalizedMerchant) else { return nil }
-            return RhythmGhost(id: p.id, displayName: p.displayName, normalizedMerchant: p.normalizedMerchant,
-                               amount: p.amount, currencyCode: p.currency.rawValue,
-                               categoryName: try? learnedCategoryName(forNormalized: p.normalizedMerchant))
+        // One fetch for all surfaced ghosts' learned categories (replaces the per-ghost N+1).
+        let norms = surfaced.map(\.normalizedMerchant)
+        let merchants = norms.isEmpty ? [] : try modelContext.fetch(FetchDescriptor<MerchantRecord>(
+            predicate: #Predicate { norms.contains($0.normalizedName) }))
+        let categoryByNorm = Dictionary(merchants.map { ($0.normalizedName, $0.defaultCategory?.name) },
+                                        uniquingKeysWith: { first, _ in first })
+
+        return surfaced.map { p in
+            RhythmGhost(id: p.id, displayName: p.displayName, normalizedMerchant: p.normalizedMerchant,
+                        amount: p.amount, currencyCode: p.currency.rawValue,
+                        categoryName: categoryByNorm[p.normalizedMerchant] ?? nil)
         }
     }
 
@@ -46,14 +59,5 @@ extension IngestionStore {
     public func confirmRhythmGhost(_ ghost: RhythmGhost, amount: Decimal) throws {
         try logManual(amount: amount, currency: CurrencyCode(ghost.currencyCode),
                       merchant: ghost.displayName, categoryName: nil, date: .now)
-    }
-
-    /// Read-only learned category for a normalized merchant (does NOT bump merchant stats — unlike
-    /// the private `defaultCategory` used at log time).
-    private func learnedCategoryName(forNormalized norm: String) throws -> String? {
-        guard !norm.isEmpty else { return nil }
-        var mf = FetchDescriptor<MerchantRecord>(predicate: #Predicate { $0.normalizedName == norm })
-        mf.fetchLimit = 1
-        return try modelContext.fetch(mf).first?.defaultCategory?.name
     }
 }

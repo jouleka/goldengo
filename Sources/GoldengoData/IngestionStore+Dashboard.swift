@@ -35,13 +35,19 @@ extension IngestionStore {
         let cal = Calendar.current
         let monthStart = cal.date(from: cal.dateComponents([.year, .month], from: now)) ?? cal.startOfDay(for: now)
         let expenseRaw = TransactionKind.expense.rawValue
+        let monthRecords = try modelContext.fetch(FetchDescriptor<ExpenseRecord>(predicate: #Predicate {
+            $0.isArchived == false && $0.kindRaw == expenseRaw && $0.date >= monthStart
+        }))
+        return try makeDashboardSummary(monthRecords: monthRecords, in: displayCurrency,
+                                        rates: rates, topCategoryLimit: topCategoryLimit)
+    }
+
+    /// Reduce already-fetched month expense records + confirmed subscriptions into a DashboardSummary.
+    /// Internal so `homeData` can pass a month-filtered slice of its single shared fetch.
+    func makeDashboardSummary(monthRecords: [ExpenseRecord], in displayCurrency: CurrencyCode,
+                              rates: RateTable, topCategoryLimit: Int) throws -> DashboardSummary {
         let converter = CurrencyConverter(table: rates)
         let display = displayCurrency.rawValue
-
-        let monthFd = FetchDescriptor<ExpenseRecord>(predicate: #Predicate {
-            $0.isArchived == false && $0.kindRaw == expenseRaw && $0.date >= monthStart
-        })
-        let monthRecords = try modelContext.fetch(monthFd)
 
         var monthTotal = Decimal(0)
         var byCategory: [String: Decimal] = [:]

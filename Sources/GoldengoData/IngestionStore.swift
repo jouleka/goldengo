@@ -200,7 +200,7 @@ public actor IngestionStore {
 #endif
     }
 
-    private func makeSnapshot(_ r: ExpenseRecord) -> ExpenseSnapshot {
+    func makeSnapshot(_ r: ExpenseRecord) -> ExpenseSnapshot {
         ExpenseSnapshot(dedupeKey: r.dedupeKey, amount: r.amount, currencyCode: r.currencyCode,
                         source: r.source, categoryName: r.category?.name,
                         date: r.date, merchantName: r.merchantName, note: r.note, kind: r.kind,

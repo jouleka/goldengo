@@ -70,6 +70,12 @@ extension IngestionStore {
     func fundingLabels(displayCurrency: CurrencyCode) throws -> [String: String] {
         let table = ExchangeRateCache().load() ?? SeedRates.table
         let (alloc, sources) = try compute(rates: table, displayCurrency: displayCurrency)
+        return fundingLabelMap(alloc: alloc, sources: sources)
+    }
+
+    /// Map a finished allocation + its sources into per-outflow "funded by" label strings.
+    /// Internal so `homeData` can reuse it from its single shared fetch.
+    func fundingLabelMap(alloc: ProvenanceAllocator.Allocation, sources: [SourceRecord]) -> [String: String] {
         let nameByID = Dictionary(uniqueKeysWithValues: sources.map { ($0.id, $0.name) })
         var labels: [String: String] = [:]
         for (outflowID, segs) in alloc.fundingByOutflow {
