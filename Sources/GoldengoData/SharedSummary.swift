@@ -41,6 +41,32 @@ public struct SharedSummary {
     public func setLastSeen(_ date: Date = .now) { defaults.set(date, forKey: Self.lastSeenKey) }
     public func readLastSeen() -> Date? { defaults.object(forKey: Self.lastSeenKey) as? Date }
 
+    // MARK: Daily check-in ritual (GOL-85) — opt-in morning intention + evening reflection.
+    public static let ritualEnabledKey = "ritualEnabled"
+    public static let intentionKey = "ritualIntention"
+    public static let intentionDateKey = "ritualIntentionDate"
+    public static let reflectedDateKey = "ritualReflectedDate"
+
+    public func setRitualEnabled(_ on: Bool) { defaults.set(on, forKey: Self.ritualEnabledKey) }
+    public func ritualEnabled() -> Bool { defaults.bool(forKey: Self.ritualEnabledKey) }
+
+    /// Store today's morning intention text + the moment it was captured.
+    public func setIntention(_ text: String, on date: Date = .now) {
+        defaults.set(text, forKey: Self.intentionKey)
+        defaults.set(date, forKey: Self.intentionDateKey)
+    }
+    /// The stored intention, or nil if either the text or its date is missing.
+    public func readIntention() -> (text: String, date: Date)? {
+        guard let text = defaults.string(forKey: Self.intentionKey),
+              let date = defaults.object(forKey: Self.intentionDateKey) as? Date else { return nil }
+        return (text, date)
+    }
+    public func readIntentionDate() -> Date? { defaults.object(forKey: Self.intentionDateKey) as? Date }
+
+    /// Mark that the evening reflection was completed at `date`.
+    public func setReflected(on date: Date = .now) { defaults.set(date, forKey: Self.reflectedDateKey) }
+    public func readReflectedDate() -> Date? { defaults.object(forKey: Self.reflectedDateKey) as? Date }
+
     public func setPendingTab(_ tab: Int?) {
         if let tab {
             defaults.set(tab, forKey: Self.pendingTabKey)
