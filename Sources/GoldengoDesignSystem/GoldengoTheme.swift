@@ -32,6 +32,14 @@ public enum GoldengoTheme {
         public static let control: CGFloat = 16
         public static let card: CGFloat = 22
     }
+
+    /// The shared per-source palette (by `SourceRecord.colorIndex`) — the Sources tab bars and the
+    /// funded-by chips must agree on a source's color, so both resolve through here.
+    public static let sourcePalette: [Color] = [.blue, .teal, .green, .orange, .pink, .purple, .indigo, .brown]
+    public static func sourceColor(_ index: Int) -> Color {
+        let n = sourcePalette.count
+        return sourcePalette[((index % n) + n) % n]
+    }
 }
 
 public extension Color {

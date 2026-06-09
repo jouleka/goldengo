@@ -3,6 +3,7 @@ import Observation
 import SwiftUI
 import GoldengoCore
 import GoldengoData
+import GoldengoDesignSystem
 
 @MainActor
 @Observable
@@ -43,10 +44,9 @@ public final class SourcesModel {
         return Money(amount: s.unaccounted, currency: CurrencyCode(s.displayCurrencyCode)).formatted()
     }
 
-    private static let palette: [Color] = [.blue, .teal, .green, .orange, .pink, .purple, .indigo, .brown]
-    /// A stable, distinct color per source (by its colorIndex) — the "distinctly-colored source".
+    /// A stable, distinct color per source (by its colorIndex) — shared with the funded-by chips
+    /// via the design-system palette so the same source is the same color everywhere.
     public func color(_ b: SourceBalance) -> Color {
-        let n = Self.palette.count
-        return Self.palette[((b.colorIndex % n) + n) % n]
+        GoldengoTheme.sourceColor(b.colorIndex)
     }
 }

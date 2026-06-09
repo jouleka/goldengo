@@ -10,7 +10,9 @@ public struct EditExpenseView: View {
     @Environment(\.dismiss) private var dismiss
 
     private let snapshot: ExpenseSnapshot
-    private let onSave: (_ amount: Decimal, _ currency: CurrencyCode, _ merchant: String?, _ note: String?, _ category: String?, _ date: Date) -> Void
+    /// Named sources for the "Paid from" picker (GOL-89); empty hides the section.
+    private let fundingSources: [FundingSourceOption]
+    private let onSave: (_ amount: Decimal, _ currency: CurrencyCode, _ merchant: String?, _ note: String?, _ category: String?, _ date: Date, _ fundedBySourceID: String?) -> Void
     private let onDelete: () -> Void
 
     @State private var amountText: String
@@ -19,6 +21,7 @@ public struct EditExpenseView: View {
     @State private var note: String
     @State private var category: String?
     @State private var date: Date
+    @State private var fundedBySourceID: String?
     @State private var showDeleteConfirm = false
     @State private var showCurrencyPicker = false
 
@@ -27,9 +30,11 @@ public struct EditExpenseView: View {
     private static let baseCategories = ["Groceries", "Food", "Transport", "Coffee", "Bills", "Shopping"]
 
     public init(snapshot: ExpenseSnapshot,
-                onSave: @escaping (_ amount: Decimal, _ currency: CurrencyCode, _ merchant: String?, _ note: String?, _ category: String?, _ date: Date) -> Void,
+                fundingSources: [FundingSourceOption] = [],
+                onSave: @escaping (_ amount: Decimal, _ currency: CurrencyCode, _ merchant: String?, _ note: String?, _ category: String?, _ date: Date, _ fundedBySourceID: String?) -> Void,
                 onDelete: @escaping () -> Void) {
         self.snapshot = snapshot
+        self.fundingSources = fundingSources
         self.onSave = onSave
         self.onDelete = onDelete
         _amountText = State(initialValue: NSDecimalNumber(decimal: snapshot.amount).stringValue)
@@ -38,6 +43,7 @@ public struct EditExpenseView: View {
         _note = State(initialValue: snapshot.note ?? "")
         _category = State(initialValue: snapshot.categoryName)
         _date = State(initialValue: snapshot.date)
+        _fundedBySourceID = State(initialValue: snapshot.fundedBySourceID)
     }
 
     private var categories: [String] {
@@ -61,6 +67,9 @@ public struct EditExpenseView: View {
                 merchantSection
                 noteSection
                 categorySection
+                if snapshot.kind == .expense && !fundingSources.isEmpty {
+                    paidFromSection
+                }
                 dateSection
                 deleteSection
             }
@@ -197,6 +206,51 @@ public struct EditExpenseView: View {
         }
     }
 
+    /// GOL-89: choose which money pool this expense draws from — "Automatic" (FIFO) or a pinned
+    /// source. Chips mirror the category-chip pattern; each source chip carries its palette dot.
+    private var paidFromSection: some View {
+        Section {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: GoldengoTheme.Spacing.s) {
+                    paidFromChip(label: "Automatic", dot: nil, selected: fundedBySourceID == nil) {
+                        fundedBySourceID = nil
+                    }
+                    ForEach(fundingSources) { s in
+                        paidFromChip(label: s.name, dot: GoldengoTheme.sourceColor(s.colorIndex),
+                                     selected: fundedBySourceID == s.id) {
+                            fundedBySourceID = s.id
+                        }
+                    }
+                }
+                .padding(.vertical, 2)
+            }
+            .listRowInsets(EdgeInsets(top: GoldengoTheme.Spacing.s, leading: GoldengoTheme.Spacing.m,
+                                      bottom: GoldengoTheme.Spacing.s, trailing: GoldengoTheme.Spacing.m))
+        } header: {
+            Text("Paid from")
+        } footer: {
+            Text("Automatic uses your oldest money first. Pick a source to say exactly where this came from.")
+        }
+    }
+
+    private func paidFromChip(label: String, dot: Color?, selected: Bool,
+                              action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 6) {
+                if let dot {
+                    Circle().fill(dot).frame(width: 8, height: 8)
+                }
+                Text(label).font(.subheadline.weight(.medium))
+            }
+            .padding(.horizontal, GoldengoTheme.Spacing.m)
+            .padding(.vertical, 10)
+            .background(selected ? GoldengoTheme.accent : Color.goldengoField)
+            .foregroundStyle(selected ? .black : .primary)
+            .clipShape(Capsule())
+        }
+        .buttonStyle(.plain)
+    }
+
     private var dateSection: some View {
         Section {
             DatePicker("Date", selection: $date, displayedComponents: .date)
@@ -221,7 +275,7 @@ public struct EditExpenseView: View {
         let trimmedMerchant = merchant.trimmingCharacters(in: .whitespacesAndNewlines)
         let trimmedNote = note.trimmingCharacters(in: .whitespacesAndNewlines)
         onSave(amount, currency, trimmedMerchant.isEmpty ? nil : trimmedMerchant,
-               trimmedNote.isEmpty ? nil : trimmedNote, category, date)
+               trimmedNote.isEmpty ? nil : trimmedNote, category, date, fundedBySourceID)
         dismiss()
     }
 }

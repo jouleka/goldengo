@@ -102,8 +102,10 @@ public struct RecentExpensesView: View {
             .sheet(item: $editing) { snap in
                 EditExpenseView(
                     snapshot: snap,
-                    onSave: { amt, cur, m, n, c, d in
-                        Task { await model.update(snap, amount: amt, currency: cur, merchant: m, note: n, categoryName: c, date: d) }
+                    fundingSources: model.fundingSources,
+                    onSave: { amt, cur, m, n, c, d, pin in
+                        Task { await model.update(snap, amount: amt, currency: cur, merchant: m, note: n,
+                                                  categoryName: c, date: d, fundedBySourceID: pin) }
                     },
                     onDelete: { deleteWithUndo(snap) }
                 )
@@ -411,8 +413,21 @@ public struct RecentExpensesView: View {
                 Text(r.categoryName ?? "Other")
                     .font(.caption).foregroundStyle(.secondary)
                 if let fundedBy = r.fundedBy {
-                    Label("funded by \(fundedBy)", systemImage: "arrow.down.left.circle")
-                        .font(.caption2).foregroundStyle(.secondary).labelStyle(.titleAndIcon)
+                    // Quiet funding chip: the source's palette-color dot (matching its Sources-tab
+                    // bar) + "from <source>", in a soft capsule — calm, glanceable, no iconography.
+                    HStack(spacing: 5) {
+                        Circle()
+                            .fill(GoldengoTheme.sourceColor(r.fundedByColorIndex ?? 0))
+                            .frame(width: 6, height: 6)
+                        Text("from \(fundedBy)")
+                            .font(.caption2.weight(.medium))
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding(.horizontal, GoldengoTheme.Spacing.s)
+                    .padding(.vertical, 3)
+                    .background(Color.goldengoField)
+                    .clipShape(Capsule())
+                    .padding(.top, 1)
                 }
             }
             Spacer()
