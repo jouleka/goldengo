@@ -14,6 +14,7 @@ public final class RecentExpensesModel {
     /// True when the last load threw. The view surfaces this instead of silently showing an empty
     /// list (errors used to be swallowed with `try?`).
     public private(set) var loadFailed = false
+    public private(set) var ghosts: [RhythmGhost] = []
 
     public init(store: any RecentExpensesReading, currency: CurrencyCode = .all) {
         self.reader = store; self.currency = currency
@@ -27,6 +28,7 @@ public final class RecentExpensesModel {
             rows = fetched
             todayTotalText = Money(amount: total, currency: currency).formatted()
             summary = try await reader.dashboardSummary(in: currency, rates: rates, now: .now, topCategoryLimit: 4)
+            ghosts = (try? await reader.rhythmGhosts(now: .now)) ?? []
             loadFailed = false
         } catch {
             // Keep any previously-loaded rows on screen; surface the failure so the user can retry.
@@ -46,6 +48,12 @@ public final class RecentExpensesModel {
     /// Undo a soft-delete, then reload so the row reappears (backs the "Undo" toast).
     public func restore(_ snapshot: ExpenseSnapshot) async {
         try? await reader.restoreExpense(dedupeKey: snapshot.dedupeKey)
+        await load()
+    }
+
+    /// Confirm a daily "usual": log it at `amount` (default = its median), then reload so it clears.
+    public func confirm(_ ghost: RhythmGhost, amount: Decimal? = nil) async {
+        try? await reader.confirmRhythmGhost(ghost, amount: amount ?? ghost.amount)
         await load()
     }
 

@@ -34,4 +34,6 @@ private struct FailingReader: RecentExpensesReading {
     func deleteExpense(dedupeKey: String) async throws { throw Boom() }
     func restoreExpense(dedupeKey: String) async throws { throw Boom() }
     func updateExpense(dedupeKey: String, amount: Decimal, currency: CurrencyCode?, merchant: String?, note: String?, categoryName: String?, date: Date) async throws { throw Boom() }
+    func rhythmGhosts(now: Date) async throws -> [RhythmGhost] { throw Boom() }
+    func confirmRhythmGhost(_ ghost: RhythmGhost, amount: Decimal) async throws { throw Boom() }
 }

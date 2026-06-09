@@ -11,6 +11,8 @@ public protocol RecentExpensesReading: Sendable {
     func deleteExpense(dedupeKey: String) async throws
     func restoreExpense(dedupeKey: String) async throws
     func updateExpense(dedupeKey: String, amount: Decimal, currency: CurrencyCode?, merchant: String?, note: String?, categoryName: String?, date: Date) async throws
+    func rhythmGhosts(now: Date) async throws -> [RhythmGhost]
+    func confirmRhythmGhost(_ ghost: RhythmGhost, amount: Decimal) async throws
 }
 
 extension IngestionStore: RecentExpensesReading {}
