@@ -20,6 +20,8 @@ public struct RecentExpensesView: View {
     private let onOpenSubscriptions: () -> Void
     private let onChangeCurrency: (CurrencyCode) -> Void
     @State private var showCurrencyPicker = false
+    @State private var adjusting: RhythmGhost?
+    @State private var adjustAmount = ""
 
     public init(model: RecentExpensesModel,
                 onAdd: @escaping () -> Void = {},
@@ -46,6 +48,12 @@ public struct RecentExpensesView: View {
                 monthCard.goldengoCardRow()
                 if model.subscriptionsText() != nil { subscriptionsCard.goldengoCardRow() }
                 if let s = model.summary, !s.topCategories.isEmpty { categoriesCard(s).goldengoCardRow() }
+
+                if !model.ghosts.isEmpty {
+                    GoldengoSectionLabel("Today's usuals")
+                        .goldengoCardRow(top: GoldengoTheme.Spacing.m, bottom: GoldengoTheme.Spacing.xs)
+                    ForEach(model.ghosts) { g in ghostRow(g) }
+                }
 
                 GoldengoSectionLabel("Recent")
                     .goldengoCardRow(top: GoldengoTheme.Spacing.m, bottom: GoldengoTheme.Spacing.xs)
@@ -75,6 +83,21 @@ public struct RecentExpensesView: View {
                 }
             }
             .refreshable { await model.load() }
+            .alert("Adjust amount", isPresented: Binding(get: { adjusting != nil },
+                                                         set: { if !$0 { adjusting = nil } }),
+                   presenting: adjusting) { g in
+                TextField("Amount", text: $adjustAmount)
+#if os(iOS)
+                    .keyboardType(.decimalPad)
+#endif
+                Button("Add") {
+                    let amt = Decimal(string: adjustAmount) ?? g.amount
+                    Task { await model.confirm(g, amount: amt) }
+                }
+                Button("Cancel", role: .cancel) { }
+            } message: { g in
+                Text("How much for \(g.displayName) today?")
+            }
             .sheet(item: $editing) { snap in
                 EditExpenseView(
                     snapshot: snap,
@@ -330,6 +353,37 @@ public struct RecentExpensesView: View {
             }
         }
         .frame(height: 6)
+    }
+
+    /// A pre-drafted daily "usual" — tap to log at the median (today); long-press → Adjust amount.
+    private func ghostRow(_ g: RhythmGhost) -> some View {
+        Button { Task { await model.confirm(g) } } label: {
+            HStack(spacing: GoldengoTheme.Spacing.m) {
+                Image(systemName: GoldengoCategoryIcon.symbol(for: g.categoryName))
+                    .font(.subheadline).foregroundStyle(.secondary)
+                    .frame(width: 36, height: 36)
+                    .background(Color.goldengoField)
+                    .clipShape(RoundedRectangle(cornerRadius: GoldengoTheme.Radius.chip, style: .continuous))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(g.displayName).font(.subheadline.weight(.medium))
+                    Text("~" + Money(amount: g.amount, currency: CurrencyCode(g.currencyCode)).formatted() + " · tap to add")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+                Spacer()
+                Image(systemName: "plus.circle").foregroundStyle(GoldengoTheme.accent)
+            }
+            .padding(.vertical, 4)
+            .opacity(0.7)   // reads as a draft
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .listRowBackground(Color.clear)
+        .listRowSeparator(.hidden)
+        .listRowInsets(EdgeInsets(top: GoldengoTheme.Spacing.xs, leading: GoldengoTheme.Spacing.m,
+                                  bottom: GoldengoTheme.Spacing.xs, trailing: GoldengoTheme.Spacing.m))
+        .contextMenu {
+            Button("Adjust amount…") { adjustAmount = ""; adjusting = g }
+        }
     }
 
     private func expenseRow(_ r: ExpenseSnapshot) -> some View {
