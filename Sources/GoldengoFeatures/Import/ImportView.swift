@@ -94,8 +94,10 @@ public struct ImportView: View {
     }
 
     private var resultCard: some View {
-        HStack(spacing: GoldengoTheme.Spacing.s) {
-            Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
+        let failed = model.result.isFailure
+        return HStack(spacing: GoldengoTheme.Spacing.s) {
+            Image(systemName: failed ? "exclamationmark.triangle.fill" : "checkmark.circle.fill")
+                .foregroundStyle(failed ? GoldengoTheme.danger : .green)
             Text(model.resultText).font(.subheadline)
             Spacer()
         }

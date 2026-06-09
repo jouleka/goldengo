@@ -402,6 +402,11 @@ public struct RecentExpensesView: View {
                     if r.subscriptionName != nil {
                         Image(systemName: "repeat").font(.caption2).foregroundStyle(.secondary)
                     }
+                    if r.source == .automatic {
+                        // Auto-captured (e.g. the Apple Pay automation) vs hand-added — a quiet marker
+                        // so you can tell at a glance which rows Goldengo logged for you.
+                        Image(systemName: "creditcard").font(.caption2).foregroundStyle(.secondary)
+                    }
                 }
                 Text(r.categoryName ?? "Other")
                     .font(.caption).foregroundStyle(.secondary)

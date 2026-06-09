@@ -11,6 +11,7 @@ final class ImportModelTests: XCTestCase {
         let bigText = String(repeating: "a,b\n", count: 3_000_000)
         await m.importCSV(text: bigText, fileName: "huge.csv")
         XCTAssertEqual(m.resultText, "File too large (max 10 MB).")
+        XCTAssertTrue(m.result.isFailure, "An error must be marked a failure (so the UI shows a warning, not a green check).")
         let count = try await store.expenseCount()
         XCTAssertEqual(count, 0)
     }
@@ -26,6 +27,7 @@ final class ImportModelTests: XCTestCase {
         """
         await m.importCSV(text: csv, fileName: "sample.csv")
         XCTAssertEqual(m.resultText, "Imported 2, skipped 0 duplicates")
+        XCTAssertFalse(m.result.isFailure, "A successful import must NOT be marked a failure.")
         let count = try await store.expenseCount()
         XCTAssertEqual(count, 2)
     }
