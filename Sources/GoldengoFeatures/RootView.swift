@@ -11,12 +11,16 @@ public struct ImportFile: Identifiable, Hashable {
     public init(url: URL) { self.url = url; self.id = url.absoluteString }
 }
 
+/// Drives the Re-entry `.fullScreenCover(item:)` (Int? isn't Identifiable on its own).
+public struct ReEntryPrompt: Identifiable { public let id = UUID(); public let days: Int }
+
 public struct RootView: View {
     private let store: IngestionStore
     @State private var selectedTab: Int = 1            // Home dashboard is the orienting landing screen.
     @State private var showSettings = false
     @State private var showImport = false
     @State private var importFile: ImportFile?            // a statement shared into the app (Share / Open in)
+    @State private var reEntryPrompt: ReEntryPrompt?      // welcome-back soft-landing after a gap
     @Environment(\.scenePhase) private var scenePhase
     // Owned here (not inline in the tab) so Home can be refreshed when the user returns to it or
     // finishes an import — otherwise newly added/imported expenses don't appear until a manual reload.
@@ -49,6 +53,17 @@ public struct RootView: View {
             route(toTab: tab)
             summary.setPendingTab(nil)
         }
+    }
+
+    /// Show the soft-landing if we've been away long enough, then reset `lastSeen` so a same-session
+    /// re-activation (e.g. dismissing a system alert) can't re-fire it.
+    private func checkReEntry() {
+        let summary = SharedSummary()
+        if let days = ReEntryPolicy.daysAway(lastSeen: summary.readLastSeen()),
+           days >= ReEntryPolicy.thresholdDays {
+            reEntryPrompt = ReEntryPrompt(days: days)
+        }
+        summary.setLastSeen()
     }
 
     public var body: some View {
@@ -103,8 +118,16 @@ public struct RootView: View {
         }) { file in
             ImportView(model: ImportModel(store: store), autoImport: file.url)
         }
+#if os(iOS)
+        .fullScreenCover(item: $reEntryPrompt) { prompt in
+            ReEntryView(daysAway: prompt.days) { reEntryPrompt = nil }
+        }
+#endif
         .onAppear { applyPendingTab() }
-        .task { await recentModel.load() }   // cold-launch load (Home is the landing tab)
+        .task {
+            checkReEntry()            // cold-launch re-entry check (onChange(scenePhase) misses the initial .active)
+            await recentModel.load()  // Home is the landing tab
+        }
         .onChange(of: selectedTab) { _, newTab in
             // Reload the destination tab's data on entry so adds/imports show without a manual refresh.
             if newTab == 1 { Task { await recentModel.load() } }
@@ -112,11 +135,17 @@ public struct RootView: View {
             if newTab == 5 { Task { await sourcesModel.load() } }
         }
         .onChange(of: scenePhase) { _, newPhase in
-            if newPhase == .active {
+            switch newPhase {
+            case .active:
+                checkReEntry()
                 applyPendingTab()
                 // An expense may have been logged via the Quick-Log shortcut while we were
                 // backgrounded; reload so it appears on Home without a manual pull-to-refresh.
                 Task { await recentModel.load() }
+            case .background:
+                SharedSummary().setLastSeen()
+            default:
+                break
             }
         }
         .onOpenURL { url in
