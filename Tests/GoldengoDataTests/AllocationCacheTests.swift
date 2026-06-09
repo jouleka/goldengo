@@ -39,4 +39,25 @@ final class AllocationCacheTests: XCTestCase {
         let b = await store.allocationComputeCount
         XCTAssertGreaterThan(b, a, "A different display currency is a different fingerprint → recompute.")
     }
+
+    func test_allocation_recomputesWhenRateValuesChange_atSameAsOf() async throws {
+        // Cross-currency ledger: a EUR source funding an ALL spend → the allocation output depends on
+        // the EUR↔ALL rate VALUE. Two rate tables sharing asOf but differing in values must NOT collide
+        // in the cache (regression guard: the fingerprint keys on the full table, not just asOf).
+        let store = try makeStore()
+        try await store.logIncome(amount: 5, currency: CurrencyCode("EUR"), sourceName: "Sis")
+        try await store.logManual(amount: 1000, currency: .all, merchant: "Rent", categoryName: nil)
+        let asOf = Date(timeIntervalSince1970: 1_780_000_000)
+        // 5 EUR funds 500 ALL at rate A (→ 500 ALL unaccounted) but 1000 ALL at rate B (→ 0 unaccounted).
+        let ratesA = RateTable(base: .all, rates: ["ALL": 1, "EUR": 0.01], asOf: asOf)   // 1 EUR = 100 ALL
+        let ratesB = RateTable(base: .all, rates: ["ALL": 1, "EUR": 0.005], asOf: asOf)  // 1 EUR = 200 ALL
+
+        let snapA = try await store.provenanceSnapshot(displayCurrency: .all, rates: ratesA)
+        let countA = await store.allocationComputeCount
+        let snapB = try await store.provenanceSnapshot(displayCurrency: .all, rates: ratesB)
+        let countB = await store.allocationComputeCount
+
+        XCTAssertGreaterThan(countB, countA, "Different rate values (same asOf) → recompute, not a stale hit.")
+        XCTAssertNotEqual(snapA.unaccounted, snapB.unaccounted, "Recompute must reflect the new FX values.")
+    }
 }

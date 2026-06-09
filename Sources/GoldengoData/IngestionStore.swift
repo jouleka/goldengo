@@ -40,7 +40,9 @@ public actor IngestionStore {
     // private) so the cross-file +Provenance / +HomeData extensions can call allocateCached.
     struct LedgerFingerprint: Equatable {
         let currencyCode: String
-        let ratesAsOf: Date
+        let rates: RateTable     // the FULL table, not just asOf: cross-currency allocation output
+                                 // depends on the rate VALUES, so two same-asOf/different-rates tables
+                                 // must produce different fingerprints (else the cache serves stale FX).
         let inflowKeys: [String]
         let outflowKeys: [String]
     }
@@ -66,7 +68,7 @@ public actor IngestionStore {
                              rates: RateTable, displayCurrency: CurrencyCode) -> LedgerFingerprint {
         LedgerFingerprint(
             currencyCode: displayCurrency.rawValue,
-            ratesAsOf: rates.asOf,
+            rates: rates,
             inflowKeys: inflows.map { "\($0.id)|\($0.date.timeIntervalSinceReferenceDate)|\($0.amount)|\($0.currency.rawValue)|\($0.sourceID)" }.sorted(),
             outflowKeys: outflows.map { "\($0.id)|\($0.date.timeIntervalSinceReferenceDate)|\($0.amount)|\($0.currency.rawValue)" }.sorted())
     }
