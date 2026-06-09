@@ -40,10 +40,13 @@ extension IngestionStore {
             .map { MerchantNormalizer.normalize($0.merchantName) })
         let surfaced = patterns.filter { !loggedTodayMerchants.contains($0.normalizedMerchant) }
 
-        // One fetch for all surfaced ghosts' learned categories (replaces the per-ghost N+1).
-        let norms = surfaced.map(\.normalizedMerchant)
-        let merchants = norms.isEmpty ? [] : try modelContext.fetch(FetchDescriptor<MerchantRecord>(
-            predicate: #Predicate { norms.contains($0.normalizedName) }))
+        // One fetch for all surfaced ghosts' learned categories (replaces the per-ghost N+1). The
+        // merchant set is matched IN MEMORY — capturing a Swift array and calling `.contains` inside a
+        // SwiftData #Predicate crashes at runtime (same SIGSEGV class as Decimal-in-#Predicate), so we
+        // fetch the (small) merchant table and filter here. Only runs when a ghost actually surfaced.
+        let norms = Set(surfaced.map(\.normalizedMerchant))
+        let merchants = norms.isEmpty ? [] : try modelContext.fetch(FetchDescriptor<MerchantRecord>())
+            .filter { norms.contains($0.normalizedName) }
         let categoryByNorm = Dictionary(merchants.map { ($0.normalizedName, $0.defaultCategory?.name) },
                                         uniquingKeysWith: { first, _ in first })
 
