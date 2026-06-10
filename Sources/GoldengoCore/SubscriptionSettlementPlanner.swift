@@ -61,24 +61,42 @@ public enum SubscriptionSettlementPlanner {
         return abs(a - s) / s <= SubscriptionDetector.Options().amountTolerance
     }
 
-    /// Charge dates strictly after `lastCharge`, at-or-before `now`, within the trailing
-    /// horizon, oldest first. The anchored multi-period advance (`by: k`) keeps the billing
-    /// day-of-month stable across short months (Jan 31 → Feb 28 → Mar 31, not Mar 28).
-    public static func dueCharges(lastCharge: Date, cadence: SubscriptionCadence,
+    /// Billing-grid dates inside the surfacing window — at-or-before `now`, within the trailing
+    /// horizon, never before `notBefore` (the sub's earliest known charge: backfill must not
+    /// invent pre-history), excluding the anchor's own date. Oldest first.
+    ///
+    /// The grid walks BOTH directions from the anchor with the anchored multi-period advance
+    /// (`by: k`), which keeps the billing day-of-month stable across short months (Jan 31 →
+    /// Feb 28 → Mar 31, not Mar 28). The backward walk matters when the anchor is itself a
+    /// freshly-logged LATER due: tapping May's ghost must not discard April's (covered grid
+    /// dates are filtered by the caller, so backward dates landing on real charges vanish).
+    public static func dueCharges(anchor: Date, notBefore: Date, cadence: SubscriptionCadence,
                                   now: Date, calendar: Calendar) -> [Date] {
-        guard lastCharge < now,
+        guard anchor <= now,
               let horizonStart = calendar.date(byAdding: .day, value: -horizonDays, to: now)
         else { return [] }
+        let floor = max(horizonStart, notBefore)
         var due: [Date] = []
-        var k = 1
-        var previous = lastCharge
-        var next = cadence.advance(lastCharge, by: k, calendar: calendar)
+        var k = -1
+        var previous = anchor
+        var next = cadence.advance(anchor, by: k, calendar: calendar)
+        while next >= floor {
+            guard next < previous else { break }        // advance() fell back to its input — never spin
+            due.append(next)
+            previous = next
+            k -= 1
+            next = cadence.advance(anchor, by: k, calendar: calendar)
+        }
+        due.reverse()
+        k = 1
+        previous = anchor
+        next = cadence.advance(anchor, by: k, calendar: calendar)
         while next <= now {
-            guard next > previous else { return due }   // advance() fell back to its input — never spin
+            guard next > previous else { break }        // same fallback guard on the forward walk
             if next >= horizonStart { due.append(next) }
             previous = next
             k += 1
-            next = cadence.advance(lastCharge, by: k, calendar: calendar)
+            next = cadence.advance(anchor, by: k, calendar: calendar)
         }
         return due
     }

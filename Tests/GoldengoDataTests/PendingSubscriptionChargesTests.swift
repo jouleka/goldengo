@@ -71,6 +71,25 @@ final class PendingSubscriptionChargesTests: XCTestCase {
         XCTAssertEqual(before, after)
     }
 
+    func test_tappingALaterGhostFirst_keepsEarlierGhosts() async throws {
+        let store = try makeStore()
+        try await confirmedNetflix(store)
+        let pending = try await store.pendingSubscriptionCharges(now: day(2026, 5, 12))
+        XCTAssertEqual(pending.map(\.dueDate), [day(2026, 4, 5), day(2026, 5, 5)])
+        // Nothing constrains tap order — the user logs MAY first.
+        let may = try XCTUnwrap(pending.last)
+        _ = try await store.logAutomatic(amount: may.amount, currency: CurrencyCode(may.currencyCode),
+                                         merchant: may.merchantName, date: may.dueDate)
+        let after = try await store.pendingSubscriptionCharges(now: day(2026, 5, 12))
+        XCTAssertEqual(after.map(\.dueDate), [day(2026, 4, 5)],
+                       "The backward grid walk keeps April's due alive — logging May must not discard it")
+        let april = try XCTUnwrap(after.first)
+        _ = try await store.logAutomatic(amount: april.amount, currency: CurrencyCode(april.currencyCode),
+                                         merchant: april.merchantName, date: april.dueDate)
+        let final = try await store.pendingSubscriptionCharges(now: day(2026, 5, 12))
+        XCTAssertTrue(final.isEmpty, "Both periods logged → nothing pending")
+    }
+
     func test_weeklyCadence_flowsThroughTheStore() async throws {
         let store = try makeStore()
         for (i, d) in [4, 11, 18, 25].enumerated() {   // four weekly charges in May

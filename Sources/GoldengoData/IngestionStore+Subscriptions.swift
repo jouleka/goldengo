@@ -13,6 +13,12 @@ public struct PendingSubscriptionCharge: Sendable, Equatable, Identifiable {
     public var currencyCode: String
     public var dueDate: Date
     public var id: String { "\(matchKey)|\(dueDate.timeIntervalSinceReferenceDate)" }
+
+    public init(matchKey: String, displayName: String, merchantName: String,
+                amount: Decimal, currencyCode: String, dueDate: Date) {
+        self.matchKey = matchKey; self.displayName = displayName; self.merchantName = merchantName
+        self.amount = amount; self.currencyCode = currencyCode; self.dueDate = dueDate
+    }
 }
 
 public struct SubscriptionSnapshot: Sendable, Equatable, Identifiable {
@@ -232,11 +238,13 @@ extension IngestionStore {
 
         var cal = Calendar(identifier: .gregorian); cal.timeZone = TimeZone(identifier: "UTC")!
         let expenseRaw = TransactionKind.expense.rawValue
-        // ONE bulk fetch, tombstones INCLUDED (a deleted charge must keep suppressing its due
-        // date). Merchant + amount matching stays in memory — never in a #Predicate (Decimal
-        // there SIGSEGVs at runtime).
+        // ONE bounded fetch, tombstones INCLUDED (a deleted charge must keep suppressing its due
+        // date). 400 days reaches a yearly sub's anchor plus the widest coverage window with
+        // slack, without rescanning the whole table on every home load (GOL-86). Merchant +
+        // amount matching stays in memory — never in a #Predicate (Decimal there SIGSEGVs).
+        let lookback = cal.date(byAdding: .day, value: -400, to: now) ?? .distantPast
         let rows = try modelContext.fetch(FetchDescriptor<ExpenseRecord>(
-            predicate: #Predicate { $0.kindRaw == expenseRaw }))
+            predicate: #Predicate { $0.kindRaw == expenseRaw && $0.date >= lookback }))
         let grouped = Dictionary(grouping: rows) {
             "\(MerchantNormalizer.normalize($0.merchantName))|\($0.currencyCode)"
         }
@@ -245,14 +253,18 @@ extension IngestionStore {
         for sub in representative.values {
             let groupKey = "\(sub.normalizedMerchant)|\(sub.currencyCode)"
             guard let merchantRows = grouped[groupKey] else { continue }
-            guard let anchor = merchantRows
-                .filter({ !$0.isArchived
+            let evidence = merchantRows.filter {
+                !$0.isArchived
                     && SubscriptionSettlementPlanner.isBillingEvidence(amount: $0.amount,
-                                                                       subscriptionAmount: sub.amount) })
-                .max(by: { $0.date < $1.date }) else { continue }
+                                                                       subscriptionAmount: sub.amount)
+            }
+            // Anchor = freshest billing evidence; the earliest bounds the backward grid walk so
+            // backfill can never invent dues from before the subscription's known history.
+            guard let anchor = evidence.max(by: { $0.date < $1.date }),
+                  let earliest = evidence.min(by: { $0.date < $1.date }) else { continue }
             let coverage = TimeInterval(SubscriptionSettlementPlanner.coverageWindowDays(for: sub.cadence)) * 86_400
             for dueDate in SubscriptionSettlementPlanner.dueCharges(
-                lastCharge: anchor.date, cadence: sub.cadence, now: now, calendar: cal) {
+                anchor: anchor.date, notBefore: earliest.date, cadence: sub.cadence, now: now, calendar: cal) {
                 let isCovered = merchantRows.contains {
                     abs($0.date.timeIntervalSince(dueDate)) <= coverage
                 }

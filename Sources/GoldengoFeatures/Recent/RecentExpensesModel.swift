@@ -66,6 +66,11 @@ public final class RecentExpensesModel {
     /// `.automatic` so a later statement import merges into it. Reload clears the ghost (the new
     /// row now covers its due date).
     public func logPending(_ charge: PendingSubscriptionCharge) async {
+        // Drop the ghost SYNCHRONOUSLY, before the first await: every log is a distinct insert
+        // (unique key), so a double-tap during the actor round-trip would double-count. The
+        // guard makes a re-entrant second tap a no-op; load() recomputes the true list after.
+        guard pendingCharges.contains(charge) else { return }
+        pendingCharges.removeAll { $0.id == charge.id }
         _ = try? await reader.logAutomatic(amount: charge.amount,
                                            currency: CurrencyCode(charge.currencyCode),
                                            merchant: charge.merchantName,

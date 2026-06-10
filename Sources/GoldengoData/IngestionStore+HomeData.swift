@@ -13,6 +13,12 @@ public struct HomeData: Sendable {
     public let sources: [FundingSourceOption]
     /// Due-but-unlogged subscription charges for the one-tap "Due" ghost section (GOL-92).
     public let pending: [PendingSubscriptionCharge]
+
+    public init(rows: [ExpenseSnapshot], todayTotal: Decimal, summary: DashboardSummary,
+                ghosts: [RhythmGhost], sources: [FundingSourceOption], pending: [PendingSubscriptionCharge]) {
+        self.rows = rows; self.todayTotal = todayTotal; self.summary = summary
+        self.ghosts = ghosts; self.sources = sources; self.pending = pending
+    }
 }
 
 extension IngestionStore {

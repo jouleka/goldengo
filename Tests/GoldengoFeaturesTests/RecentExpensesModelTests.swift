@@ -23,6 +23,56 @@ final class RecentExpensesModelTests: XCTestCase {
         XCTAssertTrue(m.rows.isEmpty)
         XCTAssertNil(m.summary)
     }
+
+    func test_doubleTappingADueGhost_logsExactlyOnce() async throws {
+        let ghost = PendingSubscriptionCharge(matchKey: "NETFLIX|monthly|ALL", displayName: "Netflix",
+                                              merchantName: "Netflix", amount: 1200, currencyCode: "ALL",
+                                              dueDate: Date(timeIntervalSinceReferenceDate: 0))
+        let reader = CountingReader(pending: [ghost])
+        let m = RecentExpensesModel(store: reader, currency: .all)
+        await m.load()
+        XCTAssertEqual(m.pendingCharges.count, 1)
+        // Two taps land before the first round-trip completes. logPending drops the ghost
+        // synchronously before its first await, so the second call must be a no-op — a unique
+        // dedupeKey per log means a second insert would silently double-count the charge.
+        async let first: Void = m.logPending(ghost)
+        async let second: Void = m.logPending(ghost)
+        _ = await (first, second)
+        let count = await reader.logCount
+        XCTAssertEqual(count, 1, "Re-entrant taps on one ghost must collapse to a single log")
+    }
+}
+
+/// A reader that serves one fixed pending ghost and counts logAutomatic calls.
+private actor CountingReader: RecentExpensesReading {
+    private let pending: [PendingSubscriptionCharge]
+    private(set) var logCount = 0
+    init(pending: [PendingSubscriptionCharge]) { self.pending = pending }
+
+    func recentExpenses(limit: Int) async throws -> [ExpenseSnapshot] { [] }
+    func todayTotal(in currency: CurrencyCode, rates: RateTable) async throws -> Decimal { 0 }
+    func dashboardSummary(in currency: CurrencyCode, rates: RateTable, now: Date, topCategoryLimit: Int) async throws -> DashboardSummary {
+        DashboardSummary(monthTotal: 0, topCategories: [], confirmedSubscriptionCount: 0,
+                         confirmedSubscriptionsMonthly: 0, currencyCode: currency.rawValue, ratesAsOf: nil)
+    }
+    func deleteExpense(dedupeKey: String) async throws {}
+    func restoreExpense(dedupeKey: String) async throws {}
+    func updateExpense(dedupeKey: String, amount: Decimal, currency: CurrencyCode?, merchant: String?, note: String?, categoryName: String?, date: Date, fundedBySourceID: String?) async throws {}
+    func rhythmGhosts(now: Date) async throws -> [RhythmGhost] { [] }
+    func confirmRhythmGhost(_ ghost: RhythmGhost, amount: Decimal) async throws {}
+    func homeData(in currency: CurrencyCode, rates: RateTable, now: Date, topCategoryLimit: Int) async throws -> HomeData {
+        HomeData(rows: [], todayTotal: 0,
+                 summary: DashboardSummary(monthTotal: 0, topCategories: [], confirmedSubscriptionCount: 0,
+                                           confirmedSubscriptionsMonthly: 0, currencyCode: currency.rawValue,
+                                           ratesAsOf: nil),
+                 ghosts: [], sources: [], pending: pending)
+    }
+    @discardableResult
+    func logAutomatic(amount: Decimal, currency: CurrencyCode, merchant: String?,
+                      categoryName: String?, date: Date) async throws -> String {
+        logCount += 1
+        return "auto:test-\(logCount)"
+    }
 }
 
 /// A reader whose calls always throw — used to exercise the error path that `try?` used to swallow.
