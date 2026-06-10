@@ -84,10 +84,19 @@ public enum LocalNotificationScheduler {
     /// notifications aren't authorized/available. Leaves `sub-reminder:` requests untouched.
     public static func scheduleRitual() async {
         #if canImport(UserNotifications)
+        // Guard on the source of truth: a picker-change schedule racing a toggle-off cancel
+        // must never re-register nudges for a disabled feature. The @AppStorage write lands
+        // synchronously before either task is spawned, so this read is decisive.
+        let summary = SharedSummary()
+        guard summary.ritualEnabled() else { return }
         let center = UNUserNotificationCenter.current()
         let pending = await center.pendingNotificationRequests()
         center.removePendingNotificationRequests(
             withIdentifiers: pending.map(\.identifier).filter { $0.hasPrefix(ritualPrefix) })
+        // Re-check after the suspension points above — a toggle-off may have cancelled while
+        // we awaited. (The residual window between this read and the adds is two XPC calls;
+        // accepted — full closure would need an actor for a notification nicety.)
+        guard summary.ritualEnabled() else { return }
 
         func add(_ id: String, minutes: Int, title: String, body: String) async {
             let content = UNMutableNotificationContent()
@@ -99,7 +108,6 @@ public enum LocalNotificationScheduler {
         }
         // Clamped defensively — old builds or tampered defaults can't push a nudge outside
         // the self-presenting windows.
-        let summary = SharedSummary()
         await add("morning", minutes: RitualPolicy.clampMorningNudge(minutes: summary.ritualMorningMinutes()),
                   title: "Set today's intention", body: "What's today about?")
         await add("evening", minutes: RitualPolicy.clampEveningNudge(minutes: summary.ritualEveningMinutes()),
