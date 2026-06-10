@@ -111,14 +111,7 @@ public actor IngestionStore {
     /// Merge an incoming transaction into an existing record: refresh provenance/merchant but keep
     /// the first-seen amount/date/currency — an import confirming an earlier entry must not silently
     /// rewrite it. Used by both the exact-dedupeKey path and cross-source reconciliation.
-    /// EXCEPTION (GOL-92): a never-merged settle PREDICTION adopts the import's amount and date —
-    /// the first-seen rule protects user-entered truth, not app guesses; predictions yield to truth.
     private func merge(_ existing: ExpenseRecord, with tx: NormalizedTransaction, source: ExpenseSource) throws {
-        if existing.dedupeKey.hasPrefix(Self.settleKeyPrefix + ":"),
-           existing.sourceRaw == ExpenseSource.automatic.rawValue {
-            existing.amount = tx.amount
-            existing.date = tx.date
-        }
         existing.sourceRaw = source.rawValue
         existing.merchantName = tx.rawMerchant ?? existing.merchantName
         existing.updatedAt = .now
@@ -133,11 +126,8 @@ public actor IngestionStore {
 
     /// Find a recent `.automatic` capture that is high-confidence the SAME purchase as an imported
     /// row, or nil. High-confidence = same currency + exact amount + same kind + exact normalized
-    /// merchant (`MerchantNormalizer`, which drops numeric terminal tokens) + a date window:
-    /// the swipe day within `[postingDay - 4, postingDay]` (posting follows the swipe) for Apple
-    /// Pay captures, widened to `[postingDay - 4, postingDay + 4)` for auto-settle entries
-    /// (`settle:` keys, GOL-92) whose PREDICTED date can trail an early-posting real charge —
-    /// e.g. a 30-day biller vs the calendar-month advance. Returns the earliest match so a
+    /// merchant (`MerchantNormalizer`, which drops numeric terminal tokens) + the swipe day within
+    /// `[postingDay - 4, postingDay]` (posting follows the swipe). Returns the earliest match so a
     /// second imported row in the same statement reconciles against a different capture. Bias:
     /// anything short of this stays a separate, deletable record — never hide a real expense.
     private func reconcileImportedAgainstAutomatic(_ tx: NormalizedTransaction) throws -> ExpenseRecord? {
@@ -148,8 +138,7 @@ public actor IngestionStore {
         let cal = Calendar.current
         let postingDay = cal.startOfDay(for: tx.date)
         guard let lower = cal.date(byAdding: .day, value: -4, to: postingDay),
-              let upper = cal.date(byAdding: .day, value: 1, to: postingDay),
-              let settleUpper = cal.date(byAdding: .day, value: 4, to: postingDay) else { return nil }
+              let upper = cal.date(byAdding: .day, value: 1, to: postingDay) else { return nil }
         let cur = tx.currency.rawValue
         let kindRaw = tx.kind.rawValue
         let autoRaw = ExpenseSource.automatic.rawValue
@@ -160,22 +149,12 @@ public actor IngestionStore {
             predicate: #Predicate {
                 $0.isArchived == false && $0.sourceRaw == autoRaw && $0.kindRaw == kindRaw
                     && $0.currencyCode == cur
-                    && $0.date >= lower && $0.date < settleUpper
+                    && $0.date >= lower && $0.date < upper
             },
             sortBy: [SortDescriptor(\.date, order: .forward)])
         let amt = tx.amount
-        let settlePrefix = Self.settleKeyPrefix + ":"
         let candidates = try modelContext.fetch(fd)
-        return candidates.first {
-            guard MerchantNormalizer.normalize($0.merchantName) == merchantNorm else { return false }
-            if $0.dedupeKey.hasPrefix(settlePrefix) {
-                // A settle row here is a never-merged PREDICTION (merging flips it off
-                // .automatic, leaving this fetch): tolerance-match the amount so an
-                // in-band price change still confirms it, with the widened ±4-day window.
-                return SubscriptionSettlementPlanner.isBillingEvidence(amount: amt, subscriptionAmount: $0.amount)
-            }
-            return $0.amount == amt && $0.date < upper
-        }
+        return candidates.first { $0.amount == amt && MerchantNormalizer.normalize($0.merchantName) == merchantNorm }
     }
 
     public func expenseCount() throws -> Int {
@@ -251,11 +230,6 @@ public actor IngestionStore {
         }
     }
 
-    /// dedupeKey prefix for entries created by the subscription auto-settle sweep (GOL-92).
-    /// Distinguishable from Apple Pay captures (`auto:`) forever — settle entries are app
-    /// PREDICTIONS, so reconciliation, anchoring, and deletion semantics treat them specially.
-    public static let settleKeyPrefix = "settle"
-
     /// Logs a user-entered expense. Always a distinct insert (unique key) so identical
     /// same-day purchases are never collapsed. Returns the new record's dedupeKey.
     @discardableResult
@@ -267,25 +241,25 @@ public actor IngestionStore {
                      fundedBySourceID: fundedBySourceID)
     }
 
-    /// Logs a hands-free auto-captured payment (e.g. the Apple Pay Transaction automation). Same
-    /// behavior as `logManual` but tagged `.automatic` so import reconciliation can safely merge a
-    /// later statement row into it, and the UI can label it "auto-logged". Always a distinct insert.
+    /// Logs a hands-free auto-captured payment (e.g. the Apple Pay Transaction automation) or a
+    /// user-confirmed subscription ghost (GOL-92, which backdates via `date:`). Same behavior as
+    /// `logManual` but tagged `.automatic` so import reconciliation can safely merge a later
+    /// statement row into it, and the UI can label it "auto-logged". Always a distinct insert.
     @discardableResult
     public func logAutomatic(amount: Decimal, currency: CurrencyCode,
-                             merchant: String?, categoryName: String? = nil) throws -> String {
+                             merchant: String?, categoryName: String? = nil,
+                             date: Date = .now) throws -> String {
         try logEntry(amount: amount, currency: currency, merchant: merchant, note: nil,
-                     categoryName: categoryName, source: .automatic, keyPrefix: "auto")
+                     categoryName: categoryName, source: .automatic, keyPrefix: "auto", date: date)
     }
 
-    /// Shared insert for the user-facing log paths (`logManual`, `logAutomatic`) and the
-    /// auto-settle sweep (`settleDueSubscriptionCharges`, GOL-92 — lives in another file, hence
-    /// internal not private). A unique `<keyPrefix>:<uuid>` dedupeKey means these are never
-    /// collapsed with each other — only an imported statement row reconciles into an `.automatic`
-    /// entry (see `ingest`).
+    /// Shared insert for the user-facing log paths (`logManual`, `logAutomatic`). A unique
+    /// `<keyPrefix>:<uuid>` dedupeKey means these are never collapsed with each other — only an
+    /// imported statement row reconciles into an `.automatic` entry (see `ingest`).
     @discardableResult
-    func logEntry(amount: Decimal, currency: CurrencyCode, merchant: String?, note: String?,
-                  categoryName: String?, source: ExpenseSource, keyPrefix: String,
-                  date: Date = .now, fundedBySourceID: String? = nil) throws -> String {
+    private func logEntry(amount: Decimal, currency: CurrencyCode, merchant: String?, note: String?,
+                          categoryName: String?, source: ExpenseSource, keyPrefix: String,
+                          date: Date = .now, fundedBySourceID: String? = nil) throws -> String {
         let key = "\(keyPrefix):\(UUID().uuidString)"
         let cleanNote = note?.trimmingCharacters(in: .whitespacesAndNewlines)
         let rec = ExpenseRecord(amount: amount, currencyCode: currency.rawValue, date: date,

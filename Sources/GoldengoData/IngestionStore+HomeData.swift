@@ -11,6 +11,8 @@ public struct HomeData: Sendable {
     /// Named sources for the edit sheet's "Paid from" chips (GOL-89) — rides the source fetch
     /// homeData already does for funding labels, so the picker costs no extra round-trip.
     public let sources: [FundingSourceOption]
+    /// Due-but-unlogged subscription charges for the one-tap "Due" ghost section (GOL-92).
+    public let pending: [PendingSubscriptionCharge]
 }
 
 extension IngestionStore {
@@ -63,11 +65,15 @@ extension IngestionStore {
         // Ghosts — best-effort so a rhythm failure never blanks the dashboard (matches load()'s try?).
         let ghosts = (try? rhythmGhosts(from: all.filter { $0.kindRaw == expenseRaw }, now: now)) ?? []
 
+        // Pending subscription dues (GOL-92) — same best-effort stance. Self-contained fetch:
+        // its tombstone-aware coverage needs archived rows, which `all` deliberately excludes.
+        let pending = (try? pendingSubscriptionCharges(now: now)) ?? []
+
         let options = sources
             .map { FundingSourceOption(id: $0.id, name: $0.name, colorIndex: $0.colorIndex) }
             .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
 
         return HomeData(rows: rows, todayTotal: todayTotal, summary: summary, ghosts: ghosts,
-                        sources: options)
+                        sources: options, pending: pending)
     }
 }

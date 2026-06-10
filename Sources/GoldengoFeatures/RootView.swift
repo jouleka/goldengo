@@ -162,9 +162,6 @@ public struct RootView: View {
         .task {
             checkReEntry()            // cold-launch re-entry check (onChange(scenePhase) misses the initial .active)
             checkRitual()             // then the daily check-in (Re-entry takes precedence)
-            // Quiet books-keeping (GOL-92): settle due subscription charges before the first load
-            // so Home wakes already correct. Failure must never block launch — drop to next foreground.
-            _ = try? await store.settleDueSubscriptionCharges()
             await recentModel.load()  // Home is the landing tab
         }
         .onChange(of: selectedTab) { _, newTab in
@@ -182,11 +179,7 @@ public struct RootView: View {
                 applyPendingTab()
                 // An expense may have been logged via the Quick-Log shortcut while we were
                 // backgrounded; reload so it appears on Home without a manual pull-to-refresh.
-                // Settle due subscription charges first (GOL-92) so the reload includes them.
-                Task {
-                    _ = try? await store.settleDueSubscriptionCharges()
-                    await recentModel.load()
-                }
+                Task { await recentModel.load() }
             case .background:
                 SharedSummary().setLastSeen()
             default:

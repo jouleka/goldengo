@@ -49,6 +49,14 @@ public struct RecentExpensesView: View {
                 if model.subscriptionsText() != nil { subscriptionsCard.goldengoCardRow() }
                 if let s = model.summary, !s.topCategories.isEmpty { categoriesCard(s).goldengoCardRow() }
 
+                if !model.pendingCharges.isEmpty {
+                    // Subscription dues outrank habit guesses: a detected billing schedule is
+                    // near-certain, so the "Due" section sits above "Today's usuals" (GOL-92).
+                    GoldengoSectionLabel("Due")
+                        .goldengoCardRow(top: GoldengoTheme.Spacing.m, bottom: GoldengoTheme.Spacing.xs)
+                    ForEach(model.pendingCharges) { p in dueRow(p) }
+                }
+
                 if !model.ghosts.isEmpty {
                     GoldengoSectionLabel("Today's usuals")
                         .goldengoCardRow(top: GoldengoTheme.Spacing.m, bottom: GoldengoTheme.Spacing.xs)
@@ -356,6 +364,40 @@ public struct RecentExpensesView: View {
             }
         }
         .frame(height: 6)
+    }
+
+    /// A due-but-unlogged subscription charge (GOL-92) — tap to log it at its due date. Same ghost
+    /// grammar as the rhythm rows (draft opacity, plus-circle), but the chip carries the `repeat`
+    /// symbol users already know as the subscription marker, and the caption leads with the date.
+    private func dueRow(_ p: PendingSubscriptionCharge) -> some View {
+        Button { GoldengoHaptics.spendLanded(); Task { await model.logPending(p) } } label: {
+            HStack(spacing: GoldengoTheme.Spacing.m) {
+                Image(systemName: "repeat")
+                    .font(.subheadline).foregroundStyle(.secondary)
+                    .frame(width: 36, height: 36)
+                    .background(Color.goldengoField)
+                    .clipShape(RoundedRectangle(cornerRadius: GoldengoTheme.Radius.chip, style: .continuous))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(p.displayName).font(.subheadline.weight(.medium))
+                    Text(Money(amount: p.amount, currency: CurrencyCode(p.currencyCode)).formatted()
+                         + " · " + p.dueDate.formatted(.dateTime.day().month(.abbreviated))
+                         + " · tap to add")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+                Spacer()
+                Image(systemName: "plus.circle").foregroundStyle(GoldengoTheme.accent)
+            }
+            .padding(.vertical, 4)
+            .opacity(0.7)   // reads as a draft
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .listRowBackground(Color.clear)
+        .listRowSeparator(.hidden)
+        .listRowInsets(EdgeInsets(top: GoldengoTheme.Spacing.xs, leading: GoldengoTheme.Spacing.m,
+                                  bottom: GoldengoTheme.Spacing.xs, trailing: GoldengoTheme.Spacing.m))
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(p.displayName), due \(p.dueDate.formatted(.dateTime.day().month(.wide))), \(Money(amount: p.amount, currency: CurrencyCode(p.currencyCode)).formatted()). Double tap to log.")
     }
 
     /// A pre-drafted daily "usual" — tap to log at the median (today); long-press → Adjust amount.

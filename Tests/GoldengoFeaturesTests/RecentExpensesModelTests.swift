@@ -37,4 +37,6 @@ private struct FailingReader: RecentExpensesReading {
     func rhythmGhosts(now: Date) async throws -> [RhythmGhost] { throw Boom() }
     func confirmRhythmGhost(_ ghost: RhythmGhost, amount: Decimal) async throws { throw Boom() }
     func homeData(in currency: CurrencyCode, rates: RateTable, now: Date, topCategoryLimit: Int) async throws -> HomeData { throw Boom() }
+    func logAutomatic(amount: Decimal, currency: CurrencyCode, merchant: String?,
+                      categoryName: String?, date: Date) async throws -> String { throw Boom() }
 }

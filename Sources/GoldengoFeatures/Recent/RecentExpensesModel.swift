@@ -15,6 +15,8 @@ public final class RecentExpensesModel {
     /// list (errors used to be swallowed with `try?`).
     public private(set) var loadFailed = false
     public private(set) var ghosts: [RhythmGhost] = []
+    /// Due-but-unlogged subscription charges for the one-tap "Due" section (GOL-92).
+    public private(set) var pendingCharges: [PendingSubscriptionCharge] = []
     /// Named sources for the edit sheet's "Paid from" chips (GOL-89); rides along in homeData.
     public private(set) var fundingSources: [FundingSourceOption] = []
 
@@ -30,6 +32,7 @@ public final class RecentExpensesModel {
             todayTotalText = Money(amount: data.todayTotal, currency: currency).formatted()
             summary = data.summary
             ghosts = data.ghosts
+            pendingCharges = data.pending
             fundingSources = data.sources
             loadFailed = false
         } catch {
@@ -56,6 +59,17 @@ public final class RecentExpensesModel {
     /// Confirm a daily "usual": log it at `amount` (default = its median), then reload so it clears.
     public func confirm(_ ghost: RhythmGhost, amount: Decimal? = nil) async {
         try? await reader.confirmRhythmGhost(ghost, amount: amount ?? ghost.amount)
+        await load()
+    }
+
+    /// Log a due subscription charge from its "Due" ghost (GOL-92): backdated to the due date,
+    /// `.automatic` so a later statement import merges into it. Reload clears the ghost (the new
+    /// row now covers its due date).
+    public func logPending(_ charge: PendingSubscriptionCharge) async {
+        _ = try? await reader.logAutomatic(amount: charge.amount,
+                                           currency: CurrencyCode(charge.currencyCode),
+                                           merchant: charge.merchantName,
+                                           categoryName: nil, date: charge.dueDate)
         await load()
     }
 

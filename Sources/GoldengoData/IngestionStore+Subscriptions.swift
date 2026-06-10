@@ -3,6 +3,18 @@ import SwiftData
 import GoldengoCore
 
 /// `Sendable` view of a detected/persisted subscription, safe to cross the actor boundary to the UI.
+/// A due-but-unlogged subscription charge, surfaced as a one-tap ghost row (GOL-92).
+/// Read-only candidate — becomes a real expense only when the user taps it.
+public struct PendingSubscriptionCharge: Sendable, Equatable, Identifiable {
+    public var matchKey: String
+    public var displayName: String
+    public var merchantName: String   // the anchor charge's REAL string, so a later import merges
+    public var amount: Decimal
+    public var currencyCode: String
+    public var dueDate: Date
+    public var id: String { "\(matchKey)|\(dueDate.timeIntervalSinceReferenceDate)" }
+}
+
 public struct SubscriptionSnapshot: Sendable, Equatable, Identifiable {
     public var id: String              // matchKey
     public var displayName: String
@@ -188,73 +200,56 @@ extension IngestionStore {
         return try modelContext.fetch(fd).first
     }
 
-    /// GOL-92: logs due-but-unlogged charges for confirmed fixed-amount subscriptions as
-    /// `.automatic` entries (dedupeKey `settle:<uuid>`) dated at the due date.
+    /// GOL-92 (pending ghosts): the due-but-unlogged charges of confirmed fixed-amount
+    /// subscriptions, as ONE-TAP ghost candidates for the Recent list. READ-ONLY — nothing
+    /// is written until the user taps a ghost (which logs via `logAutomatic(date:)`, the same
+    /// battle-tested path as Apple Pay captures, so later statement imports merge normally).
     ///
-    /// Safety rules (spec revisions after two adversarial reviews) — one maxim: predictions
-    /// yield to truth, user actions are final.
-    /// - The SCHEDULE anchors only on REAL billing evidence — non-archived rows that are
-    ///   either never-merged-settle-free (no `settle:` key with `.automatic` source) or
-    ///   import-confirmed, within the detector's amount tolerance — so sweep output never
-    ///   feeds its own schedule and month-end billing days never drift across runs.
+    /// Rules (spec "Final pivot", distilled from three adversarial review rounds):
+    /// - The SCHEDULE anchors on the most recent real charge within the detector's amount
+    ///   tolerance — a same-merchant one-off can't hijack it, and due dates are always
+    ///   `advance(anchor, by: k)` so month-end billing days never drift.
     /// - A due date COVERED by any row (tombstones included) within half a cadence period
-    ///   is skipped: deletion is final, and editing an entry's date inside its period can't
-    ///   re-fabricate it.
-    /// - Deleting a PURE prediction (settle-keyed, still `.automatic` — never confirmed by an
-    ///   import) dated after the anchor MUTES the sub until newer real evidence arrives.
-    ///   Deleting a merged/real charge never mutes — it's a data correction, not a rejection.
-    /// - Eligibility per `SubscriptionSettlementPlanner.settleableMatchKeys`: same-matchKey
-    ///   CloudKit duplicates settle once; competing schedules settle never.
-    /// Returns the number of entries created.
-    @discardableResult
-    public func settleDueSubscriptionCharges(now: Date = .now) throws -> Int {
+    ///   never surfaces — deletion is final; nothing re-asks about a deleted charge.
+    /// - Eligibility per `settleableMatchKeys`: CloudKit same-matchKey duplicates count once;
+    ///   competing same-merchant schedules surface nothing.
+    public func pendingSubscriptionCharges(now: Date = .now) throws -> [PendingSubscriptionCharge] {
         let confirmed = try modelContext.fetch(FetchDescriptor<SubscriptionRecord>())
             .filter { $0.isConfirmed && !$0.isDismissed && !$0.isArchived }
-        guard !confirmed.isEmpty else { return 0 }
+        guard !confirmed.isEmpty else { return [] }
         let settleable = SubscriptionSettlementPlanner.settleableMatchKeys(confirmed: confirmed.map {
             .init(matchKey: $0.matchKey, normalizedMerchant: $0.normalizedMerchant,
                   currencyCode: $0.currencyCode, isVariableAmount: $0.isVariableAmount)
         })
-        // One representative per settleable key (duplicates are the same schedule; prefer the
-        // freshest copy — its detector-derived amount is the most current).
+        // One representative per key (duplicates are the same schedule; the freshest copy
+        // carries the most current detector-derived amount).
         var representative: [String: SubscriptionRecord] = [:]
         for sub in confirmed where settleable.contains(sub.matchKey) {
             if let kept = representative[sub.matchKey], kept.updatedAt >= sub.updatedAt { continue }
             representative[sub.matchKey] = sub
         }
-        guard !representative.isEmpty else { return 0 }
+        guard !representative.isEmpty else { return [] }
 
         var cal = Calendar(identifier: .gregorian); cal.timeZone = TimeZone(identifier: "UTC")!
         let expenseRaw = TransactionKind.expense.rawValue
-        // ONE bulk fetch, tombstones INCLUDED (archived rows must keep covering their dates or
-        // deletions would resurrect). Merchant + amount matching stays in memory — never in a
-        // #Predicate (Decimal there SIGSEGVs at runtime).
+        // ONE bulk fetch, tombstones INCLUDED (a deleted charge must keep suppressing its due
+        // date). Merchant + amount matching stays in memory — never in a #Predicate (Decimal
+        // there SIGSEGVs at runtime).
         let rows = try modelContext.fetch(FetchDescriptor<ExpenseRecord>(
             predicate: #Predicate { $0.kindRaw == expenseRaw }))
         let grouped = Dictionary(grouping: rows) {
             "\(MerchantNormalizer.normalize($0.merchantName))|\($0.currencyCode)"
         }
-        let settlePrefix = Self.settleKeyPrefix + ":"
-        let autoRaw = ExpenseSource.automatic.rawValue
-        // A row is a PURE prediction while settle-keyed AND still .automatic; once an import
-        // merges into it the source flips to .imported and it counts as real evidence.
-        let isPurePrediction: (ExpenseRecord) -> Bool = {
-            $0.dedupeKey.hasPrefix(settlePrefix) && $0.sourceRaw == autoRaw
-        }
 
-        var created = 0
+        var pending: [PendingSubscriptionCharge] = []
         for sub in representative.values {
             let groupKey = "\(sub.normalizedMerchant)|\(sub.currencyCode)"
             guard let merchantRows = grouped[groupKey] else { continue }
             guard let anchor = merchantRows
-                .filter({ !$0.isArchived && !isPurePrediction($0)
+                .filter({ !$0.isArchived
                     && SubscriptionSettlementPlanner.isBillingEvidence(amount: $0.amount,
                                                                        subscriptionAmount: sub.amount) })
                 .max(by: { $0.date < $1.date }) else { continue }
-            // Deletion mutes: the user rejected a pure guess newer than all real evidence.
-            guard !merchantRows.contains(where: {
-                $0.isArchived && isPurePrediction($0) && $0.date > anchor.date
-            }) else { continue }
             let coverage = TimeInterval(SubscriptionSettlementPlanner.coverageWindowDays(for: sub.cadence)) * 86_400
             for dueDate in SubscriptionSettlementPlanner.dueCharges(
                 lastCharge: anchor.date, cadence: sub.cadence, now: now, calendar: cal) {
@@ -262,14 +257,14 @@ extension IngestionStore {
                     abs($0.date.timeIntervalSince(dueDate)) <= coverage
                 }
                 guard !isCovered else { continue }
-                // The anchor's REAL merchant string (not displayName) keeps MerchantNormalizer
-                // equality with future statement rows so the import merges, not duplicates.
-                _ = try logEntry(amount: sub.amount, currency: CurrencyCode(sub.currencyCode),
-                                 merchant: anchor.merchantName, note: nil, categoryName: nil,
-                                 source: .automatic, keyPrefix: Self.settleKeyPrefix, date: dueDate)
-                created += 1
+                // The anchor's REAL merchant string (not displayName): logging the ghost with it
+                // keeps MerchantNormalizer equality with future statement rows so imports merge.
+                pending.append(PendingSubscriptionCharge(
+                    matchKey: sub.matchKey, displayName: sub.displayName,
+                    merchantName: anchor.merchantName ?? sub.displayName,
+                    amount: sub.amount, currencyCode: sub.currencyCode, dueDate: dueDate))
             }
         }
-        return created
+        return pending.sorted { $0.dueDate < $1.dueDate }
     }
 }

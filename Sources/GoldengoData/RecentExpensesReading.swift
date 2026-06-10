@@ -14,6 +14,10 @@ public protocol RecentExpensesReading: Sendable {
     func rhythmGhosts(now: Date) async throws -> [RhythmGhost]
     func confirmRhythmGhost(_ ghost: RhythmGhost, amount: Decimal) async throws
     func homeData(in currency: CurrencyCode, rates: RateTable, now: Date, topCategoryLimit: Int) async throws -> HomeData
+    /// Logs a tapped "Due" ghost (GOL-92) — the `.automatic` path, so later imports merge into it.
+    @discardableResult
+    func logAutomatic(amount: Decimal, currency: CurrencyCode, merchant: String?,
+                      categoryName: String?, date: Date) async throws -> String
 }
 
 extension IngestionStore: RecentExpensesReading {}
