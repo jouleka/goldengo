@@ -15,6 +15,10 @@ public final class QuickAddModel {
     public var selectedCategory: String?
     public var merchant: String = ""
     public var note: String = ""
+    /// GOL-90: the source the user chose to pay from for THIS expense (nil = automatic FIFO).
+    public var selectedSourceID: String?
+    /// Named sources + remaining balances for the "Paid from" picker; empty hides the control.
+    public private(set) var sourceBalances: [SourceBalance] = []
 
     /// Most-used categories surfaced as one-tap chips (smart defaults come later).
     public let quickCategories = ["Groceries", "Food", "Transport", "Coffee", "Bills", "Shopping", "Other"]
@@ -22,6 +26,13 @@ public final class QuickAddModel {
     public init(store: IngestionStore, currency: CurrencyCode = .all) {
         self.store = store
         self.currency = currency
+    }
+
+    /// Load the named sources (+ remaining balances) for the "Paid from" picker. Best-effort: a
+    /// failure just leaves the control hidden. Reuses the cached provenance allocation (GOL-86).
+    public func loadSources() async {
+        let rates = ExchangeRateCache().load() ?? SeedRates.table
+        sourceBalances = (try? await store.provenanceSnapshot(displayCurrency: currency, rates: rates))?.sources ?? []
     }
 
     /// Switch the currency for the in-progress expense, trimming the typed amount so it stays valid
@@ -72,9 +83,11 @@ public final class QuickAddModel {
             try await store.logManual(amount: amountDecimal, currency: currency,
                                       merchant: merchant.isEmpty ? nil : merchant,
                                       note: note.isEmpty ? nil : note,
-                                      categoryName: selectedCategory)
+                                      categoryName: selectedCategory,
+                                      fundedBySourceID: selectedSourceID)
             savedCount += 1
             reset()
+            await loadSources()   // refresh remaining balances after the spend drew from a source
 #if canImport(WidgetKit)
             WidgetCenter.shared.reloadAllTimelines()
 #endif
@@ -88,5 +101,6 @@ public final class QuickAddModel {
         merchant = ""
         note = ""
         selectedCategory = nil
+        selectedSourceID = nil   // back to Automatic, so one tagged expense never mis-attributes the next
     }
 }

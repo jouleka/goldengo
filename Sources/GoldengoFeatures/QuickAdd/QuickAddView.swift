@@ -27,6 +27,7 @@ public struct QuickAddView: View {
             amountDisplay
             noteField
             categoryChips
+            paidFromRow
             Spacer(minLength: 0)
             keypad
 #if os(iOS)
@@ -84,6 +85,7 @@ public struct QuickAddView: View {
                     .transition(.move(edge: .top).combined(with: .opacity))
             }
         }
+        .task { await model.loadSources() }   // populate the "Paid from" picker (hidden if no sources)
         // Fire only on a *new* save (not on returning to this tab), so the confirmation isn't replayed.
         .onChange(of: model.savedCount) { _, newCount in
             guard newCount > 0 else { return }
@@ -213,6 +215,67 @@ public struct QuickAddView: View {
             }
             .padding(.horizontal, 2)
         }
+    }
+
+    // MARK: - Paid from (GOL-90)
+
+    /// Optional funding-source picker — only when the user has named sources. "Automatic" (FIFO) is
+    /// the zero-tap default; choosing a source pins this expense to it.
+    @ViewBuilder private var paidFromRow: some View {
+        if !model.sourceBalances.isEmpty {
+            HStack {
+                Text("Paid from").font(.subheadline).foregroundStyle(.secondary)
+                Spacer()
+                paidFromMenu
+            }
+        }
+    }
+
+    private var selectedSource: SourceBalance? {
+        model.sourceBalances.first { $0.id == model.selectedSourceID }
+    }
+
+    private var paidFromMenu: some View {
+        Menu {
+            Button { model.selectedSourceID = nil } label: {
+                if model.selectedSourceID == nil {
+                    Label("Automatic — oldest money first", systemImage: "checkmark")
+                } else {
+                    Text("Automatic — oldest money first")
+                }
+            }
+            ForEach(model.sourceBalances) { s in
+                Button { model.selectedSourceID = s.id } label: {
+                    let label = "\(s.name)  ·  \(sourceRemaining(s)) left"
+                    if model.selectedSourceID == s.id {
+                        Label(label, systemImage: "checkmark")
+                    } else {
+                        Text(label)
+                    }
+                }
+            }
+        } label: {
+            HStack(spacing: 7) {
+                if let s = selectedSource {
+                    Circle().fill(GoldengoTheme.sourceColor(s.colorIndex)).frame(width: 9, height: 9)
+                    Text(s.name).font(.subheadline.weight(.medium)).foregroundStyle(.primary)
+                } else {
+                    Image(systemName: "sparkles").font(.caption).foregroundStyle(.secondary)
+                    Text("Automatic").font(.subheadline.weight(.medium)).foregroundStyle(.secondary)
+                }
+                Image(systemName: "chevron.down").font(.system(size: 11, weight: .bold)).foregroundStyle(.tertiary)
+            }
+            .padding(.horizontal, GoldengoTheme.Spacing.m)
+            .padding(.vertical, 8)
+            .background(Color.goldengoField)
+            .clipShape(Capsule())
+            .contentShape(Capsule())
+        }
+        .animation(.snappy, value: model.selectedSourceID)
+    }
+
+    private func sourceRemaining(_ s: SourceBalance) -> String {
+        Money(amount: s.remaining, currency: CurrencyCode(s.currencyCode)).formatted()
     }
 
     // MARK: - Keypad
