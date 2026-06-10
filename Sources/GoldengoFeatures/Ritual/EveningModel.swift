@@ -14,6 +14,8 @@ public final class EveningModel {
     public private(set) var intention: String?
     public private(set) var ghosts: [RhythmGhost] = []
     public private(set) var todayTotalText: String = ""
+    /// Past mornings' notes (newest first), EXCLUDING today's — drives the "Past notes" link (GOL-93).
+    public private(set) var pastNotes: [IntentionEntry] = []
 
     public init(store: IngestionStore, currency: CurrencyCode = .all, summary: SharedSummary = SharedSummary()) {
         self.store = store; self.currency = currency; self.summary = summary
@@ -26,6 +28,9 @@ public final class EveningModel {
         } else {
             intention = nil
         }
+        pastNotes = Array(summary.readIntentionHistory()
+            .filter { !Calendar.current.isDate($0.date, inSameDayAs: .now) }
+            .reversed())
         let rates = ExchangeRateCache().load() ?? SeedRates.table
         ghosts = (try? await store.rhythmGhosts(now: .now)) ?? []
         let total = (try? await store.todayTotal(in: currency, rates: rates)) ?? 0

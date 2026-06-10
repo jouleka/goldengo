@@ -79,9 +79,9 @@ public enum LocalNotificationScheduler {
 
     private static let ritualPrefix = "ritual:"
 
-    /// Schedule the two daily check-in nudges (08:00 morning, 21:00 evening), repeating.
-    /// Idempotent: clears our prior ritual requests first. Best-effort no-op when notifications
-    /// aren't authorized/available. Leaves `sub-reminder:` requests untouched (distinct prefix).
+    /// Schedule the two daily check-in nudges at the user's chosen times (defaults 08:00/21:00),
+    /// repeating. Idempotent: clears our prior ritual requests first. Best-effort no-op when
+    /// notifications aren't authorized/available. Leaves `sub-reminder:` requests untouched.
     public static func scheduleRitual() async {
         #if canImport(UserNotifications)
         let center = UNUserNotificationCenter.current()
@@ -89,16 +89,31 @@ public enum LocalNotificationScheduler {
         center.removePendingNotificationRequests(
             withIdentifiers: pending.map(\.identifier).filter { $0.hasPrefix(ritualPrefix) })
 
-        func add(_ id: String, hour: Int, title: String, body: String) async {
+        func add(_ id: String, minutes: Int, title: String, body: String) async {
             let content = UNMutableNotificationContent()
             content.title = title; content.body = body; content.sound = .default
-            var comps = DateComponents(); comps.hour = hour; comps.minute = 0
+            var comps = DateComponents(); comps.hour = minutes / 60; comps.minute = minutes % 60
             let trigger = UNCalendarNotificationTrigger(dateMatching: comps, repeats: true)
             try? await center.add(UNNotificationRequest(identifier: ritualPrefix + id,
                                                         content: content, trigger: trigger))
         }
-        await add("morning", hour: 8, title: "Set today's intention", body: "What's today about?")
-        await add("evening", hour: 21, title: "Close your day", body: "A calm look back at today.")
+        // Clamped defensively — old builds or tampered defaults can't push a nudge outside
+        // the self-presenting windows.
+        let summary = SharedSummary()
+        await add("morning", minutes: RitualPolicy.clampMorningNudge(minutes: summary.ritualMorningMinutes()),
+                  title: "Set today's intention", body: "What's today about?")
+        await add("evening", minutes: RitualPolicy.clampEveningNudge(minutes: summary.ritualEveningMinutes()),
+                  title: "Close your day", body: "A calm look back at today.")
+        #endif
+    }
+
+    /// True when the user has explicitly denied notification permission — drives the quiet
+    /// "notifications are off" hint in Settings (GOL-93). False where the framework is absent.
+    public static func authorizationDenied() async -> Bool {
+        #if canImport(UserNotifications)
+        return await UNUserNotificationCenter.current().notificationSettings().authorizationStatus == .denied
+        #else
+        return false
         #endif
     }
 

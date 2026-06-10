@@ -7,6 +7,7 @@ import GoldengoDesignSystem
 /// confirm, a calm spend recap, and a warm close. Accountability to yourself — never scolding.
 public struct EveningView: View {
     @State private var model: EveningModel
+    @State private var showPastNotes = false
     let onDone: () -> Void
     public init(model: EveningModel, onDone: @escaping () -> Void) {
         _model = State(initialValue: model); self.onDone = onDone
@@ -26,6 +27,12 @@ public struct EveningView: View {
                 } else {
                     Text("No note this morning — that's fine.")
                         .font(.body).foregroundStyle(.secondary)
+                }
+
+                // The quiet journal door (GOL-93) — only when there are PAST notes to read.
+                if !model.pastNotes.isEmpty {
+                    Button("Past notes") { showPastNotes = true }
+                        .font(.caption).foregroundStyle(.secondary)
                 }
 
                 // Today's usuals — one tap each to confirm.
@@ -72,6 +79,7 @@ public struct EveningView: View {
             .padding(GoldengoTheme.Spacing.l)
         }
         .background(Color.goldengoBackground.ignoresSafeArea())
+        .sheet(isPresented: $showPastNotes) { PastNotesView(notes: model.pastNotes) }
         .task { await model.load() }
         // Mark the night closed on ANY dismissal — Done OR an interactive swipe-down — so a
         // swiped-away reflection is not re-presented later the same evening session.

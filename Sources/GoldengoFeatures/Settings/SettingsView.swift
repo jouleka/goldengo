@@ -1,6 +1,9 @@
 import SwiftUI
 import GoldengoData
 import GoldengoCore
+#if os(iOS)
+import UIKit
+#endif
 
 public struct SettingsView: View {
     @AppStorage(SharedSummary.revealKey, store: UserDefaults(suiteName: SharedSummary.appGroupID))
@@ -15,6 +18,21 @@ public struct SettingsView: View {
     private var ritualEnabled: Bool = false
     @Environment(\.dismiss) private var dismiss
     @Environment(\.openURL) private var openURL
+    // GOL-93: nudge-time pickers (minutes-from-midnight in SharedSummary; Dates only for the UI)
+    // and the quiet "notifications are off" hint.
+    @State private var morningNudge: Date = SettingsView.date(fromMinutes: SharedSummary().ritualMorningMinutes())
+    @State private var eveningNudge: Date = SettingsView.date(fromMinutes: SharedSummary().ritualEveningMinutes())
+    @State private var notificationsDenied = false
+
+    /// Minutes ↔ Date on a fixed reference day — the pickers only ever read hour+minute.
+    private static func date(fromMinutes m: Int) -> Date {
+        Calendar.current.date(bySettingHour: m / 60, minute: m % 60, second: 0,
+                              of: Date(timeIntervalSinceReferenceDate: 0)) ?? .now
+    }
+    private static func minutes(from date: Date) -> Int {
+        let c = Calendar.current.dateComponents([.hour, .minute], from: date)
+        return (c.hour ?? 0) * 60 + (c.minute ?? 0)
+    }
 
     public init() {}
 
@@ -80,6 +98,27 @@ public struct SettingsView: View {
                 }
                 Section("Daily check-in") {
                     Toggle("Morning + evening check-in", isOn: $ritualEnabled)
+                    if ritualEnabled {
+                        DatePicker("Morning nudge", selection: $morningNudge,
+                                   in: Self.date(fromMinutes: 5 * 60)...Self.date(fromMinutes: 11 * 60 + 45),
+                                   displayedComponents: .hourAndMinute)
+                        DatePicker("Evening nudge", selection: $eveningNudge,
+                                   in: Self.date(fromMinutes: 18 * 60)...Self.date(fromMinutes: 23 * 60 + 45),
+                                   displayedComponents: .hourAndMinute)
+                        if notificationsDenied {
+                            // Quiet remediation, never a scold: the sheets still self-present on open.
+                            Text("Notifications are off — check-ins won't nudge you.")
+                                .font(.caption).foregroundStyle(.secondary)
+                            Button("Open iOS Settings") {
+                                #if os(iOS)
+                                if let url = URL(string: UIApplication.openNotificationSettingsURLString) {
+                                    openURL(url)
+                                }
+                                #endif
+                            }
+                            .font(.caption)
+                        }
+                    }
                     Text("A morning intention you set for yourself, surfaced back to you at night with a calm recap. Two gentle nudges a day.")
                         .font(.caption).foregroundStyle(.secondary)
                 }
@@ -111,11 +150,23 @@ public struct SettingsView: View {
                     if on {
                         await LocalNotificationScheduler.requestAuthorization()
                         await LocalNotificationScheduler.scheduleRitual()
+                        notificationsDenied = await LocalNotificationScheduler.authorizationDenied()
                     } else {
                         await LocalNotificationScheduler.cancelRitual()
                     }
                 }
             }
+            // GOL-93: persist a picked nudge time (clamped to its window) and re-register both
+            // nudges — same notification ids, so re-scheduling replaces cleanly.
+            .onChange(of: morningNudge) { _, picked in
+                SharedSummary().setRitualMorningMinutes(RitualPolicy.clampMorningNudge(minutes: Self.minutes(from: picked)))
+                Task { await LocalNotificationScheduler.scheduleRitual() }
+            }
+            .onChange(of: eveningNudge) { _, picked in
+                SharedSummary().setRitualEveningMinutes(RitualPolicy.clampEveningNudge(minutes: Self.minutes(from: picked)))
+                Task { await LocalNotificationScheduler.scheduleRitual() }
+            }
+            .task { notificationsDenied = await LocalNotificationScheduler.authorizationDenied() }
         }
     }
 }
