@@ -16,7 +16,22 @@ Confirmed, fixed-amount subscriptions get their charges logged by Goldengo itsel
 - **Confirmed = consent** (chosen over a global Settings toggle and per-sub toggles). "Yes, it's a subscription" means Goldengo keeps its books. No new UI; entries carry the existing creditcard + repeat markers and are deletable.
 - **`.automatic` source is load-bearing:** it is the only source the GOL-79 reconciliation merges an imported statement row into (`reconcileImportedAgainstAutomatic`, manual entries are never merged — `test_neverMergesIntoManual`). The reconcile window `[postingDay − 4, postingDay + 1)` accepts an entry up to 4 days *before* the posting — exactly the auto-settle case (entry at due date, bank posting trails 0–4 days). **No dedup changes needed.**
 - **60-day horizon** (tunable constant): misses within ~2 monthly cycles are near-certainly real; older misses suggest a sub cancelled outside the app — don't fabricate deep history. An eventual statement import can still bring the truth (and merges or inserts per existing rules).
-- **Idempotency is derived, not stored:** due dates are computed from the most recent *observed* charge; each settled entry becomes the new last charge, so a re-run is a no-op. `nextChargeDate` stays detector-owned — the sweep never reads or writes it (the detector always advances it past `now`, so it cannot represent "missed").
+- **Idempotency is derived, not stored:** `nextChargeDate` stays detector-owned — the sweep never reads or writes it (the detector always advances it past `now`, so it cannot represent "missed").
+
+## Revision after adversarial review (same day)
+
+The v1 sweep anchored on "most recent non-archived charge at merchant+currency" and was proven unsafe (empirically, with scratch tests): deleting an auto-settled entry rolled the anchor back so the entry **resurrected on the next foreground**, and a sub cancelled outside the app **fabricated charges indefinitely** (each fabrication became the new anchor and kept the detector series alive). A same-merchant one-off purchase could also hijack the schedule, and the month-end "no drift" property only held within a single run. Revised semantics:
+
+- **Settle entries are identifiable forever:** the sweep logs with dedupeKey prefix `settle:` (vs `auto:` for Apple Pay captures).
+- **Schedule anchors only on real evidence:** the most recent non-archived, non-`settle:` charge whose amount is within the detector's `amountTolerance` (15%) of the sub's amount. Sweep output never anchors the schedule, so due dates are always `advance(realAnchor, by: k)` — month-end days never drift across runs, and a gift-card one-off (different amount) can't hijack the schedule.
+- **Coverage, not anchoring, dedupes:** a due date is skipped when ANY charge row — live or tombstoned, any source — sits within ±3 days (`coverageWindowDays`). Tombstones count, so **deletion is final**: neither a deleted settle entry nor a deleted real charge is ever recreated.
+- **Deletion mutes the sub:** an *archived* `settle:` entry dated at-or-after the real anchor means the user rejected a guess — the sweep skips that sub until newer real evidence arrives. This is the cancellation signal v1 lacked; a dead sub fabricates at most until the user deletes one entry.
+- **Ambiguity guard:** two confirmed records sharing merchant+currency (e.g. the series changed cadence over time) → settle neither; don't guess between competing schedules.
+- **Reconcile window widened for settle entries only:** an imported posting accepts a `settle:` entry within `[postingDay − 4, postingDay + 4)` (v1's `[−4, +1)` missed real charges that post 1–3 days *before* the predicted date — e.g. 30-day billers vs calendar-month advance — duplicating every cycle). Apple Pay (`auto:`) behavior is unchanged.
+- **One bulk fetch** per sweep (early-exit when no eligible subs) instead of a per-sub table scan.
+- **Settle on confirm:** `SubscriptionsModel.confirm` triggers a sweep so charges due at confirm time appear immediately, not at the next foreground.
+
+Known accepted limitations: a price change within the 15% tolerance still settles at the sub's (detector-median) amount until the median catches up — the exact-amount reconcile may keep an early posting separate for a cycle or two; same-day double when a foreground sweep fires between midnight and an Apple Pay capture of the same charge (rare, visible, deletable, and a later import merges into one of them).
 
 ## Components
 
@@ -68,9 +83,9 @@ later statement import → posting matches amount+merchant+window → merges int
 ## Edge cases
 
 - Away 8 weeks, monthly sub → two entries (both real charges). Weekly sub → up to ~8; truth is the feature.
-- Sub cancelled outside the app: at most one wrong charge inside the horizon before charges stop arriving; user deletes it like any expense (and the detector's series eventually drops/corrects the sub).
+- Sub cancelled outside the app: fabricates until the user deletes one entry — deletion mutes the sub (see revision above); the mute lifts only when new real evidence arrives.
 - Clock moved backwards → `dueCharges` yields `[]` (non-positive gaps).
-- Statement posting >4 days after due date → reconcile misses → leftover deletable duplicate, per the codebase principle (never hide a real expense).
+- Statement posting >4 days after the due date (either side) → reconcile misses → leftover deletable duplicate, per the codebase principle (never hide a real expense).
 - First run after upgrade: horizon caps the backfill at ~2 monthly cycles per sub — no months-deep history dump.
 - CloudKit two-device race: both devices may settle the same due date before sync → two `.automatic` entries with distinct UUID keys. Rare (requires near-simultaneous foregrounds), visible, deletable; accepted for v1.
 
