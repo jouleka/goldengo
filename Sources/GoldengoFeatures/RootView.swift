@@ -166,6 +166,7 @@ public struct RootView: View {
         }
         .onChange(of: selectedTab) { _, newTab in
             // Reload the destination tab's data on entry so adds/imports show without a manual refresh.
+            if newTab == 0 { Task { await quickAddModel.loadSources() } }   // fresh "Paid from" balances (GOL-90)
             if newTab == 1 { Task { await recentModel.load() } }
             if newTab == 4 { Task { await subsModel.load() } }
             if newTab == 5 { Task { await sourcesModel.load() } }
