@@ -189,36 +189,64 @@ extension IngestionStore {
     }
 
     /// GOL-92: logs due-but-unlogged charges for confirmed fixed-amount subscriptions as
-    /// `.automatic` entries dated at the due date. Idempotent — due dates derive from the most
-    /// recent observed charge, and each settled entry becomes the new anchor. `.automatic` is
-    /// load-bearing: it's the only source a later statement import reconciles into (GOL-79).
+    /// `.automatic` entries (dedupeKey `settle:<uuid>`) dated at the due date.
+    ///
+    /// Safety rules (spec revision after adversarial review):
+    /// - The SCHEDULE anchors only on REAL billing evidence — non-archived, non-settle rows
+    ///   within the detector's amount tolerance — so sweep output never feeds its own schedule
+    ///   (no self-sustaining fabrication) and month-end billing days never drift across runs.
+    /// - A due date COVERED by any row within ±`coverageWindowDays` — tombstones included —
+    ///   is skipped, so deleting an entry (settle-made or real) is final.
+    /// - An archived settle row at/after the anchor means the user rejected a guess: the sub
+    ///   is MUTED until newer real evidence arrives.
+    /// - Two confirmed records sharing merchant+currency (a series that changed cadence) is
+    ///   ambiguous — settle neither.
     /// Returns the number of entries created.
     @discardableResult
     public func settleDueSubscriptionCharges(now: Date = .now) throws -> Int {
-        var cal = Calendar(identifier: .gregorian); cal.timeZone = TimeZone(identifier: "UTC")!
         let subs = try modelContext.fetch(FetchDescriptor<SubscriptionRecord>())
+            .filter { $0.isConfirmed && !$0.isDismissed && !$0.isArchived && !$0.isVariableAmount }
+        guard !subs.isEmpty else { return 0 }
+        var merchantCount: [String: Int] = [:]
+        for s in subs { merchantCount["\(s.normalizedMerchant)|\(s.currencyCode)", default: 0] += 1 }
+
+        var cal = Calendar(identifier: .gregorian); cal.timeZone = TimeZone(identifier: "UTC")!
         let expenseRaw = TransactionKind.expense.rawValue
+        // ONE bulk fetch, tombstones INCLUDED (archived rows must keep covering their dates or
+        // deletions would resurrect). Merchant + amount matching stays in memory — never in a
+        // #Predicate (Decimal there SIGSEGVs at runtime).
+        let rows = try modelContext.fetch(FetchDescriptor<ExpenseRecord>(
+            predicate: #Predicate { $0.kindRaw == expenseRaw }))
+        let grouped = Dictionary(grouping: rows) {
+            "\(MerchantNormalizer.normalize($0.merchantName))|\($0.currencyCode)"
+        }
+        let settlePrefix = Self.settleKeyPrefix + ":"
+        let coverage = TimeInterval(SubscriptionSettlementPlanner.coverageWindowDays) * 86_400
+
         var created = 0
-        var seenKeys = Set<String>()   // CloudKit can briefly hold matchKey duplicates — settle each key once
-        for sub in subs where sub.isConfirmed && !sub.isDismissed && !sub.isArchived && !sub.isVariableAmount {
-            guard seenKeys.insert(sub.matchKey).inserted else { continue }
-            // Most recent observed charge for this merchant+currency. Merchant (and any Decimal)
-            // comparisons stay OUT of the #Predicate — normalize in memory after the fetch.
-            let currency = sub.currencyCode
-            let candidates = try modelContext.fetch(FetchDescriptor<ExpenseRecord>(
-                predicate: #Predicate {
-                    $0.isArchived == false && $0.kindRaw == expenseRaw && $0.currencyCode == currency
-                }))
-            guard let last = candidates
-                .filter({ MerchantNormalizer.normalize($0.merchantName) == sub.normalizedMerchant })
+        for sub in subs {
+            let groupKey = "\(sub.normalizedMerchant)|\(sub.currencyCode)"
+            guard merchantCount[groupKey] == 1, let merchantRows = grouped[groupKey] else { continue }
+            guard let anchor = merchantRows
+                .filter({ !$0.isArchived && !$0.dedupeKey.hasPrefix(settlePrefix)
+                    && SubscriptionSettlementPlanner.isBillingEvidence(amount: $0.amount,
+                                                                       subscriptionAmount: sub.amount) })
                 .max(by: { $0.date < $1.date }) else { continue }
+            // Deletion mutes: the user rejected a guess made at/after the last real charge.
+            guard !merchantRows.contains(where: {
+                $0.isArchived && $0.dedupeKey.hasPrefix(settlePrefix) && $0.date >= anchor.date
+            }) else { continue }
             for dueDate in SubscriptionSettlementPlanner.dueCharges(
-                lastCharge: last.date, cadence: sub.cadence, now: now, calendar: cal) {
-                // Copy the last REAL charge's merchant string (not displayName) so MerchantNormalizer
-                // matches a future statement row and the import merges instead of duplicating.
+                lastCharge: anchor.date, cadence: sub.cadence, now: now, calendar: cal) {
+                let isCovered = merchantRows.contains {
+                    abs($0.date.timeIntervalSince(dueDate)) <= coverage
+                }
+                guard !isCovered else { continue }
+                // The anchor's REAL merchant string (not displayName) keeps MerchantNormalizer
+                // equality with future statement rows so the import merges, not duplicates.
                 _ = try logEntry(amount: sub.amount, currency: CurrencyCode(sub.currencyCode),
-                                 merchant: last.merchantName, note: nil, categoryName: nil,
-                                 source: .automatic, keyPrefix: "auto", date: dueDate)
+                                 merchant: anchor.merchantName, note: nil, categoryName: nil,
+                                 source: .automatic, keyPrefix: Self.settleKeyPrefix, date: dueDate)
                 created += 1
             }
         }

@@ -126,8 +126,11 @@ public actor IngestionStore {
 
     /// Find a recent `.automatic` capture that is high-confidence the SAME purchase as an imported
     /// row, or nil. High-confidence = same currency + exact amount + same kind + exact normalized
-    /// merchant (`MerchantNormalizer`, which drops numeric terminal tokens) + the swipe day within
-    /// `[postingDay - 4, postingDay]` (posting follows the swipe). Returns the earliest match so a
+    /// merchant (`MerchantNormalizer`, which drops numeric terminal tokens) + a date window:
+    /// the swipe day within `[postingDay - 4, postingDay]` (posting follows the swipe) for Apple
+    /// Pay captures, widened to `[postingDay - 4, postingDay + 4)` for auto-settle entries
+    /// (`settle:` keys, GOL-92) whose PREDICTED date can trail an early-posting real charge —
+    /// e.g. a 30-day biller vs the calendar-month advance. Returns the earliest match so a
     /// second imported row in the same statement reconciles against a different capture. Bias:
     /// anything short of this stays a separate, deletable record — never hide a real expense.
     private func reconcileImportedAgainstAutomatic(_ tx: NormalizedTransaction) throws -> ExpenseRecord? {
@@ -138,7 +141,8 @@ public actor IngestionStore {
         let cal = Calendar.current
         let postingDay = cal.startOfDay(for: tx.date)
         guard let lower = cal.date(byAdding: .day, value: -4, to: postingDay),
-              let upper = cal.date(byAdding: .day, value: 1, to: postingDay) else { return nil }
+              let upper = cal.date(byAdding: .day, value: 1, to: postingDay),
+              let settleUpper = cal.date(byAdding: .day, value: 4, to: postingDay) else { return nil }
         let cur = tx.currency.rawValue
         let kindRaw = tx.kind.rawValue
         let autoRaw = ExpenseSource.automatic.rawValue
@@ -149,12 +153,16 @@ public actor IngestionStore {
             predicate: #Predicate {
                 $0.isArchived == false && $0.sourceRaw == autoRaw && $0.kindRaw == kindRaw
                     && $0.currencyCode == cur
-                    && $0.date >= lower && $0.date < upper
+                    && $0.date >= lower && $0.date < settleUpper
             },
             sortBy: [SortDescriptor(\.date, order: .forward)])
         let amt = tx.amount
+        let settlePrefix = Self.settleKeyPrefix + ":"
         let candidates = try modelContext.fetch(fd)
-        return candidates.first { $0.amount == amt && MerchantNormalizer.normalize($0.merchantName) == merchantNorm }
+        return candidates.first {
+            $0.amount == amt && MerchantNormalizer.normalize($0.merchantName) == merchantNorm
+                && ($0.date < upper || $0.dedupeKey.hasPrefix(settlePrefix))
+        }
     }
 
     public func expenseCount() throws -> Int {
@@ -229,6 +237,11 @@ public actor IngestionStore {
             rec.subscription = match
         }
     }
+
+    /// dedupeKey prefix for entries created by the subscription auto-settle sweep (GOL-92).
+    /// Distinguishable from Apple Pay captures (`auto:`) forever — settle entries are app
+    /// PREDICTIONS, so reconciliation, anchoring, and deletion semantics treat them specially.
+    public static let settleKeyPrefix = "settle"
 
     /// Logs a user-entered expense. Always a distinct insert (unique key) so identical
     /// same-day purchases are never collapsed. Returns the new record's dedupeKey.

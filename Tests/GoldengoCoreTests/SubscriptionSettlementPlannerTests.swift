@@ -44,6 +44,23 @@ final class SubscriptionSettlementPlannerTests: XCTestCase {
         XCTAssertEqual(due, [])
     }
 
+    func test_dueExactlyAtNow_isIncluded() {
+        // The boundary is at-or-before now (`<=`): a charge due today is settled today,
+        // not silently deferred to the next foreground.
+        let due = SubscriptionSettlementPlanner.dueCharges(
+            lastCharge: day(2026, 5, 5), cadence: .monthly, now: day(2026, 6, 5), calendar: cal)
+        XCTAssertEqual(due, [day(2026, 6, 5)])
+    }
+
+    func test_billingEvidence_toleratesPriceChange_rejectsOneOffs() {
+        XCTAssertTrue(SubscriptionSettlementPlanner.isBillingEvidence(amount: 1320, subscriptionAmount: 1200),
+                      "+10% is a price change inside the detector's tolerance — still billing evidence")
+        XCTAssertTrue(SubscriptionSettlementPlanner.isBillingEvidence(amount: 1200, subscriptionAmount: 1200))
+        XCTAssertFalse(SubscriptionSettlementPlanner.isBillingEvidence(amount: 5000, subscriptionAmount: 1200),
+                       "A same-merchant one-off (gift card) must not count as billing evidence")
+        XCTAssertFalse(SubscriptionSettlementPlanner.isBillingEvidence(amount: 100, subscriptionAmount: 1200))
+    }
+
     func test_monthEndAnchoring_doesNotDriftAfterShortMonth() {
         // Anchored advance: Jan 31 → Feb 28 → Mar 31 (a charge-by-charge walk would drift to Mar 28).
         let due = SubscriptionSettlementPlanner.dueCharges(

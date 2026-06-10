@@ -41,6 +41,8 @@ public final class SubscriptionsModel {
 
     public func confirm(_ s: SubscriptionSnapshot) async {
         try? await store.confirmSubscription(matchKey: s.id)
+        // Charges already due shouldn't wait for the next foreground (GOL-92).
+        _ = try? await store.settleDueSubscriptionCharges()
         await load()
     }
 
