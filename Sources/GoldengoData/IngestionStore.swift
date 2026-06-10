@@ -235,9 +235,10 @@ public actor IngestionStore {
     @discardableResult
     public func logManual(amount: Decimal, currency: CurrencyCode,
                           merchant: String?, note: String? = nil, categoryName: String?,
-                          date: Date = .now) throws -> String {
+                          date: Date = .now, fundedBySourceID: String? = nil) throws -> String {
         try logEntry(amount: amount, currency: currency, merchant: merchant, note: note,
-                     categoryName: categoryName, source: .manual, keyPrefix: "manual", date: date)
+                     categoryName: categoryName, source: .manual, keyPrefix: "manual", date: date,
+                     fundedBySourceID: fundedBySourceID)
     }
 
     /// Logs a hands-free auto-captured payment (e.g. the Apple Pay Transaction automation). Same
@@ -256,12 +257,13 @@ public actor IngestionStore {
     @discardableResult
     private func logEntry(amount: Decimal, currency: CurrencyCode, merchant: String?, note: String?,
                           categoryName: String?, source: ExpenseSource, keyPrefix: String,
-                          date: Date = .now) throws -> String {
+                          date: Date = .now, fundedBySourceID: String? = nil) throws -> String {
         let key = "\(keyPrefix):\(UUID().uuidString)"
         let cleanNote = note?.trimmingCharacters(in: .whitespacesAndNewlines)
         let rec = ExpenseRecord(amount: amount, currencyCode: currency.rawValue, date: date,
                                 merchantName: merchant, note: (cleanNote?.isEmpty ?? true) ? nil : cleanNote,
                                 kind: .expense, source: source, dedupeKey: key)
+        rec.fundedBySourceID = fundedBySourceID   // GOL-90: pin the chosen source at add time (nil = automatic FIFO)
         if let categoryName, !categoryName.isEmpty {
             rec.category = try findOrCreateCategory(named: categoryName)
         } else {
