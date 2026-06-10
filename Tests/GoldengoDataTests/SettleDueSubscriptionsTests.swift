@@ -80,4 +80,20 @@ final class SettleDueSubscriptionsTests: XCTestCase {
         let created = try await store.settleDueSubscriptionCharges(now: day(2026, 5, 12))
         XCTAssertEqual(created, 0, "Variable-amount subs have no trustworthy amount — never guess")
     }
+
+    func test_laterStatementImport_mergesIntoSettledEntry_noDuplicate() async throws {
+        let store = try makeStore()
+        try await seedMonthlyNetflix(store)
+        _ = try await store.refreshSubscriptions(now: day(2026, 3, 10))
+        try await store.confirmSubscription(matchKey: try await netflixKey(store))
+        _ = try await store.settleDueSubscriptionCharges(now: day(2026, 4, 7))   // settles Apr 5
+        let before = try await store.expenseCount()
+        // The bank statement posts the same charge 2 days after the due date.
+        let outcome = try await store.ingest(NormalizedTransaction(
+            externalID: nil, amount: 1200, currency: .all, date: day(2026, 4, 7),
+            rawMerchant: "NETFLIX 4471", kind: .expense, accountRef: "card"), source: .imported)
+        XCTAssertEqual(outcome, .merged, "The posting must reconcile into the settled entry")
+        let after = try await store.expenseCount()
+        XCTAssertEqual(before, after, "Settle + import of the same charge must not double-count")
+    }
 }
