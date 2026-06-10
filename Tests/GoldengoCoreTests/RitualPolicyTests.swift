@@ -13,6 +13,20 @@ final class RitualPolicyTests: XCTestCase {
         cal.date(from: DateComponents(year: 2026, month: 6, day: day, hour: hour, minute: 30))!
     }
 
+    func test_clampNudges_pinToTheirWindows() {
+        XCTAssertEqual(RitualPolicy.clampMorningNudge(minutes: 480), 480)    // 08:00 passes through
+        XCTAssertEqual(RitualPolicy.clampMorningNudge(minutes: 0), 300)     // below → 05:00
+        XCTAssertEqual(RitualPolicy.clampMorningNudge(minutes: 900), 705)   // above → 11:45
+        XCTAssertEqual(RitualPolicy.clampEveningNudge(minutes: 1260), 1260) // 21:00 passes through
+        XCTAssertEqual(RitualPolicy.clampEveningNudge(minutes: 600), 1080)  // below → 18:00
+        XCTAssertEqual(RitualPolicy.clampEveningNudge(minutes: 1440), 1425) // above → 23:45
+        // The shipped defaults must already be inside the windows (no first-run clamping).
+        XCTAssertEqual(RitualPolicy.clampMorningNudge(minutes: RitualPolicy.defaultMorningNudgeMinutes),
+                       RitualPolicy.defaultMorningNudgeMinutes)
+        XCTAssertEqual(RitualPolicy.clampEveningNudge(minutes: RitualPolicy.defaultEveningNudgeMinutes),
+                       RitualPolicy.defaultEveningNudgeMinutes)
+    }
+
     func test_morningWindow_noIntentionToday_returnsMorning() {
         let r = RitualPolicy.prompt(now: at(8), intentionDate: nil, reflectedDate: nil, calendar: cal)
         XCTAssertEqual(r, .morning)

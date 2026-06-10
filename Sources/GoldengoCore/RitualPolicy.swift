@@ -42,4 +42,14 @@ public enum RitualPolicy {
         let baseDay = hour < eveningEndHour ? calendar.date(byAdding: .day, value: -1, to: now)! : now
         return calendar.date(byAdding: .hour, value: eveningStartHour, to: calendar.startOfDay(for: baseDay))!
     }
+
+    // GOL-93: user-schedulable nudge times, stored as minutes-from-midnight. Clamped to the
+    // self-presenting windows above so a nudge can never fire where no sheet would present.
+    public static let defaultMorningNudgeMinutes = 8 * 60      // 08:00
+    public static let defaultEveningNudgeMinutes = 21 * 60     // 21:00
+
+    /// Pin a morning-nudge choice inside the morning window (05:00–11:45).
+    public static func clampMorningNudge(minutes: Int) -> Int { min(max(minutes, 5 * 60), 11 * 60 + 45) }
+    /// Pin an evening-nudge choice inside the evening window's same-day stretch (18:00–23:45).
+    public static func clampEveningNudge(minutes: Int) -> Int { min(max(minutes, 18 * 60), 23 * 60 + 45) }
 }
