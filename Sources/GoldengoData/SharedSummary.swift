@@ -50,10 +50,13 @@ public struct SharedSummary {
     public func setRitualEnabled(_ on: Bool) { defaults.set(on, forKey: Self.ritualEnabledKey) }
     public func ritualEnabled() -> Bool { defaults.bool(forKey: Self.ritualEnabledKey) }
 
-    /// Store today's morning intention text + the moment it was captured.
+    /// Store today's morning intention text + the moment it was captured, and journal it
+    /// (same-day re-saves replace their journal entry — IntentionJournal rules).
     public func setIntention(_ text: String, on date: Date = .now) {
         defaults.set(text, forKey: Self.intentionKey)
         defaults.set(date, forKey: Self.intentionDateKey)
+        setIntentionHistory(IntentionJournal.append(IntentionEntry(date: date, text: text),
+                                                    to: readIntentionHistory(), calendar: .current))
     }
     /// The stored intention, or nil if either the text or its date is missing.
     public func readIntention() -> (text: String, date: Date)? {
@@ -66,6 +69,33 @@ public struct SharedSummary {
     /// Mark that the evening reflection was completed at `date`.
     public func setReflected(on date: Date = .now) { defaults.set(date, forKey: Self.reflectedDateKey) }
     public func readReflectedDate() -> Date? { defaults.object(forKey: Self.reflectedDateKey) as? Date }
+
+    // GOL-93 extras: schedulable nudge times + the intention journal.
+    public static let ritualMorningMinutesKey = "ritualMorningMinutes"
+    public static let ritualEveningMinutesKey = "ritualEveningMinutes"
+    public static let ritualIntentionHistoryKey = "ritualIntentionHistory"
+
+    /// Nudge times as minutes-from-midnight — Ints avoid Date/timezone traps. Unset reads as
+    /// the shipped defaults (object(forKey:) nil-check, NOT integer(forKey:), which would
+    /// silently turn "unset" into midnight).
+    public func setRitualMorningMinutes(_ m: Int) { defaults.set(m, forKey: Self.ritualMorningMinutesKey) }
+    public func ritualMorningMinutes() -> Int {
+        defaults.object(forKey: Self.ritualMorningMinutesKey) as? Int ?? RitualPolicy.defaultMorningNudgeMinutes
+    }
+    public func setRitualEveningMinutes(_ m: Int) { defaults.set(m, forKey: Self.ritualEveningMinutesKey) }
+    public func ritualEveningMinutes() -> Int {
+        defaults.object(forKey: Self.ritualEveningMinutesKey) as? Int ?? RitualPolicy.defaultEveningNudgeMinutes
+    }
+
+    /// The intention journal, JSON-encoded. Corrupt/missing → [] (restart, never crash).
+    public func readIntentionHistory() -> [IntentionEntry] {
+        guard let data = defaults.data(forKey: Self.ritualIntentionHistoryKey),
+              let entries = try? JSONDecoder().decode([IntentionEntry].self, from: data) else { return [] }
+        return entries
+    }
+    public func setIntentionHistory(_ entries: [IntentionEntry]) {
+        defaults.set((try? JSONEncoder().encode(entries)) ?? Data(), forKey: Self.ritualIntentionHistoryKey)
+    }
 
     public func setPendingTab(_ tab: Int?) {
         if let tab {
