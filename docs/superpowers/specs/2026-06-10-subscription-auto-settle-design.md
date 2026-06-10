@@ -1,6 +1,6 @@
-# Subscription auto-settle — quiet books-keeping for confirmed subscriptions
+# Subscription pending ghosts (né auto-settle) — one-tap books-keeping for confirmed subscriptions
 
-**Status:** design approved; pending spec review.
+**Status:** PIVOTED (see "Final pivot" below) — silent auto-logging was abandoned after three adversarial review rounds; the shipped design surfaces due charges as one-tap ghost rows instead.
 **Date:** 2026-06-10.
 **Origin:** the GOL-84 fast-follow ("offer gap-due recurring charges on Re-entry"), resolved by *rejecting* the Re-entry placement and solving the underlying problem instead.
 **Builds on:** `SubscriptionDetector`/`SubscriptionRecord` (GOL-81 era), `logAutomatic` + the auto-logged marker (GOL-77/87), GOL-79 import reconciliation, `RootView` scenePhase wiring.
@@ -105,3 +105,33 @@ later statement import → posting matches amount+merchant+window → merges int
 - Notifications or banners announcing auto-logged entries (Recent's markers are the surface).
 - Per-subscription or global auto-settle toggles.
 - Cross-device settlement coordination (accepted rare-duplicate race above).
+
+## Final pivot: pending ghosts (the shipped design)
+
+Round 3 of adversarial review confirmed 5 further defects (34 total across three rounds: 19 → 10 → 5), including two HIGHs in the *revised* design: an out-of-tolerance price hike (+20% is routine) resurrects the perpetual per-period double-count, and a settle prediction steals statement merges from exact-matching Apple Pay captures. The root cause was judged structural, not incidental: **a silently fabricated expense row has no stable identity once users, imports, Apple Pay, CloudKit, and the detector can all mutate the same table.** Every fix taught the sweep to defend its predictions against one more mutation path; every round found the next one.
+
+**Decision (user-approved): stop fabricating — surface.** Due-but-unlogged charges appear as **pending ghost rows** in the Recent list, in the exact visual language of Rhythm Ledger's "usuals" ghosts (GOL-82): a quiet "Due" section, draft opacity, one tap to log. Nothing is written until the user taps, so the entire fabrication defect class — resurrection, mutes, merge-stealing, edit-awareness, CloudKit races — evaporates. Cost, stated honestly: a few taps per month instead of zero.
+
+### What carries over from the auto-settle work
+- `SubscriptionSettlementPlanner.dueCharges` (anchored multi-period advance, 60-day horizon) — now computes ghost candidates.
+- `isBillingEvidence` (15% tolerance) — anchors the schedule on real billing evidence; one-offs can't hijack.
+- `coverageWindowDays(for:)` (half a cadence period) — a due date covered by ANY row, tombstones included, never surfaces a ghost (deletion is final; nothing re-asks about a deleted charge).
+- `settleableMatchKeys` — CloudKit duplicate collapse + competing-schedule ambiguity, unchanged.
+- All planner tests.
+
+### What replaces the sweep
+- `IngestionStore.pendingSubscriptionCharges(now:) -> [PendingSubscriptionCharge]` — **read-only**. Eligible subs (confirmed, fixed-amount, unambiguous) × planner dues × coverage filter → Sendable snapshots `{ id = matchKey|dueDate, displayName, merchantName (anchor's real string), amount, currencyCode, dueDate, categoryName (merchant default) }`. No writes, no saves, no stored state.
+- Ghost tap → `logAutomatic(amount:currency:merchant:categoryName:date:)` (gains a backdating `date:` parameter) — the SAME battle-tested path as Apple Pay captures, so a later statement import merges into it under the original, untouched GOL-79 rules. The entry carries the creditcard marker and is an ordinary expense thereafter.
+- The logged row (or any import/manual row, or its tombstone) covers the due date → the ghost vanishes on next load. A dead sub's ghosts are ignored into the horizon, or silenced for good by dismissing the subscription (existing flow).
+
+### What reverts to pre-GOL-92 byte-identical
+- `reconcileImportedAgainstAutomatic` (window + exact-amount matcher), `merge()` (first-seen rule, no adoption), no `settle:` key prefix, `logEntry` back to private. The only IngestionStore.swift delta vs `main` is the `date:` parameter on `logAutomatic`.
+- `RootView` foreground sweep calls and `SubscriptionsModel.confirm` sweep call — removed (ghosts are computed at load time by `RecentExpensesModel`).
+
+### UI (Recent tab)
+A "Due" ghost section above "Today's usuals", same `ghostRow` visual grammar: subscription icon, name, "1,200 ALL · Jun 5 · tap to add", plus-circle accent, 0.7 opacity, spend haptic on tap. No per-ghost dismissal in v1 (ignore = it ages out at the horizon; dismiss the subscription to silence permanently).
+
+### Accepted limitations (v1)
+- Tap-then-import-late race: a ghost logged on the due date + a statement posting >1 day earlier/4 days later stays a visible, deletable duplicate (original GOL-79 window; unchanged).
+- A same-merchant one-off inside the coverage window suppresses that period's ghost (errs toward silence; the import brings truth later).
+- Ghost amounts lag an in-tolerance price change until the detector median catches up (the tap logs the sub's current amount; editable like any entry).
