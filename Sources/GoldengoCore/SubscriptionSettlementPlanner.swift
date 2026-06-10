@@ -9,10 +9,46 @@ public enum SubscriptionSettlementPlanner {
     public static let horizonDays = 60
 
     /// A due date already "covered" by any charge row within this many days (tombstones
-    /// included) is never settled — so deleting an entry, settle-made or real, is final.
-    /// Must stay under half the shortest cadence (weekly = 7d) so adjacent dues can't
-    /// cover each other.
-    public static let coverageWindowDays = 3
+    /// included) is never settled — so deleting an entry, settle-made or real, is final,
+    /// and editing a settle entry's date within its cadence period can't re-fabricate it.
+    /// Just under half a period, so adjacent due dates can never cover each other.
+    public static func coverageWindowDays(for cadence: SubscriptionCadence) -> Int {
+        switch cadence {
+        case .weekly:    return 3
+        case .monthly:   return 15
+        case .quarterly: return 45
+        case .yearly:    return 182
+        }
+    }
+
+    /// One confirmed subscription record's identity, as the settlement sweep sees it.
+    public struct SettlementCandidate: Sendable {
+        public var matchKey: String
+        public var normalizedMerchant: String
+        public var currencyCode: String
+        public var isVariableAmount: Bool
+        public init(matchKey: String, normalizedMerchant: String, currencyCode: String, isVariableAmount: Bool) {
+            self.matchKey = matchKey; self.normalizedMerchant = normalizedMerchant
+            self.currencyCode = currencyCode; self.isVariableAmount = isVariableAmount
+        }
+    }
+
+    /// Which matchKeys may settle, given ALL confirmed records (variable ones included):
+    /// - Two DISTINCT matchKeys sharing merchant+currency are competing schedules (a series
+    ///   that changed cadence) — settle neither, even if one competitor is itself ineligible.
+    /// - Same-matchKey duplicates (CloudKit cross-device confirms before sync) are ONE
+    ///   schedule — the key settles once, unless any copy is variable-amount (don't guess).
+    public static func settleableMatchKeys(confirmed: [SettlementCandidate]) -> Set<String> {
+        let groups = Dictionary(grouping: confirmed) { "\($0.normalizedMerchant)|\($0.currencyCode)" }
+        var keys = Set<String>()
+        for (_, members) in groups {
+            let distinct = Set(members.map(\.matchKey))
+            guard distinct.count == 1, let key = distinct.first,
+                  !members.contains(where: \.isVariableAmount) else { continue }
+            keys.insert(key)
+        }
+        return keys
+    }
 
     /// Whether an observed charge amount is billing evidence for a subscription priced at
     /// `subscriptionAmount` — within the detector's variable-amount tolerance, so a normal

@@ -111,7 +111,14 @@ public actor IngestionStore {
     /// Merge an incoming transaction into an existing record: refresh provenance/merchant but keep
     /// the first-seen amount/date/currency — an import confirming an earlier entry must not silently
     /// rewrite it. Used by both the exact-dedupeKey path and cross-source reconciliation.
+    /// EXCEPTION (GOL-92): a never-merged settle PREDICTION adopts the import's amount and date —
+    /// the first-seen rule protects user-entered truth, not app guesses; predictions yield to truth.
     private func merge(_ existing: ExpenseRecord, with tx: NormalizedTransaction, source: ExpenseSource) throws {
+        if existing.dedupeKey.hasPrefix(Self.settleKeyPrefix + ":"),
+           existing.sourceRaw == ExpenseSource.automatic.rawValue {
+            existing.amount = tx.amount
+            existing.date = tx.date
+        }
         existing.sourceRaw = source.rawValue
         existing.merchantName = tx.rawMerchant ?? existing.merchantName
         existing.updatedAt = .now
@@ -160,8 +167,14 @@ public actor IngestionStore {
         let settlePrefix = Self.settleKeyPrefix + ":"
         let candidates = try modelContext.fetch(fd)
         return candidates.first {
-            $0.amount == amt && MerchantNormalizer.normalize($0.merchantName) == merchantNorm
-                && ($0.date < upper || $0.dedupeKey.hasPrefix(settlePrefix))
+            guard MerchantNormalizer.normalize($0.merchantName) == merchantNorm else { return false }
+            if $0.dedupeKey.hasPrefix(settlePrefix) {
+                // A settle row here is a never-merged PREDICTION (merging flips it off
+                // .automatic, leaving this fetch): tolerance-match the amount so an
+                // in-band price change still confirms it, with the widened ±4-day window.
+                return SubscriptionSettlementPlanner.isBillingEvidence(amount: amt, subscriptionAmount: $0.amount)
+            }
+            return $0.amount == amt && $0.date < upper
         }
     }
 

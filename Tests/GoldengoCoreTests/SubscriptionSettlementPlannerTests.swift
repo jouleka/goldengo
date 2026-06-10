@@ -52,6 +52,51 @@ final class SubscriptionSettlementPlannerTests: XCTestCase {
         XCTAssertEqual(due, [day(2026, 6, 5)])
     }
 
+    func test_coverageWindow_staysUnderHalfThePeriod() {
+        XCTAssertEqual(SubscriptionSettlementPlanner.coverageWindowDays(for: .weekly), 3)
+        XCTAssertEqual(SubscriptionSettlementPlanner.coverageWindowDays(for: .monthly), 15)
+        XCTAssertEqual(SubscriptionSettlementPlanner.coverageWindowDays(for: .quarterly), 45)
+        XCTAssertEqual(SubscriptionSettlementPlanner.coverageWindowDays(for: .yearly), 182)
+        // The invariant that makes coverage safe: adjacent due dates can never cover each other.
+        XCTAssertLessThan(SubscriptionSettlementPlanner.coverageWindowDays(for: .weekly) * 2, 7)
+        XCTAssertLessThan(SubscriptionSettlementPlanner.coverageWindowDays(for: .monthly) * 2, 31)
+    }
+
+    func test_settleableMatchKeys_collapsesCloudKitDuplicates_skipsAmbiguity() {
+        typealias C = SubscriptionSettlementPlanner.SettlementCandidate
+        // A same-matchKey CloudKit duplicate pair is ONE schedule — it settles (once).
+        XCTAssertEqual(SubscriptionSettlementPlanner.settleableMatchKeys(confirmed: [
+            C(matchKey: "NETFLIX|monthly|ALL", normalizedMerchant: "NETFLIX", currencyCode: "ALL", isVariableAmount: false),
+            C(matchKey: "NETFLIX|monthly|ALL", normalizedMerchant: "NETFLIX", currencyCode: "ALL", isVariableAmount: false),
+        ]), ["NETFLIX|monthly|ALL"])
+        // Two DISTINCT matchKeys for one merchant+currency = competing schedules — settle neither.
+        XCTAssertEqual(SubscriptionSettlementPlanner.settleableMatchKeys(confirmed: [
+            C(matchKey: "NETFLIX|weekly|ALL", normalizedMerchant: "NETFLIX", currencyCode: "ALL", isVariableAmount: false),
+            C(matchKey: "NETFLIX|monthly|ALL", normalizedMerchant: "NETFLIX", currencyCode: "ALL", isVariableAmount: false),
+        ]), [])
+        // The ambiguity poison applies even when one competitor is variable-amount (and thus
+        // itself ineligible) — the fixed record's schedule is stale, don't trust it either.
+        XCTAssertEqual(SubscriptionSettlementPlanner.settleableMatchKeys(confirmed: [
+            C(matchKey: "NETFLIX|monthly|ALL", normalizedMerchant: "NETFLIX", currencyCode: "ALL", isVariableAmount: false),
+            C(matchKey: "NETFLIX|weekly|ALL", normalizedMerchant: "NETFLIX", currencyCode: "ALL", isVariableAmount: true),
+        ]), [])
+        // A variable copy inside a same-matchKey duplicate pair poisons the key (don't guess amounts).
+        XCTAssertEqual(SubscriptionSettlementPlanner.settleableMatchKeys(confirmed: [
+            C(matchKey: "NETFLIX|monthly|ALL", normalizedMerchant: "NETFLIX", currencyCode: "ALL", isVariableAmount: false),
+            C(matchKey: "NETFLIX|monthly|ALL", normalizedMerchant: "NETFLIX", currencyCode: "ALL", isVariableAmount: true),
+        ]), [])
+        // Different merchants are independent.
+        XCTAssertEqual(SubscriptionSettlementPlanner.settleableMatchKeys(confirmed: [
+            C(matchKey: "NETFLIX|monthly|ALL", normalizedMerchant: "NETFLIX", currencyCode: "ALL", isVariableAmount: false),
+            C(matchKey: "SPOTIFY|monthly|ALL", normalizedMerchant: "SPOTIFY", currencyCode: "ALL", isVariableAmount: false),
+        ]), ["NETFLIX|monthly|ALL", "SPOTIFY|monthly|ALL"])
+        // Same merchant, different CURRENCY — separate groups, both settle.
+        XCTAssertEqual(SubscriptionSettlementPlanner.settleableMatchKeys(confirmed: [
+            C(matchKey: "NETFLIX|monthly|ALL", normalizedMerchant: "NETFLIX", currencyCode: "ALL", isVariableAmount: false),
+            C(matchKey: "NETFLIX|monthly|EUR", normalizedMerchant: "NETFLIX", currencyCode: "EUR", isVariableAmount: false),
+        ]), ["NETFLIX|monthly|ALL", "NETFLIX|monthly|EUR"])
+    }
+
     func test_billingEvidence_toleratesPriceChange_rejectsOneOffs() {
         XCTAssertTrue(SubscriptionSettlementPlanner.isBillingEvidence(amount: 1320, subscriptionAmount: 1200),
                       "+10% is a price change inside the detector's tolerance — still billing evidence")

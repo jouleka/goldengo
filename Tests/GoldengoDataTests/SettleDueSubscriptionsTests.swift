@@ -250,6 +250,71 @@ final class SettleDueSubscriptionsTests: XCTestCase {
                        "Schedule stays anchored on the REAL Jan 31 charge across runs — Mar 31, never a drifted Mar 28")
     }
 
+    func test_editingASettleEntryDate_doesNotRefabricateTheDueDate() async throws {
+        let store = try makeStore()
+        try await confirmedNetflix(store)
+        _ = try await store.settleDueSubscriptionCharges(now: day(2026, 4, 7))   // settles Apr 5
+        let settled = try await settledEntries(store)
+        let key = try XCTUnwrap(settled.first?.dedupeKey)
+        // The user corrects the date to when the charge actually hit — a routine edit.
+        try await store.updateExpense(dedupeKey: key, amount: 1200, merchant: "Netflix",
+                                      categoryName: nil, date: day(2026, 4, 18))
+        let created = try await store.settleDueSubscriptionCharges(now: day(2026, 4, 20))
+        XCTAssertEqual(created, 0, "An edited entry still covers its cadence period — no phantom duplicate")
+        let after = try await settledEntries(store)
+        XCTAssertEqual(after.map(\.date), [day(2026, 4, 18)], "The user's correction stands")
+    }
+
+    func test_deletedRealCharge_isNeverReplacedByAFabrication() async throws {
+        let store = try makeStore()
+        try await confirmedNetflix(store)
+        // April's real charge posts late (Apr 10) via import — no settle entry exists for April.
+        _ = try await store.ingest(NormalizedTransaction(
+            externalID: "apr-late", amount: 1200, currency: .all, date: day(2026, 4, 10),
+            rawMerchant: "NETFLIX 4471", kind: .expense, accountRef: "card"), source: .imported)
+        // The user deletes it (say, a refund). Deletion is final:
+        let keys = try await store.recentExpenses(limit: 10)
+        let lateKey = try XCTUnwrap(keys.first { $0.date == day(2026, 4, 10) }?.dedupeKey)
+        try await store.deleteExpense(dedupeKey: lateKey)
+        let created = try await store.settleDueSubscriptionCharges(now: day(2026, 4, 20))
+        XCTAssertEqual(created, 0, "The tombstone covers its whole cadence period — money never resurrects as a prediction")
+    }
+
+    func test_deletingAnImportConfirmedEntry_doesNotMuteTheSub() async throws {
+        let store = try makeStore()
+        try await confirmedNetflix(store)
+        _ = try await store.settleDueSubscriptionCharges(now: day(2026, 4, 7))   // settles Apr 5
+        // The statement confirms the prediction — it's now a real charge, not a guess.
+        let outcome = try await store.ingest(NormalizedTransaction(
+            externalID: nil, amount: 1200, currency: .all, date: day(2026, 4, 7),
+            rawMerchant: "NETFLIX 4471", kind: .expense, accountRef: "card"), source: .imported)
+        XCTAssertEqual(outcome, .merged)
+        let merged = try await settledEntries(store)
+        let key = try XCTUnwrap(merged.first?.dedupeKey)
+        try await store.deleteExpense(dedupeKey: key)   // deleting a REAL charge, not rejecting a guess
+        let created = try await store.settleDueSubscriptionCharges(now: day(2026, 6, 10))
+        XCTAssertEqual(created, 2, "No mute — the sub stays live and May 5 + June 5 settle")
+        let entries = try await settledEntries(store)
+        XCTAssertEqual(Set(entries.map(\.date)), [day(2026, 5, 5), day(2026, 6, 5)],
+                       "April's period stays covered by the tombstone; later periods are fabricated normally")
+    }
+
+    func test_importPriceChange_adoptsTruthIntoThePrediction_noPerpetualDoubleCount() async throws {
+        let store = try makeStore()
+        try await confirmedNetflix(store)
+        _ = try await store.settleDueSubscriptionCharges(now: day(2026, 4, 5))   // predicts Apr 5 @ 1200
+        // The real charge posts at +10% (in-tolerance price rise) two days later.
+        let outcome = try await store.ingest(NormalizedTransaction(
+            externalID: nil, amount: 1320, currency: .all, date: day(2026, 4, 7),
+            rawMerchant: "NETFLIX 4471", kind: .expense, accountRef: "card"), source: .imported)
+        XCTAssertEqual(outcome, .merged, "Predictions yield to truth: tolerance-matched, not exact-matched")
+        let rows = try await store.recentExpenses(limit: 10)
+        let aprilRows = rows.filter { $0.date >= day(2026, 4, 1) }
+        XCTAssertEqual(aprilRows.count, 1, "One April charge, not a prediction + a real row")
+        XCTAssertEqual(aprilRows.first?.amount, 1320, "The merged row carries the REAL amount, not the stale prediction")
+        XCTAssertEqual(aprilRows.first?.date, day(2026, 4, 7), "...and the real posting date")
+    }
+
     // MARK: - Import reconciliation
 
     func test_laterStatementImport_mergesIntoSettledEntry_noDuplicate() async throws {

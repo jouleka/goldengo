@@ -191,24 +191,38 @@ extension IngestionStore {
     /// GOL-92: logs due-but-unlogged charges for confirmed fixed-amount subscriptions as
     /// `.automatic` entries (dedupeKey `settle:<uuid>`) dated at the due date.
     ///
-    /// Safety rules (spec revision after adversarial review):
-    /// - The SCHEDULE anchors only on REAL billing evidence — non-archived, non-settle rows
-    ///   within the detector's amount tolerance — so sweep output never feeds its own schedule
-    ///   (no self-sustaining fabrication) and month-end billing days never drift across runs.
-    /// - A due date COVERED by any row within ±`coverageWindowDays` — tombstones included —
-    ///   is skipped, so deleting an entry (settle-made or real) is final.
-    /// - An archived settle row at/after the anchor means the user rejected a guess: the sub
-    ///   is MUTED until newer real evidence arrives.
-    /// - Two confirmed records sharing merchant+currency (a series that changed cadence) is
-    ///   ambiguous — settle neither.
+    /// Safety rules (spec revisions after two adversarial reviews) — one maxim: predictions
+    /// yield to truth, user actions are final.
+    /// - The SCHEDULE anchors only on REAL billing evidence — non-archived rows that are
+    ///   either never-merged-settle-free (no `settle:` key with `.automatic` source) or
+    ///   import-confirmed, within the detector's amount tolerance — so sweep output never
+    ///   feeds its own schedule and month-end billing days never drift across runs.
+    /// - A due date COVERED by any row (tombstones included) within half a cadence period
+    ///   is skipped: deletion is final, and editing an entry's date inside its period can't
+    ///   re-fabricate it.
+    /// - Deleting a PURE prediction (settle-keyed, still `.automatic` — never confirmed by an
+    ///   import) dated after the anchor MUTES the sub until newer real evidence arrives.
+    ///   Deleting a merged/real charge never mutes — it's a data correction, not a rejection.
+    /// - Eligibility per `SubscriptionSettlementPlanner.settleableMatchKeys`: same-matchKey
+    ///   CloudKit duplicates settle once; competing schedules settle never.
     /// Returns the number of entries created.
     @discardableResult
     public func settleDueSubscriptionCharges(now: Date = .now) throws -> Int {
-        let subs = try modelContext.fetch(FetchDescriptor<SubscriptionRecord>())
-            .filter { $0.isConfirmed && !$0.isDismissed && !$0.isArchived && !$0.isVariableAmount }
-        guard !subs.isEmpty else { return 0 }
-        var merchantCount: [String: Int] = [:]
-        for s in subs { merchantCount["\(s.normalizedMerchant)|\(s.currencyCode)", default: 0] += 1 }
+        let confirmed = try modelContext.fetch(FetchDescriptor<SubscriptionRecord>())
+            .filter { $0.isConfirmed && !$0.isDismissed && !$0.isArchived }
+        guard !confirmed.isEmpty else { return 0 }
+        let settleable = SubscriptionSettlementPlanner.settleableMatchKeys(confirmed: confirmed.map {
+            .init(matchKey: $0.matchKey, normalizedMerchant: $0.normalizedMerchant,
+                  currencyCode: $0.currencyCode, isVariableAmount: $0.isVariableAmount)
+        })
+        // One representative per settleable key (duplicates are the same schedule; prefer the
+        // freshest copy — its detector-derived amount is the most current).
+        var representative: [String: SubscriptionRecord] = [:]
+        for sub in confirmed where settleable.contains(sub.matchKey) {
+            if let kept = representative[sub.matchKey], kept.updatedAt >= sub.updatedAt { continue }
+            representative[sub.matchKey] = sub
+        }
+        guard !representative.isEmpty else { return 0 }
 
         var cal = Calendar(identifier: .gregorian); cal.timeZone = TimeZone(identifier: "UTC")!
         let expenseRaw = TransactionKind.expense.rawValue
@@ -221,21 +235,27 @@ extension IngestionStore {
             "\(MerchantNormalizer.normalize($0.merchantName))|\($0.currencyCode)"
         }
         let settlePrefix = Self.settleKeyPrefix + ":"
-        let coverage = TimeInterval(SubscriptionSettlementPlanner.coverageWindowDays) * 86_400
+        let autoRaw = ExpenseSource.automatic.rawValue
+        // A row is a PURE prediction while settle-keyed AND still .automatic; once an import
+        // merges into it the source flips to .imported and it counts as real evidence.
+        let isPurePrediction: (ExpenseRecord) -> Bool = {
+            $0.dedupeKey.hasPrefix(settlePrefix) && $0.sourceRaw == autoRaw
+        }
 
         var created = 0
-        for sub in subs {
+        for sub in representative.values {
             let groupKey = "\(sub.normalizedMerchant)|\(sub.currencyCode)"
-            guard merchantCount[groupKey] == 1, let merchantRows = grouped[groupKey] else { continue }
+            guard let merchantRows = grouped[groupKey] else { continue }
             guard let anchor = merchantRows
-                .filter({ !$0.isArchived && !$0.dedupeKey.hasPrefix(settlePrefix)
+                .filter({ !$0.isArchived && !isPurePrediction($0)
                     && SubscriptionSettlementPlanner.isBillingEvidence(amount: $0.amount,
                                                                        subscriptionAmount: sub.amount) })
                 .max(by: { $0.date < $1.date }) else { continue }
-            // Deletion mutes: the user rejected a guess made at/after the last real charge.
+            // Deletion mutes: the user rejected a pure guess newer than all real evidence.
             guard !merchantRows.contains(where: {
-                $0.isArchived && $0.dedupeKey.hasPrefix(settlePrefix) && $0.date >= anchor.date
+                $0.isArchived && isPurePrediction($0) && $0.date > anchor.date
             }) else { continue }
+            let coverage = TimeInterval(SubscriptionSettlementPlanner.coverageWindowDays(for: sub.cadence)) * 86_400
             for dueDate in SubscriptionSettlementPlanner.dueCharges(
                 lastCharge: anchor.date, cadence: sub.cadence, now: now, calendar: cal) {
                 let isCovered = merchantRows.contains {
