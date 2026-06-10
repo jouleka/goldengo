@@ -187,4 +187,41 @@ extension IngestionStore {
         fd.fetchLimit = 1
         return try modelContext.fetch(fd).first
     }
+
+    /// GOL-92: logs due-but-unlogged charges for confirmed fixed-amount subscriptions as
+    /// `.automatic` entries dated at the due date. Idempotent — due dates derive from the most
+    /// recent observed charge, and each settled entry becomes the new anchor. `.automatic` is
+    /// load-bearing: it's the only source a later statement import reconciles into (GOL-79).
+    /// Returns the number of entries created.
+    @discardableResult
+    public func settleDueSubscriptionCharges(now: Date = .now) throws -> Int {
+        var cal = Calendar(identifier: .gregorian); cal.timeZone = TimeZone(identifier: "UTC")!
+        let subs = try modelContext.fetch(FetchDescriptor<SubscriptionRecord>())
+        let expenseRaw = TransactionKind.expense.rawValue
+        var created = 0
+        var seenKeys = Set<String>()   // CloudKit can briefly hold matchKey duplicates — settle each key once
+        for sub in subs where sub.isConfirmed && !sub.isDismissed && !sub.isArchived && !sub.isVariableAmount {
+            guard seenKeys.insert(sub.matchKey).inserted else { continue }
+            // Most recent observed charge for this merchant+currency. Merchant (and any Decimal)
+            // comparisons stay OUT of the #Predicate — normalize in memory after the fetch.
+            let currency = sub.currencyCode
+            let candidates = try modelContext.fetch(FetchDescriptor<ExpenseRecord>(
+                predicate: #Predicate {
+                    $0.isArchived == false && $0.kindRaw == expenseRaw && $0.currencyCode == currency
+                }))
+            guard let last = candidates
+                .filter({ MerchantNormalizer.normalize($0.merchantName) == sub.normalizedMerchant })
+                .max(by: { $0.date < $1.date }) else { continue }
+            for dueDate in SubscriptionSettlementPlanner.dueCharges(
+                lastCharge: last.date, cadence: sub.cadence, now: now, calendar: cal) {
+                // Copy the last REAL charge's merchant string (not displayName) so MerchantNormalizer
+                // matches a future statement row and the import merges instead of duplicating.
+                _ = try logEntry(amount: sub.amount, currency: CurrencyCode(sub.currencyCode),
+                                 merchant: last.merchantName, note: nil, categoryName: nil,
+                                 source: .automatic, keyPrefix: "auto", date: dueDate)
+                created += 1
+            }
+        }
+        return created
+    }
 }
