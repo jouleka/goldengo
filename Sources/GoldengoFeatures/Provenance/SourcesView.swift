@@ -1,13 +1,25 @@
 import SwiftUI
 import GoldengoDesignSystem
 import GoldengoCore
+import GoldengoData
 
 /// Each named source as a draining pool, plus an Unaccounted row and an "Add income" entry.
 public struct SourcesView: View {
     @State private var model: SourcesModel
     @State private var showAddIncome = false
     @State private var showCount = false
+    @State private var walletAutoAdjust = false   // GOL-98: widget tap lands ON the Adjust screen
+    @Environment(\.scenePhase) private var scenePhase
     public init(model: SourcesModel) { _model = State(initialValue: model) }
+
+    /// Consume the one-shot widget deep-link flag: open the wallet sheet straight at Adjust.
+    private func consumePendingWalletAdjust() {
+        let summary = SharedSummary()
+        guard summary.readPendingWalletAdjust() else { return }
+        summary.setPendingWalletAdjust(false)
+        walletAutoAdjust = true
+        showCount = true
+    }
 
     public var body: some View {
         NavigationStack {
@@ -85,10 +97,14 @@ public struct SourcesView: View {
                               existingSources: (model.snapshot?.sources ?? []).map(\.name),
                               currency: model.currency, onDone: { showAddIncome = false })
             }
-            .sheet(isPresented: $showCount, onDismiss: { Task { await model.load() } }) {
-                WalletView(model: model)
+            .sheet(isPresented: $showCount, onDismiss: {
+                walletAutoAdjust = false
+                Task { await model.load() }
+            }) {
+                WalletView(model: model, autoOpenAdjust: walletAutoAdjust ? .all : nil)
             }
-            .task { await model.load() }
+            .task { await model.load(); consumePendingWalletAdjust() }
+            .onChange(of: scenePhase) { _, p in if p == .active { consumePendingWalletAdjust() } }
         }
     }
 }

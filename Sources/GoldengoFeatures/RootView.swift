@@ -190,6 +190,9 @@ public struct RootView: View {
         .onOpenURL { url in
             if Self.isStatementFile(url) {
                 importFile = ImportFile(url: url)            // Share-to-Goldengo: import the shared file
+            } else if url.host == "wallet" {
+                SharedSummary().setPendingWalletAdjust(true)   // GOL-98: land on Adjust
+                route(toTab: 5)
             } else if let tab = Self.tab(forDeepLink: url) {
                 route(toTab: tab)
             }

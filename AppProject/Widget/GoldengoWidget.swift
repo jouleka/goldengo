@@ -1,5 +1,6 @@
 import WidgetKit
 import SwiftUI
+import GoldengoCore
 import GoldengoData
 import GoldengoIntents
 
@@ -45,10 +46,79 @@ struct GoldengoWidgetView: View {
     }
 }
 
+// MARK: - Pocket Truth (GOL-98): the lock screen claims what's in your pocket.
+
+struct PocketEntry: TimelineEntry { let date: Date; let payload: PocketPayload?; let reveal: Bool }
+
+struct PocketProvider: TimelineProvider {
+    func placeholder(in c: Context) -> PocketEntry {
+        .init(date: .now, payload: SharedSummary().readPocketPayload(), reveal: false)
+    }
+    func getSnapshot(in c: Context, completion: @escaping (PocketEntry) -> Void) {
+        let s = SharedSummary()
+        completion(.init(date: .now, payload: s.readPocketPayload(), reveal: s.read().revealOnLockScreen))
+    }
+    func getTimeline(in c: Context, completion: @escaping (Timeline<PocketEntry>) -> Void) {
+        let s = SharedSummary()
+        let payload = s.readPocketPayload()
+        let reveal = s.read().revealOnLockScreen
+        let now = Date.now
+        // One entry per upcoming midnight so "since Tue" wording could go stale at most a day
+        // without app opens; saves/reconciles reload all timelines anyway (existing call).
+        let cal = Calendar.current
+        var entries = [PocketEntry(date: now, payload: payload, reveal: reveal)]
+        for offset in 1...2 {
+            if let d = cal.date(byAdding: .day, value: offset, to: now) {
+                entries.append(PocketEntry(date: cal.startOfDay(for: d), payload: payload, reveal: reveal))
+            }
+        }
+        completion(Timeline(entries: entries, policy: .atEnd))
+    }
+}
+
+struct PocketWidgetView: View {
+    @Environment(\.widgetFamily) private var family
+    var entry: PocketEntry
+    var body: some View {
+        Group {
+            if family == .accessoryInline {
+                Text(entry.payload.map { entry.reveal ? $0.revealedInline : $0.hiddenInline } ?? "Set your wallet")
+            } else {
+                VStack(alignment: .leading, spacing: 2) {
+                    if let payload = entry.payload, payload.hasWallet {
+                        ForEach((entry.reveal ? payload.revealedLines : payload.hiddenLines).prefix(3),
+                                id: \.self) { line in
+                            Text(line).font(.caption2).minimumScaleFactor(0.7).lineLimit(1)
+                        }
+                    } else {
+                        Text("In your pocket").font(.caption2).foregroundStyle(.secondary)
+                        Text("Set your wallet to begin").font(.caption2)
+                    }
+                }
+            }
+        }
+        .privacySensitive(!entry.reveal)
+        .containerBackground(.fill.tertiary, for: .widget)
+        .widgetURL(URL(string: "goldengo://wallet"))
+    }
+}
+
+struct PocketWidget: Widget {
+    var body: some WidgetConfiguration {
+        StaticConfiguration(kind: "PocketWidget", provider: PocketProvider()) { entry in
+            PocketWidgetView(entry: entry)
+        }
+        .configurationDisplayName("In your pocket")
+        .description("What the books say you're carrying — tap to set it straight.")
+        .supportedFamilies([.accessoryInline, .accessoryRectangular])
+    }
+}
+
 @main
 struct GoldengoWidgetBundle: WidgetBundle {
     var body: some Widget {
         GoldengoWidget()
+        PocketWidget()
         if #available(iOS 18.0, *) { GoldengoControl() }
     }
 }

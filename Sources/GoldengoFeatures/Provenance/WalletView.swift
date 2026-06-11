@@ -8,7 +8,13 @@ import GoldengoDesignSystem
 /// number. Lower than expected auto-logs one visible "Unaccounted" entry; higher just is.
 public struct WalletView: View {
     @State private var model: SourcesModel
-    public init(model: SourcesModel) { _model = State(initialValue: model) }
+    /// GOL-98: a widget tap lands straight on this currency's Adjust screen.
+    let autoOpenAdjust: CurrencyCode?
+    @State private var adjustPresented = false
+    public init(model: SourcesModel, autoOpenAdjust: CurrencyCode? = nil) {
+        _model = State(initialValue: model)
+        self.autoOpenAdjust = autoOpenAdjust
+    }
 
     /// Every catalog currency without a wallet line yet — the same catalog the Add-income and
     /// Settings pickers use (rate-table driven), not a hardcoded shortlist. The common Albanian
@@ -88,6 +94,11 @@ public struct WalletView: View {
             .scrollContentBackground(.hidden)
             .background(Color.goldengoBackground.ignoresSafeArea())
             .navigationTitle("Wallet")
+            // GOL-98: a widget tap pushes straight to Adjust — the reconcile is the point.
+            .navigationDestination(isPresented: $adjustPresented) {
+                AdjustWalletView(model: model, currency: autoOpenAdjust ?? .all)
+            }
+            .onAppear { if autoOpenAdjust != nil { adjustPresented = true } }
         }
     }
 }

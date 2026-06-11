@@ -81,6 +81,11 @@ public struct SharedSummary {
         return p
     }
 
+    // GOL-98: one-shot flag — the pocket widget tap should land ON the Adjust screen.
+    public static let pendingWalletAdjustKey = "pendingWalletAdjust"
+    public func setPendingWalletAdjust(_ on: Bool) { defaults.set(on, forKey: Self.pendingWalletAdjustKey) }
+    public func readPendingWalletAdjust() -> Bool { defaults.bool(forKey: Self.pendingWalletAdjustKey) }
+
     // GOL-97: a same-day skip marker so the morning prompt presents at most once per day.
     public static let ritualSkippedDateKey = "ritualSkippedDate"
     public func setMorningSkipped(on date: Date = .now) { defaults.set(date, forKey: Self.ritualSkippedDateKey) }
