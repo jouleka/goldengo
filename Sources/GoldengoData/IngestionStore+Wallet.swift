@@ -2,75 +2,98 @@ import Foundation
 import SwiftData
 import GoldengoCore
 
-/// What the Sources-tab wallet card shows. Sendable snapshot across the actor boundary.
-public struct WalletSnapshot: Sendable, Equatable {
+/// One currency line of the wallet (GOL-95 v2). Sendable snapshot across the actor boundary.
+public struct WalletBalance: Sendable, Equatable, Identifiable {
+    public var currencyCode: String
     public var baselineDate: Date
     public var expectedNow: Decimal
+    public var id: String { currencyCode }
 }
 
-/// The result of saving a count — drives the drift moment in the count sheet.
-public struct WalletCountOutcome: Sendable, Equatable {
-    public var countedTotal: Decimal
-    public var expected: Decimal?      // nil on the first-ever count
-    public var drift: Decimal?         // counted − expected; nil on the first-ever count
+/// The result of setting a balance — one quiet confirmation line, never a question.
+public struct WalletSetOutcome: Sendable, Equatable {
+    public var expected: Decimal?            // nil on the first-ever set for this currency
+    public var unaccountedLogged: Decimal?   // the auto-logged gap when set lower than expected
 }
 
 extension IngestionStore {
-    /// dedupeKey prefix for drift ("street money") entries — identity-excluded from wallet
-    /// math forever, so user date-edits can never corrupt the ledger (the GOL-92 lesson).
+    /// dedupeKey prefix for auto-logged "Unaccounted" gap entries — identity-excluded from
+    /// wallet math forever, so user date-edits can never corrupt the ledger.
     public static let driftKeyPrefix = "drift"
 
-    /// Save a denomination count. The count is TRUTH: it always becomes the new baseline;
-    /// the returned drift only decides whether the gap gets RECORDED (via logDrift).
+    /// Set what's actually in the wallet for one currency — typed directly, or via the optional
+    /// denomination tally (just another way to produce the same number). The set amount IS the
+    /// new baseline. Lower than expected → the gap is auto-logged as one visible "Unaccounted"
+    /// expense (the user initiated the correction; the entry is its direct consequence, and it
+    /// keeps spend totals truthful). Higher → the baseline absorbs it; nothing is fabricated.
     @discardableResult
-    public func recordWalletCount(_ tally: DenominationTally, at date: Date = .now) throws -> WalletCountOutcome {
-        let counted = tally.total
-        var outcome = WalletCountOutcome(countedTotal: counted, expected: nil, drift: nil)
-        if let baseline = try latestCount() {
-            let expected = CashLedger.expected(baselineTotal: baseline.total,
-                                               flows: try cashFlows(after: baseline.date, until: date))
+    public func setWalletBalance(_ newTotal: Decimal, currency: CurrencyCode,
+                                 tally: DenominationTally?, at date: Date = .now) throws -> WalletSetOutcome {
+        var outcome = WalletSetOutcome(expected: nil, unaccountedLogged: nil)
+        if let baseline = try latestBaseline(currencyCode: currency.rawValue) {
+            let expected = CashLedger.expected(
+                baselineTotal: baseline.total,
+                flows: try cashFlows(after: baseline.date, until: date, currencyCode: currency.rawValue))
             outcome.expected = expected
-            outcome.drift = CashLedger.drift(counted: counted, expected: expected)
+            if newTotal < expected {
+                let gap = expected - newTotal
+                try logDrift(amount: gap, currency: currency, at: date)
+                outcome.unaccountedLogged = gap
+            }
         }
-        modelContext.insert(WalletCount(tally: tally, date: date))
+        modelContext.insert(WalletCount(total: newTotal, tally: tally,
+                                        currencyCode: currency.rawValue, date: date))
         try modelContext.save()
         return outcome
     }
 
-    /// The wallet card's state, or nil before the first-ever count.
-    public func walletSnapshot(now: Date = .now) throws -> WalletSnapshot? {
-        guard let baseline = try latestCount() else { return nil }
-        let expected = CashLedger.expected(baselineTotal: baseline.total,
-                                           flows: try cashFlows(after: baseline.date, until: now))
-        return WalletSnapshot(baselineDate: baseline.date, expectedNow: expected)
+    /// The wallet's per-currency lines — one per currency the user has ever set a balance for.
+    /// Empty before the first set (the card shows its begin state).
+    public func walletBalances(now: Date = .now) throws -> [WalletBalance] {
+        let counts = try modelContext.fetch(FetchDescriptor<WalletCount>(
+            predicate: #Predicate { $0.isArchived == false }))
+        // Latest baseline per currency (date desc, total as the deterministic tiebreak).
+        var latest: [String: WalletCount] = [:]
+        for c in counts {
+            if let kept = latest[c.currencyCode],
+               (kept.date, kept.total) >= (c.date, c.total) { continue }
+            latest[c.currencyCode] = c
+        }
+        return try latest.values.map { baseline in
+            let expected = CashLedger.expected(
+                baselineTotal: baseline.total,
+                flows: try cashFlows(after: baseline.date, until: now, currencyCode: baseline.currencyCode))
+            return WalletBalance(currencyCode: baseline.currencyCode,
+                                 baselineDate: baseline.date, expectedNow: expected)
+        }
+        .sorted { $0.currencyCode == "ALL" ? true : ($1.currencyCode == "ALL" ? false : $0.currencyCode < $1.currencyCode) }
     }
 
-    /// Record accepted drift as an ordinary, visible "street money" expense.
-    public func logDrift(amount: Decimal, at date: Date = .now) throws {
-        _ = try logEntry(amount: amount, currency: .all, merchant: nil, note: "street money",
+    /// Record an auto-logged gap as an ordinary, visible "Unaccounted" expense.
+    func logDrift(amount: Decimal, currency: CurrencyCode, at date: Date = .now) throws {
+        _ = try logEntry(amount: amount, currency: currency, merchant: nil, note: nil,
                          categoryName: "Unaccounted", source: .manual,
                          keyPrefix: Self.driftKeyPrefix, date: date)
     }
 
-    private func latestCount() throws -> WalletCount? {
-        // Latest date wins as baseline; total as a stable second key so a (CloudKit-rare)
-        // same-instant count pair resolves deterministically on every device.
-        var fd = FetchDescriptor<WalletCount>(predicate: #Predicate { $0.isArchived == false },
-                                              sortBy: [SortDescriptor(\.date, order: .reverse),
-                                                       SortDescriptor(\.total, order: .reverse)])
+    private func latestBaseline(currencyCode: String) throws -> WalletCount? {
+        var fd = FetchDescriptor<WalletCount>(
+            predicate: #Predicate { $0.isArchived == false && $0.currencyCode == currencyCode },
+            sortBy: [SortDescriptor(\.date, order: .reverse),
+                     SortDescriptor(\.total, order: .reverse)])
         fd.fetchLimit = 1
         return try modelContext.fetch(fd).first
     }
 
-    /// Cash flows in (baseline, until]: transfers (ATM) + manual income are inflows; manual
-    /// expenses are outflows — except drift entries (identity-excluded by key prefix). ALL-only
-    /// in v1. Source/kind filters stay out of the #Predicate where they'd need Decimals; the
-    /// date/currency/archived filters are store-side, the rest in memory.
-    private func cashFlows(after baseline: Date, until: Date) throws -> [CashLedger.Flow] {
-        let all = "ALL"
+    /// Cash flows in (baseline, until] for one currency (GOL-95 v2 rules):
+    /// in — transfers (ATM withdrawals) and wallet-pinned income ("cash in hand");
+    /// out — cash-funded expenses (wallet-pinned, or unpinned `.manual` = cash by default),
+    ///       except drift entries (identity-excluded by key prefix).
+    /// Bank income, source-pinned spends, and card/imported spends never touch the wallet.
+    private func cashFlows(after baseline: Date, until: Date, currencyCode: String) throws -> [CashLedger.Flow] {
         let rows = try modelContext.fetch(FetchDescriptor<ExpenseRecord>(
             predicate: #Predicate {
-                $0.isArchived == false && $0.currencyCode == all
+                $0.isArchived == false && $0.currencyCode == currencyCode
                     && $0.date > baseline && $0.date <= until
             }))
         let manualRaw = ExpenseSource.manual.rawValue
@@ -79,10 +102,11 @@ extension IngestionStore {
             switch r.kindRaw {
             case TransactionKind.transfer.rawValue:
                 return CashLedger.Flow(amount: abs(r.amount), isInflow: true)
-            case TransactionKind.income.rawValue where r.sourceRaw == manualRaw:
+            case TransactionKind.income.rawValue where r.fundedBySourceID == FundingPin.wallet:
                 return CashLedger.Flow(amount: abs(r.amount), isInflow: true)
-            case TransactionKind.expense.rawValue where r.sourceRaw == manualRaw
-                    && !r.dedupeKey.hasPrefix(driftPrefix):
+            case TransactionKind.expense.rawValue where !r.dedupeKey.hasPrefix(driftPrefix)
+                    && (r.fundedBySourceID == FundingPin.wallet
+                        || (r.fundedBySourceID == nil && r.sourceRaw == manualRaw)):
                 return CashLedger.Flow(amount: abs(r.amount), isInflow: false)
             default:
                 return nil

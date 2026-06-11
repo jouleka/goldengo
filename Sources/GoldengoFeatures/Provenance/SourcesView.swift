@@ -12,31 +12,29 @@ public struct SourcesView: View {
     public var body: some View {
         NavigationStack {
             List {
-                // The Count (GOL-95): the physical wallet as a place. Never prompted — opened.
-                VStack(alignment: .leading, spacing: 6) {
-                    HStack {
-                        Label("In your wallet", systemImage: "wallet.bifold")
-                            .font(.subheadline.weight(.semibold))
-                        Spacer()
-                        if let w = model.wallet {
-                            Text("~" + Money(amount: w.expectedNow, currency: .all).formatted())
-                                .font(.subheadline.weight(.medium))
+                // The wallet (GOL-95 v2): per-currency cash, money moving through. Tap to adjust.
+                Button { showCount = true } label: {
+                    VStack(alignment: .leading, spacing: 6) {
+                        HStack {
+                            Label("In your wallet", systemImage: "wallet.bifold")
+                                .font(.subheadline.weight(.semibold))
+                            Spacer()
+                            if !model.wallet.isEmpty {
+                                Text(model.wallet.map {
+                                    "~" + Money(amount: $0.expectedNow,
+                                                currency: CurrencyCode($0.currencyCode)).formatted()
+                                }.joined(separator: " · "))
+                                    .font(.subheadline.weight(.medium))
+                            }
                         }
+                        Text(model.wallet.isEmpty
+                             ? "Tap to set what's in your pocket."
+                             : "Tap to adjust — cash spends drain this, not your sources.")
+                            .font(.caption).foregroundStyle(.secondary)
                     }
-                    HStack {
-                        if let w = model.wallet {
-                            Text("Counted " + w.baselineDate.formatted(.dateTime.day().month(.abbreviated)))
-                                .font(.caption).foregroundStyle(.secondary)
-                        } else {
-                            Text("Count your wallet to begin.")
-                                .font(.caption).foregroundStyle(.secondary)
-                        }
-                        Spacer()
-                        Button("Count") { showCount = true }
-                            .font(.caption.weight(.semibold))
-                            .buttonStyle(.bordered).tint(GoldengoTheme.accent)
-                    }
+                    .contentShape(Rectangle())
                 }
+                .buttonStyle(.plain)
                 .padding(.vertical, 4)
                 .listRowBackground(Color.clear)
 
@@ -88,7 +86,7 @@ public struct SourcesView: View {
                               currency: model.currency, onDone: { showAddIncome = false })
             }
             .sheet(isPresented: $showCount, onDismiss: { Task { await model.load() } }) {
-                WalletCountView(model: model)
+                WalletView(model: model)
             }
             .task { await model.load() }
         }

@@ -25,8 +25,9 @@ final class LogManualPinTests: XCTestCase {
         XCTAssertEqual(rent.fundedBySourceID, freelanceID)
     }
 
-    /// logManual without a pin behaves exactly as before (automatic FIFO → oldest source).
-    func test_logManual_withoutPin_isAutomaticFifo() async throws {
+    /// GOL-95 v2: logManual without a pin is CASH by default — it drains the wallet, never a
+    /// bank-side pool, and the chip says so. (Replaces the v1 automatic-FIFO rule.)
+    func test_logManual_withoutPin_isWalletCash() async throws {
         let store = IngestionStore(modelContainer: try .goldengoInMemory())
         try await store.logIncome(amount: 1000, currency: .all, sourceName: "Sister",
                                   date: Date().addingTimeInterval(-2 * 86_400))
@@ -35,7 +36,10 @@ final class LogManualPinTests: XCTestCase {
         _ = try await store.logManual(amount: 300, currency: .all, merchant: "Rent", categoryName: nil)
         let rows = try await store.recentExpenses(limit: 10)
         let rent = try XCTUnwrap(rows.first { $0.merchantName == "Rent" })
-        XCTAssertEqual(rent.fundedBy, "Sister")
+        XCTAssertEqual(rent.fundedBy, "Wallet")
         XCTAssertNil(rent.fundedBySourceID)
+        let snapshot = try await store.provenanceSnapshot(displayCurrency: .all)
+        XCTAssertEqual(snapshot.sources.first { $0.name == "Sister" }?.remaining, 1000,
+                       "A cash spend never drains the bank-side pools")
     }
 }

@@ -237,11 +237,13 @@ public struct QuickAddView: View {
 
     private var paidFromMenu: some View {
         Menu {
+            // GOL-95 v2: a hand-logged spend is CASH by default — it drains the wallet.
+            // Picking a source below marks it bank-paid instead (pins that source).
             Button { model.selectedSourceID = nil } label: {
                 if model.selectedSourceID == nil {
-                    Label("Automatic — oldest money first", systemImage: "checkmark")
+                    Label("Wallet — cash", systemImage: "checkmark")
                 } else {
-                    Text("Automatic — oldest money first")
+                    Text("Wallet — cash")
                 }
             }
             ForEach(model.sourceBalances) { s in
@@ -260,8 +262,8 @@ public struct QuickAddView: View {
                     Circle().fill(GoldengoTheme.sourceColor(s.colorIndex)).frame(width: 9, height: 9)
                     Text(s.name).font(.subheadline.weight(.medium)).foregroundStyle(.primary)
                 } else {
-                    Image(systemName: "sparkles").font(.caption).foregroundStyle(.secondary)
-                    Text("Automatic").font(.subheadline.weight(.medium)).foregroundStyle(.secondary)
+                    Image(systemName: "wallet.bifold").font(.caption).foregroundStyle(.secondary)
+                    Text("Wallet").font(.subheadline.weight(.medium)).foregroundStyle(.secondary)
                 }
                 Image(systemName: "chevron.down").font(.system(size: 11, weight: .bold)).foregroundStyle(.tertiary)
             }

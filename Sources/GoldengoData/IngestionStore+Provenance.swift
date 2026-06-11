@@ -36,14 +36,21 @@ public struct FundingSourceOption: Sendable, Equatable, Identifiable {
 
 extension IngestionStore {
     /// Find-or-create a source by case-insensitive name (mirrors findOrCreateCategory), then insert a
-    /// linked `.income` record. A cash withdrawal / remittance / pay is just a named inflow.
+    /// linked `.income` record. A remittance / pay is just a named inflow to its bank-side pool.
+    /// `intoWallet` (GOL-95 v2, "cash in hand"): the money physically entered the WALLET — it is
+    /// pinned to the wallet, credits the wallet ledger, and never forms a bank-side pool (the name
+    /// is kept on the record as origin memory only; no SourceRecord is created or linked).
     public func logIncome(amount: Decimal, currency: CurrencyCode,
-                          sourceName: String, date: Date = .now) throws {
-        let src = try findOrCreateSource(named: sourceName, currency: currency)
+                          sourceName: String, date: Date = .now, intoWallet: Bool = false) throws {
         let rec = ExpenseRecord(amount: amount, currencyCode: currency.rawValue, date: date,
-                                merchantName: src.name, kind: .income, source: .manual,
+                                merchantName: sourceName.trimmingCharacters(in: .whitespacesAndNewlines),
+                                kind: .income, source: .manual,
                                 dedupeKey: "income:\(UUID().uuidString)")
-        rec.provenanceSource = src
+        if intoWallet {
+            rec.fundedBySourceID = FundingPin.wallet
+        } else {
+            rec.provenanceSource = try findOrCreateSource(named: sourceName, currency: currency)
+        }
         modelContext.insert(rec)
         try modelContext.save()
         // Income doesn't change today's EXPENSE total, so no shared-summary/widget refresh needed.
@@ -112,16 +119,29 @@ extension IngestionStore {
         -> (inflows: [ProvenanceAllocator.Inflow], outflows: [ProvenanceAllocator.Outflow]) {
         let incomeRaw = TransactionKind.income.rawValue
         let expenseRaw = TransactionKind.expense.rawValue
+        let transferRaw = TransactionKind.transfer.rawValue
+        let manualRaw = ExpenseSource.manual.rawValue
         var inflows: [ProvenanceAllocator.Inflow] = []
         var outflows: [ProvenanceAllocator.Outflow] = []
         for r in records {
-            if r.kindRaw == incomeRaw, let sid = r.provenanceSource?.id {
+            if r.kindRaw == incomeRaw, r.fundedBySourceID != FundingPin.wallet,
+               let sid = r.provenanceSource?.id {
                 inflows.append(.init(id: r.dedupeKey, sourceID: sid, amount: r.amount,
                                      currency: CurrencyCode(r.currencyCode), date: r.date))
             } else if r.kindRaw == expenseRaw {
+                // GOL-95 v2: cash-funded spends drain the WALLET ledger, not the bank-side
+                // pools — the money already left those pools at the ATM (no double-drain).
+                let cashFunded = r.fundedBySourceID == FundingPin.wallet
+                    || (r.fundedBySourceID == nil && r.sourceRaw == manualRaw)
+                if cashFunded { continue }
                 outflows.append(.init(id: r.dedupeKey, amount: r.amount,
                                       currency: CurrencyCode(r.currencyCode), date: r.date,
                                       pinnedSourceID: r.fundedBySourceID))
+            } else if r.kindRaw == transferRaw {
+                // The withdrawal is the moment the bank-side sources drain (unpinned FIFO).
+                outflows.append(.init(id: r.dedupeKey, amount: abs(r.amount),
+                                      currency: CurrencyCode(r.currencyCode), date: r.date,
+                                      pinnedSourceID: nil))
             }
         }
         return (inflows, outflows)

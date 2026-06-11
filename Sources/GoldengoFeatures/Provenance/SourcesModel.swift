@@ -12,8 +12,8 @@ public final class SourcesModel {
     public var currency: CurrencyCode
     public private(set) var snapshot: ProvenanceSnapshot?
     public private(set) var loadFailed = false
-    /// The Count (GOL-95): the wallet card's state; nil before the first-ever count.
-    public private(set) var wallet: WalletSnapshot?
+    /// The wallet's per-currency lines (GOL-95 v2); empty before the first balance is set.
+    public private(set) var wallet: [WalletBalance] = []
 
     public init(store: IngestionStore, currency: CurrencyCode = .all) {
         self.store = store; self.currency = currency
@@ -22,26 +22,23 @@ public final class SourcesModel {
     public func load() async {
         do { snapshot = try await store.provenanceSnapshot(displayCurrency: currency); loadFailed = false }
         catch { loadFailed = true }
-        wallet = try? await store.walletSnapshot()
+        wallet = (try? await store.walletBalances()) ?? []
     }
 
-    /// Save a count; returns the outcome so the sheet can show the drift moment.
-    public func countWallet(_ tally: DenominationTally) async -> WalletCountOutcome? {
-        let outcome = try? await store.recordWalletCount(tally)
+    /// Set what's actually in the wallet for one currency (typed, or via the optional tally).
+    public func setWalletBalance(_ total: Decimal, currency: CurrencyCode,
+                                 tally: DenominationTally?) async -> WalletSetOutcome? {
+        let outcome = try? await store.setWalletBalance(total, currency: currency, tally: tally)
         await load()
         return outcome
     }
 
-    /// Keep negative drift as a visible "street money" entry.
-    public func keepDrift(_ amount: Decimal) async {
-        try? await store.logDrift(amount: amount)
-        await load()
-    }
-
-    public func addIncome(amount: Decimal, currency: CurrencyCode, sourceName: String) async {
+    public func addIncome(amount: Decimal, currency: CurrencyCode, sourceName: String,
+                          intoWallet: Bool = false) async {
         let name = sourceName.trimmingCharacters(in: .whitespacesAndNewlines)
         guard amount > 0, !name.isEmpty else { return }
-        try? await store.logIncome(amount: amount, currency: currency, sourceName: name)
+        try? await store.logIncome(amount: amount, currency: currency, sourceName: name,
+                                   intoWallet: intoWallet)
         await load()
     }
 

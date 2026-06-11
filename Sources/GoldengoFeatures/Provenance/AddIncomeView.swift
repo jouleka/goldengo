@@ -13,6 +13,7 @@ public struct AddIncomeView: View {
     @State private var sourceName = ""
     @State private var currencyCode: String
     @State private var date = Date.now
+    @State private var cashInHand = false   // GOL-95 v2: the money is physically in the wallet
     @FocusState private var amountFocused: Bool
 
     public init(model: SourcesModel, existingSources: [String], currency: CurrencyCode, onDone: @escaping () -> Void) {
@@ -71,6 +72,13 @@ public struct AddIncomeView: View {
                 Section("Date") {
                     DatePicker("Date", selection: $date, displayedComponents: .date)
                 }
+                Section {
+                    Toggle("Cash in hand", isOn: $cashInHand)
+                    Text(cashInHand
+                         ? "Goes straight into your wallet — the name is kept as where it came from."
+                         : "Lands in the bank as a named source; reach it via an ATM withdrawal.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
             }
             .navigationTitle("Add income")
             .scrollContentBackground(.hidden)
@@ -84,7 +92,7 @@ public struct AddIncomeView: View {
                         amountFocused = false
                         Task {
                             await model.addIncome(amount: amount, currency: CurrencyCode(currencyCode),
-                                                  sourceName: sourceName)
+                                                  sourceName: sourceName, intoWallet: cashInHand)
                             onDone()
                         }
                     }.disabled(!canSave)

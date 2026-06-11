@@ -15,10 +15,10 @@ final class SourcePinningTests: XCTestCase {
                                   date: Date().addingTimeInterval(-86_400))
         try await store.logManual(amount: 300, currency: .all, merchant: "Rent", categoryName: nil)
 
-        // FIFO baseline: oldest source (Sister) funds it.
+        // v2 baseline: an unpinned manual spend is wallet-cash.
         var rows = try await store.recentExpenses(limit: 10)
         var rent = try XCTUnwrap(rows.first { $0.merchantName == "Rent" })
-        XCTAssertEqual(rent.fundedBy, "Sister")
+        XCTAssertEqual(rent.fundedBy, "Wallet")
 
         // Pin to Freelance → label follows the pin.
         let homeSources = try await store.homeData(rates: SeedRates.table).sources
@@ -31,13 +31,13 @@ final class SourcePinningTests: XCTestCase {
         XCTAssertEqual(rent.fundedBy, "Freelance")
         XCTAssertEqual(rent.fundedBySourceID, freelanceID, "Snapshot must carry the pin for the edit sheet.")
 
-        // Clear the pin (back to Automatic) → FIFO again.
+        // Clear the pin → back to the manual default (wallet-cash, GOL-95 v2).
         try await store.updateExpense(dedupeKey: rent.dedupeKey, amount: rent.amount, currency: nil,
                                       merchant: rent.merchantName, note: nil, categoryName: nil,
                                       date: rent.date, fundedBySourceID: nil)
         rows = try await store.recentExpenses(limit: 10)
         rent = try XCTUnwrap(rows.first { $0.merchantName == "Rent" })
-        XCTAssertEqual(rent.fundedBy, "Sister")
+        XCTAssertEqual(rent.fundedBy, "Wallet")
         XCTAssertNil(rent.fundedBySourceID)
     }
 
@@ -68,7 +68,14 @@ final class SourcePinningTests: XCTestCase {
         try await store.logManual(amount: 300, currency: .all, merchant: "Rent", categoryName: nil)
         let data = try await store.homeData(rates: SeedRates.table)
         let sister = try XCTUnwrap(data.sources.first { $0.name == "Sister" })
-        let rent = try XCTUnwrap(data.rows.first { $0.merchantName == "Rent" })
+        var rent = try XCTUnwrap(data.rows.first { $0.merchantName == "Rent" })
+        XCTAssertEqual(rent.fundedBy, "Wallet", "Unpinned manual = wallet-cash (GOL-95 v2)")
+        // Pinned to a source → the chip follows the source's palette slot, as before.
+        try await store.updateExpense(dedupeKey: rent.dedupeKey, amount: rent.amount, currency: nil,
+                                      merchant: rent.merchantName, note: nil, categoryName: nil,
+                                      date: rent.date, fundedBySourceID: sister.id)
+        let data2 = try await store.homeData(rates: SeedRates.table)
+        rent = try XCTUnwrap(data2.rows.first { $0.merchantName == "Rent" })
         XCTAssertEqual(rent.fundedBy, "Sister")
         XCTAssertEqual(rent.fundedByColorIndex, sister.colorIndex,
                        "The chip's color index must match the funding source's palette slot.")

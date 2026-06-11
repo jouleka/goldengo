@@ -48,8 +48,16 @@ extension IngestionStore {
         let rows: [ExpenseSnapshot] = all.prefix(50).map { r in
             var snap = makeSnapshot(r)
             if r.kindRaw == expenseRaw {
-                snap.fundedBy = tags[r.dedupeKey]?.label
-                snap.fundedByColorIndex = tags[r.dedupeKey]?.colorIndex
+                // GOL-95 v2: cash-funded spends drain the wallet, not a source pool — chip
+                // says so directly (the FIFO tags only cover bank-funded rows now).
+                let cashFunded = r.fundedBySourceID == FundingPin.wallet
+                    || (r.fundedBySourceID == nil && r.sourceRaw == ExpenseSource.manual.rawValue)
+                if cashFunded {
+                    snap.fundedBy = "Wallet"
+                } else {
+                    snap.fundedBy = tags[r.dedupeKey]?.label
+                    snap.fundedByColorIndex = tags[r.dedupeKey]?.colorIndex
+                }
             }
             return snap
         }

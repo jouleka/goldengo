@@ -208,8 +208,16 @@ public actor IngestionStore {
         return try modelContext.fetch(fd).map { r in
             var snap = makeSnapshot(r)
             if r.kindRaw == TransactionKind.expense.rawValue {
-                snap.fundedBy = tags[r.dedupeKey]?.label
-                snap.fundedByColorIndex = tags[r.dedupeKey]?.colorIndex
+                // GOL-95 v2: cash-funded spends drain the wallet, not a source pool — the chip
+                // says so directly (kept in lockstep with homeData's identical branch).
+                let cashFunded = r.fundedBySourceID == FundingPin.wallet
+                    || (r.fundedBySourceID == nil && r.sourceRaw == ExpenseSource.manual.rawValue)
+                if cashFunded {
+                    snap.fundedBy = "Wallet"
+                } else {
+                    snap.fundedBy = tags[r.dedupeKey]?.label
+                    snap.fundedByColorIndex = tags[r.dedupeKey]?.colorIndex
+                }
             }
             return snap
         }

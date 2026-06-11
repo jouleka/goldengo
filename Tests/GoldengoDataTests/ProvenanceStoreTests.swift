@@ -44,8 +44,13 @@ final class ProvenanceStoreTests: XCTestCase {
                               asOf: Date(timeIntervalSince1970: 1_780_000_000))
         try await store.logIncome(amount: 1000, currency: .all, sourceName: "Cash",
                                   date: Date(timeIntervalSince1970: 1_700_000_000))
+        // GOL-95 v2: unpinned manual spends are wallet-cash and bypass the pools entirely, so
+        // this drain test pins the spend to the source (bank-paid) to exercise the FIFO path.
+        let pre = try await store.provenanceSnapshot(displayCurrency: .all, rates: rates)
+        let cashID = try XCTUnwrap(pre.sources.first?.id)
         try await store.logManual(amount: 300, currency: .all, merchant: "Spar", categoryName: nil,
-                                  date: Date(timeIntervalSince1970: 1_700_086_400))
+                                  date: Date(timeIntervalSince1970: 1_700_086_400),
+                                  fundedBySourceID: cashID)
         let snap = try await store.provenanceSnapshot(displayCurrency: .all, rates: rates)
         XCTAssertEqual(snap.sources.first?.remaining, 700)
         XCTAssertEqual(snap.unaccounted, 0)

@@ -5,6 +5,12 @@ import GoldengoCore
 
 final class AllocationCacheTests: XCTestCase {
     private func makeStore() throws -> IngestionStore { IngestionStore(modelContainer: try .goldengoInMemory()) }
+    /// GOL-95 v2: unpinned manual spends are wallet-cash and leave the allocator entirely, so
+    /// mutation tests pin their spends to a source (bank-paid) to stay allocator-relevant.
+    private func sourceID(_ store: IngestionStore, named name: String) async throws -> String? {
+        try await store.provenanceSnapshot(displayCurrency: .all, rates: SeedRates.table)
+            .sources.first { $0.name == name }?.id
+    }
 
     func test_allocation_reusedWhenNothingChanged() async throws {
         let store = try makeStore()
@@ -23,7 +29,8 @@ final class AllocationCacheTests: XCTestCase {
         try await store.logIncome(amount: 1000, currency: .all, sourceName: "Sister")
         _ = try await store.provenanceSnapshot(displayCurrency: .all, rates: SeedRates.table)
         let before = await store.allocationComputeCount
-        try await store.logManual(amount: 300, currency: .all, merchant: "Coffee", categoryName: nil)
+        try await store.logManual(amount: 300, currency: .all, merchant: "Coffee", categoryName: nil,
+                                  fundedBySourceID: try await sourceID(store, named: "Sister"))
         let snap = try await store.provenanceSnapshot(displayCurrency: .all, rates: SeedRates.table)
         let after = await store.allocationComputeCount
         XCTAssertGreaterThan(after, before, "A new spend changes the fingerprint → recompute.")
@@ -46,7 +53,8 @@ final class AllocationCacheTests: XCTestCase {
         // in the cache (regression guard: the fingerprint keys on the full table, not just asOf).
         let store = try makeStore()
         try await store.logIncome(amount: 5, currency: CurrencyCode("EUR"), sourceName: "Sis")
-        try await store.logManual(amount: 1000, currency: .all, merchant: "Rent", categoryName: nil)
+        try await store.logManual(amount: 1000, currency: .all, merchant: "Rent", categoryName: nil,
+                                  fundedBySourceID: try await sourceID(store, named: "Sis"))
         let asOf = Date(timeIntervalSince1970: 1_780_000_000)
         // 5 EUR funds 500 ALL at rate A (→ 500 ALL unaccounted) but 1000 ALL at rate B (→ 0 unaccounted).
         let ratesA = RateTable(base: .all, rates: ["ALL": 1, "EUR": 0.01], asOf: asOf)   // 1 EUR = 100 ALL
