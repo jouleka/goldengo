@@ -113,3 +113,26 @@ Three review lenses confirmed 7 distinct defects (13 raw findings, heavily cross
 - **First-count copy** says "Baseline set — your wallet starts here…" (nil drift is not zero drift).
 
 Accepted limitations added: a failed-withdrawal *reversal credit* is not netted against its debit (the transfer inflow stands until the next count's drift absorbs it — rare, self-correcting); a mis-tagged transfer row has no kind-edit UI in v1 (delete the row and hand-log the spend, or recount).
+
+## v2 — money moving through (user field-test rework, same day)
+
+Field testing exposed the v1 model as wrong in three ways: (1) manual income ≠ cash — Freelance income lands in the BANK, yet v1 credited the wallet; (2) the wallet and Provenance are NOT orthogonal — a cash spend drained the named source AGAIN even though the source was already debited at the ATM (double-drain); (3) the denomination-count-only flow read as an obligation ("I have to keep counting properly"), and "street money" confused. User-approved v2 model: **the wallet is a place money moves through.**
+
+### The flow rules (one money, one pool)
+
+- **ATM withdrawal (transfer)** = the moment bank-side sources drain. Transfers become *unpinned FIFO outflows* in the Provenance allocator AND wallet inflows. Freelance's bar drops at withdrawal time, once.
+- **Cash-funded expenses drain ONLY the wallet** — excluded from allocator outflows. Cash-funded = pinned to the wallet (`FundingPin.wallet`, the reserved id `"wallet"`) or, by default, any `.manual` expense with no pin. Pinning a named source instead marks a hand-logged expense as bank-paid (the existing GOL-90 picker, now with a Wallet chip first and preselected for manual adds). Chip reads "from Wallet".
+- **Income goes to the bank by default** (named source pools, as always). A "Cash in hand" toggle on Add income sets `fundedBySourceID = "wallet"` on the income row: it credits the wallet ledger and is excluded from bank-side pools (the source name stays on the record as origin memory).
+- **Wallet ledger per currency**: balance(currency) = latest baseline(currency) + transfers in + cash income in − cash spends out (drift/adjustment entries identity-excluded as before). ALL always shown; EUR/USD lines appear once cash in that currency exists.
+
+### Adjustment replaces ceremony
+
+- Tap the wallet card → per-currency balance; **type the real amount** (numeric field prefilled with the expected balance), Save. Five seconds.
+- New total **lower** than expected → the difference is auto-logged as one visible **"Unaccounted"** expense (`drift:`-prefixed → never re-drains the wallet; deletable like anything; no "street money" wording, no question asked — the user initiated the correction, the entry is its direct consequence, stated in one quiet line).
+- New total **higher** → baseline absorbs it, nothing is fabricated.
+- The **denomination grid stays as an optional input method** ("Count notes instead") that fills the same field — for when counting beats mental adding. EUR gets its own table (notes 500/200/100/50/20/10/5, coins 2/1).
+- `WalletCount` gains `currencyCode` (CloudKit-additive); baselines are per currency.
+
+### What this fixes, stated plainly
+
+Freelance drains once (at the ATM), the wallet drains on cash spends, Provenance's Unaccounted stops absorbing every cash purchase, multi-currency pockets work, and nothing ever asks the user to count.
