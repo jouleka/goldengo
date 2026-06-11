@@ -125,6 +125,16 @@ final class WalletTests: XCTestCase {
         XCTAssertEqual(totalAfter, 0, "Never downgraded back to spend")
     }
 
+    func test_cashIncome_forUntrackedCurrency_seedsItsWalletLine() async throws {
+        // "Cash in hand" must be VISIBLE immediately — a currency with no baseline would
+        // swallow the inflow invisibly (review finding).
+        let store = try makeStore()
+        try await store.logIncome(amount: 50, currency: .eur, sourceName: "Tip",
+                                  date: day(2026, 6, 2), intoWallet: true)
+        let eur = try await balance(store, "EUR", now: day(2026, 6, 3))
+        XCTAssertEqual(eur, 50, "A zero baseline is seeded just before the income, so the line shows it")
+    }
+
     func test_v2_withdrawalDrainsBankSources_cashSpendDrainsOnlyWallet() async throws {
         let store = try makeStore()
         try await store.logIncome(amount: 50000, currency: .all, sourceName: "Freelance",

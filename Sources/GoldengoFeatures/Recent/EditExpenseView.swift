@@ -206,14 +206,28 @@ public struct EditExpenseView: View {
         }
     }
 
-    /// GOL-89: choose which money pool this expense draws from — "Automatic" (FIFO) or a pinned
-    /// source. Chips mirror the category-chip pattern; each source chip carries its palette dot.
+    /// GOL-89/95: choose which money this expense draws from. "Wallet — cash" drains the wallet
+    /// ledger (the default for hand-logged spends, where a nil pin already MEANS wallet); a source
+    /// chip pins it bank-paid. "Automatic" (FIFO) only appears for imported/auto rows, where a nil
+    /// pin genuinely means oldest-money-first — showing it on manual rows would lie (v2 review).
+    private var isManualRow: Bool { snapshot.source == .manual }
+    private var walletSelected: Bool {
+        fundedBySourceID == FundingPin.wallet || (isManualRow && fundedBySourceID == nil)
+    }
+
     private var paidFromSection: some View {
         Section {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: GoldengoTheme.Spacing.s) {
-                    paidFromChip(label: "Automatic", dot: nil, selected: fundedBySourceID == nil) {
-                        fundedBySourceID = nil
+                    paidFromChip(label: "Wallet — cash", dot: nil, selected: walletSelected) {
+                        // Explicit pin (not nil): the intent survives any future default change.
+                        fundedBySourceID = FundingPin.wallet
+                    }
+                    if !isManualRow {
+                        paidFromChip(label: "Automatic", dot: nil,
+                                     selected: fundedBySourceID == nil) {
+                            fundedBySourceID = nil
+                        }
                     }
                     ForEach(fundingSources) { s in
                         paidFromChip(label: s.name, dot: GoldengoTheme.sourceColor(s.colorIndex),
@@ -229,7 +243,9 @@ public struct EditExpenseView: View {
         } header: {
             Text("Paid from")
         } footer: {
-            Text("Automatic uses your oldest money first. Pick a source to say exactly where this came from.")
+            Text(isManualRow
+                 ? "Cash drains your wallet. Pick a source to mark this bank-paid instead."
+                 : "Automatic uses your oldest money first. Wallet marks it paid in cash.")
         }
     }
 

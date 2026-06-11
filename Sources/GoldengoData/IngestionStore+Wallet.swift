@@ -76,6 +76,15 @@ extension IngestionStore {
                          keyPrefix: Self.driftKeyPrefix, date: date)
     }
 
+    /// Seed a zero baseline for a currency that has none, dated just before `date` so the
+    /// triggering inflow lands inside (baseline, now]. Used when cash income arrives for a
+    /// currency the wallet isn't tracking yet (GOL-95 v2 review).
+    func seedWalletBaselineIfMissing(currency: CurrencyCode, before date: Date) throws {
+        guard try latestBaseline(currencyCode: currency.rawValue) == nil else { return }
+        modelContext.insert(WalletCount(total: 0, tally: nil, currencyCode: currency.rawValue,
+                                        date: date.addingTimeInterval(-1)))
+    }
+
     private func latestBaseline(currencyCode: String) throws -> WalletCount? {
         var fd = FetchDescriptor<WalletCount>(
             predicate: #Predicate { $0.isArchived == false && $0.currencyCode == currencyCode },

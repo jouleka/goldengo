@@ -48,6 +48,10 @@ extension IngestionStore {
                                 dedupeKey: "income:\(UUID().uuidString)")
         if intoWallet {
             rec.fundedBySourceID = FundingPin.wallet
+            // Cash must be VISIBLE in the wallet immediately: a currency with no baseline yet
+            // would swallow the inflow invisibly (review finding) — seed a zero baseline just
+            // before the income so the line appears showing exactly this money.
+            try seedWalletBaselineIfMissing(currency: currency, before: date)
         } else {
             rec.provenanceSource = try findOrCreateSource(named: sourceName, currency: currency)
         }
