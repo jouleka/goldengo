@@ -5,14 +5,31 @@ import GoldengoCore
 final class ATMTaggingTests: XCTestCase {
     private let keywords = StatementProfile.raiffeisenAlbania.atmKeywords
 
+    private let exclusions = StatementProfile.raiffeisenAlbania.atmExclusionKeywords
+
     func test_keywordMatch_isCaseAndDiacriticInsensitive() {
-        XCTAssertTrue(ATMKeywords.isWithdrawal("TERHEQJE NGA ATM 4471", keywords: keywords))
-        XCTAssertTrue(ATMKeywords.isWithdrawal("Tërheqje bankomat", keywords: keywords))
-        XCTAssertTrue(ATMKeywords.isWithdrawal("Cash Withdrawal RBAL", keywords: keywords))
-        XCTAssertFalse(ATMKeywords.isWithdrawal("Bar Atmosfera Tirane", keywords: keywords),
+        XCTAssertTrue(ATMKeywords.isWithdrawal("TERHEQJE NGA ATM 4471", keywords: keywords, exclusions: exclusions))
+        XCTAssertTrue(ATMKeywords.isWithdrawal("Tërheqje bankomat", keywords: keywords, exclusions: exclusions))
+        XCTAssertTrue(ATMKeywords.isWithdrawal("Cash Withdrawal RBAL", keywords: keywords, exclusions: exclusions))
+        XCTAssertFalse(ATMKeywords.isWithdrawal("Bar Atmosfera Tirane", keywords: keywords, exclusions: exclusions),
                        "A merchant containing 'atm' inside a word must not be tagged")
-        XCTAssertFalse(ATMKeywords.isWithdrawal(nil, keywords: keywords))
-        XCTAssertFalse(ATMKeywords.isWithdrawal("Spar Market", keywords: keywords))
+        XCTAssertFalse(ATMKeywords.isWithdrawal(nil, keywords: keywords, exclusions: exclusions))
+        XCTAssertFalse(ATMKeywords.isWithdrawal("Spar Market", keywords: keywords, exclusions: exclusions))
+    }
+
+    func test_feeRows_areNeverWithdrawals() {
+        // A commission row is SPEND, not money entering the wallet — tagging it a transfer
+        // would hide the fee from totals AND fabricate a wallet inflow (review finding).
+        XCTAssertFalse(ATMKeywords.isWithdrawal("KOMISION TERHEQJE ATM", keywords: keywords, exclusions: exclusions))
+        XCTAssertFalse(ATMKeywords.isWithdrawal("Komision terheqje ne bankomat", keywords: keywords, exclusions: exclusions))
+        XCTAssertFalse(ATMKeywords.isWithdrawal("Cash Withdrawal Fee", keywords: keywords, exclusions: exclusions))
+        XCTAssertFalse(ATMKeywords.isWithdrawal("ATM FEE", keywords: keywords, exclusions: exclusions))
+        XCTAssertFalse(ATMKeywords.isWithdrawal("Tarifa terheqje", keywords: keywords, exclusions: exclusions))
+    }
+
+    func test_albanianInflectedForms_match() {
+        XCTAssertTrue(ATMKeywords.isWithdrawal("TERHEQJA NGA BANKOMATI", keywords: keywords, exclusions: exclusions))
+        XCTAssertTrue(ATMKeywords.isWithdrawal("Tërheqjes cash", keywords: keywords, exclusions: exclusions))
     }
 
     func test_rowMapper_tagsATMDebitAsTransfer() {

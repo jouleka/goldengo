@@ -13,7 +13,8 @@ public struct StatementProfile: Sendable {
     public var amountKeywords: [String]      // for single-signed-column banks
     public var idKeywords: [String]
     public var skipRowKeywords: [String]     // substrings marking non-transaction rows
-    public var atmKeywords: [String] = []    // descriptions marking ATM withdrawals → .transfer (GOL-95)
+    public var atmKeywords: [String] = []           // descriptions marking ATM withdrawals → .transfer (GOL-95)
+    public var atmExclusionKeywords: [String] = []  // fee/commission wording that vetoes the match — a fee is spend
 
     public static let all: [StatementProfile] = [.raiffeisenAlbania, .generic]
 
@@ -28,7 +29,8 @@ public struct StatementProfile: Sendable {
         amountKeywords: [],
         idKeywords: ["referenca", "reference", "ref"],
         skipRowKeywords: ["balanca", "numri i veprimeve", "limit overdraft", "ledger balance", "dispo balance", "nxjerrje llogarie", "data e transaksionit"],
-        atmKeywords: ["terheqje", "tërheqje", "atm", "bankomat", "cash withdrawal"])
+        atmKeywords: ["terheqje", "terheqja", "terheqjes", "atm", "bankomat", "bankomati", "bankomatit", "cash withdrawal"],
+        atmExclusionKeywords: ["komision", "komisioni", "commission", "fee", "tarifa", "tarife", "provizion"])
 
     public static let generic = StatementProfile(
         id: "generic",
@@ -41,7 +43,8 @@ public struct StatementProfile: Sendable {
         amountKeywords: ["amount", "value", "vlera", "shuma"],
         idKeywords: ["reference", "ref", "id", "transaction"],
         skipRowKeywords: ["opening balance", "closing balance", "balanca"],
-        atmKeywords: ["atm", "cash withdrawal", "terheqje", "bankomat"])
+        atmKeywords: ["atm", "cash withdrawal", "terheqje", "terheqja", "bankomat", "bankomati"],
+        atmExclusionKeywords: ["komision", "komisioni", "commission", "fee", "tarifa", "tarife", "provizion"])
 
     /// Best-match mapping from a header row, trying each known profile in order.
     public static func detectMapping(header: [String], currency: CurrencyCode) -> ColumnMapping? {
@@ -67,6 +70,7 @@ public struct StatementProfile: Sendable {
                 groupingSeparator: p.groupingSeparator,
                 currency: currency)
             mapping.atmKeywords = p.atmKeywords
+            mapping.atmExclusionKeywords = p.atmExclusionKeywords
             return mapping
         }
         return nil

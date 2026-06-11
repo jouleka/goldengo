@@ -70,7 +70,9 @@ public struct RaiffeisenAlbaniaParser: BankStatementParser {
                 .flatMap { $0.isEmpty ? nil : $0 }
             var kind: TransactionKind = amt < 0 ? .expense : .income
             if kind == .expense,
-               ATMKeywords.isWithdrawal(merchant, keywords: StatementProfile.raiffeisenAlbania.atmKeywords) {
+               ATMKeywords.isWithdrawal(merchant,
+                                        keywords: StatementProfile.raiffeisenAlbania.atmKeywords,
+                                        exclusions: StatementProfile.raiffeisenAlbania.atmExclusionKeywords) {
                 kind = .transfer   // ATM withdrawal feeds the wallet (GOL-95)
             }
             out.append(NormalizedTransaction(

@@ -78,6 +78,47 @@ final class WalletTests: XCTestCase {
         XCTAssertEqual(total, 0, "A withdrawal is not spend — the double-count ends here")
     }
 
+    func test_reimport_convergesKindSiblings_neverDuplicates() async throws {
+        // kind is baked into the composite dedupeKey: an ATM row imported PRE-feature persisted
+        // as .expense; re-importing the same statement now maps it to .transfer. The sibling-kind
+        // probe must converge the pair onto ONE record, retagged .transfer (review HIGH finding).
+        let store = try makeStore()
+        let asExpense = NormalizedTransaction(
+            externalID: nil, amount: 10000, currency: .all, date: day(2026, 6, 2),
+            rawMerchant: "TERHEQJE ATM", kind: .expense, accountRef: "statement")
+        let asTransfer = NormalizedTransaction(
+            externalID: nil, amount: 10000, currency: .all, date: day(2026, 6, 2),
+            rawMerchant: "TERHEQJE ATM", kind: .transfer, accountRef: "statement")
+        _ = try await store.ingest(asExpense, source: .imported)          // pre-feature import
+        let outcome = try await store.ingest(asTransfer, source: .imported)   // re-import today
+        XCTAssertEqual(outcome, .merged, "Same statement row — never a second record")
+        let count = try await store.expenseCount()
+        XCTAssertEqual(count, 1)
+        let total = try await store.todayTotal(in: .all, rates: SeedRates.table)
+        XCTAssertEqual(total, 0, "The converged record is a transfer — the old double-count heals")
+        // Reverse arrival order: an expense copy arriving when the transfer exists also merges,
+        // and the record STAYS a transfer (keyword tagging is the more informed signal).
+        let reverse = try await store.ingest(asExpense, source: .imported)
+        XCTAssertEqual(reverse, .merged)
+        let countAfter = try await store.expenseCount()
+        XCTAssertEqual(countAfter, 1)
+        let totalAfter = try await store.todayTotal(in: .all, rates: SeedRates.table)
+        XCTAssertEqual(totalAfter, 0, "Never downgraded back to spend")
+        // Fresh pair, reverse creation order: transfer stored first (post-feature import), an
+        // expense copy arrives later (e.g. a keyword-less CSV of the same period) — converges too.
+        let t2 = NormalizedTransaction(externalID: nil, amount: 5000, currency: .all,
+                                       date: day(2026, 6, 3), rawMerchant: "TERHEQJE ATM",
+                                       kind: .transfer, accountRef: "statement")
+        let e2 = NormalizedTransaction(externalID: nil, amount: 5000, currency: .all,
+                                       date: day(2026, 6, 3), rawMerchant: "TERHEQJE ATM",
+                                       kind: .expense, accountRef: "statement")
+        _ = try await store.ingest(t2, source: .imported)
+        let o2 = try await store.ingest(e2, source: .imported)
+        XCTAssertEqual(o2, .merged)
+        let final = try await store.expenseCount()
+        XCTAssertEqual(final, 2, "Two distinct withdrawals total — each a single converged record")
+    }
+
     func test_nonALLFlows_doNotTouchTheLekWallet() async throws {
         let store = try makeStore()
         _ = try await store.recordWalletCount(tally([1000: 3]), at: day(2026, 6, 1))

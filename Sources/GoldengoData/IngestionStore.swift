@@ -91,6 +91,22 @@ public actor IngestionStore {
             try merge(existing, with: tx, source: source)
             return .merged
         }
+        // GOL-95: kind is baked into the composite dedupeKey, so the SAME statement row keyed
+        // pre-feature as an EXPENSE and re-imported now as a TRANSFER (or arriving expense-keyed
+        // from a keyword-less CSV when the transfer copy exists) would slip past the exact match
+        // and duplicate. Probe the sibling-kind key and converge the pair on .transfer — the
+        // keyword tagging is the more informed signal, and retagging in place also heals that
+        // row's old withdrawal double-count.
+        if source == .imported, let siblingKey = Self.transferSiblingKey(for: tx) {
+            var sfd = FetchDescriptor<ExpenseRecord>(
+                predicate: #Predicate { $0.dedupeKey == siblingKey && $0.isArchived == false })
+            sfd.fetchLimit = 1
+            if let sibling = try modelContext.fetch(sfd).first {
+                sibling.kindRaw = TransactionKind.transfer.rawValue
+                try merge(sibling, with: tx, source: source)
+                return .merged
+            }
+        }
         // Cross-source reconciliation: an imported statement row that is very likely the same
         // purchase as a recent hands-free (.automatic) capture merges into it rather than
         // double-counting. Conservative on purpose — see reconcileImportedAgainstAutomatic.
@@ -106,6 +122,21 @@ public actor IngestionStore {
         try linkToConfirmedSubscription(rec)
         try modelContext.save()
         return .inserted
+    }
+
+    /// The opposite-kind composite key for an expense↔transfer pair, or nil for every other
+    /// transaction (provider-keyed rows and income are never kind-ambiguous). GOL-95.
+    private static func transferSiblingKey(for tx: NormalizedTransaction) -> String? {
+        let key = tx.dedupeKey
+        guard key.hasPrefix("cmp:") else { return nil }
+        switch tx.kind {
+        case .transfer where key.hasSuffix("|" + TransactionKind.transfer.rawValue):
+            return String(key.dropLast(TransactionKind.transfer.rawValue.count)) + TransactionKind.expense.rawValue
+        case .expense where key.hasSuffix("|" + TransactionKind.expense.rawValue):
+            return String(key.dropLast(TransactionKind.expense.rawValue.count)) + TransactionKind.transfer.rawValue
+        default:
+            return nil
+        }
     }
 
     /// Merge an incoming transaction into an existing record: refresh provenance/merchant but keep

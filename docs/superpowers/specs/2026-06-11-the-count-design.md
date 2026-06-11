@@ -101,3 +101,15 @@ Count → save tally → outcome { counted, expected, drift } → baseline := th
 ## Out of scope (cycle 2 ticket, explicit)
 
 - Withdrawal half-life + next-ATM-run prediction; fog-in-notes rendering; Home card/widget surface; EUR/USD wallets; positive-drift income ghosts; Kusur Keypad (rides this substrate later); count editing; retro-tagging historical ATM rows.
+
+## Revision after adversarial review (same day)
+
+Three review lenses confirmed 7 distinct defects (13 raw findings, heavily cross-confirmed); all fixed before merge:
+
+- **Sibling-kind dedupe convergence:** `kind` is part of the composite dedupeKey, so the same ATM row keyed pre-feature as an *expense* and re-imported as a *transfer* (or arriving expense-keyed from a keyword-less CSV when the transfer copy exists) slipped past the exact match and duplicated. `ingest` now probes the opposite-kind composite key for expense↔transfer pairs and converges the pair on **`.transfer`** — re-importing an old statement heals that row's withdrawal double-count in place. (This refines "future imports only": bulk history is still untouched, but re-imported rows converge.)
+- **Fee rows are spend, never inflows:** `atmExclusionKeywords` ("komision", "fee", "tarifa", …) veto the withdrawal match before it is attempted — "KOMISION TERHEQJE ATM" stays an expense. Albanian inflected forms ("terheqja", "bankomati", …) added to the positive lists.
+- **An empty wallet is countable:** the zero-total guard on Save is gone — a full drain must be reconcilable.
+- **Double-tap guards** on Save count and Keep it (synchronous `busy` flag before the first await — unique keys never dedupe).
+- **First-count copy** says "Baseline set — your wallet starts here…" (nil drift is not zero drift).
+
+Accepted limitations added: a failed-withdrawal *reversal credit* is not netted against its debit (the transfer inflow stands until the next count's drift absorbs it — rare, self-correcting); a mis-tagged transfer row has no kind-edit UI in v1 (delete the row and hand-log the spend, or recount).

@@ -9,6 +9,9 @@ public struct WalletCountView: View {
     @State private var model: SourcesModel
     @State private var tally = DenominationTally()
     @State private var outcome: WalletCountOutcome?
+    /// Set synchronously before the first await — a double-tap on Save/Keep must collapse to
+    /// one write (unique keys never dedupe; the GOL-92/93 lesson applied here too).
+    @State private var busy = false
     @Environment(\.dismiss) private var dismiss
     public init(model: SourcesModel) { _model = State(initialValue: model) }
 
@@ -38,14 +41,18 @@ public struct WalletCountView: View {
                 denominationRow(d)
             }
             Button {
+                guard !busy else { return }
+                busy = true
                 GoldengoHaptics.spendLanded()
-                Task { outcome = await model.countWallet(tally) }
+                Task { outcome = await model.countWallet(tally); busy = false }
             } label: {
                 Text("Save count").font(.headline).frame(maxWidth: .infinity, minHeight: 54)
             }
             .background(GoldengoTheme.accent).foregroundStyle(.black)
             .clipShape(RoundedRectangle(cornerRadius: GoldengoTheme.Radius.control, style: .continuous))
-            .disabled(tally.total == 0)
+            .disabled(busy)
+            // No zero-total guard: an honestly EMPTY wallet is a valid truth — a full drain
+            // must be countable, or it could never be reconciled (review finding).
         }
     }
 
@@ -75,6 +82,8 @@ public struct WalletCountView: View {
                      + " slipped by since the last count — keep it as street money?")
                     .font(.body).foregroundStyle(.secondary)
                 Button {
+                    guard !busy else { return }
+                    busy = true
                     GoldengoHaptics.spendLanded()
                     Task { await model.keepDrift(-drift); dismiss() }
                 } label: {
@@ -82,11 +91,17 @@ public struct WalletCountView: View {
                 }
                 .background(GoldengoTheme.accent).foregroundStyle(.black)
                 .clipShape(RoundedRectangle(cornerRadius: GoldengoTheme.Radius.control, style: .continuous))
+                .disabled(busy)
                 Button("Let it go") { dismiss() }
                     .font(.caption).foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity)
             } else {
-                if let drift = o.drift, drift > 0 {
+                if o.expected == nil {
+                    // First-ever count: there were no books to agree with — say what happened.
+                    Text("Baseline set — your wallet starts here at "
+                         + Money(amount: o.countedTotal, currency: .all).formatted() + ".")
+                        .font(.body).foregroundStyle(.secondary)
+                } else if let drift = o.drift, drift > 0 {
                     Text("Your wallet is " + Money(amount: drift, currency: .all).formatted()
                          + " ahead of the books — baseline updated.")
                         .font(.body).foregroundStyle(.secondary)

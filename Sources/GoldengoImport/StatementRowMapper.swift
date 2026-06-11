@@ -31,7 +31,9 @@ public enum StatementRowMapper {
 
         let merchant = field(m.merchantIndex)
         var kindFinal = kind
-        if kindFinal == .expense, ATMKeywords.isWithdrawal(merchant, keywords: m.atmKeywords) {
+        if kindFinal == .expense,
+           ATMKeywords.isWithdrawal(merchant, keywords: m.atmKeywords,
+                                    exclusions: m.atmExclusionKeywords) {
             kindFinal = .transfer   // money moved to the wallet, not spend (GOL-95)
         }
         let ext = field(m.externalIDIndex)
