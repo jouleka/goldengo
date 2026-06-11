@@ -237,8 +237,15 @@ public actor IngestionStore {
         return CurrencyConverter(table: rates).sum(monies, to: displayCurrency)
     }
 
+    /// Recompose the shared widget summaries (today-total + pocket claim) without a save.
+    /// Called on app launch so an update/install never leaves the lock screen asserting a
+    /// stale or missing claim until the next save (review: first-run gap).
+    public func refreshSharedSummaries() throws { try refreshSharedTodayTotal() }
+
     /// Recompute the widget's today-total in the user's preferred currency and publish it.
-    private func refreshSharedTodayTotal() throws {
+    /// Internal, not private: every mutating path must end here — the editing paths route
+    /// through it too (review: edits/deletes bypassed the choke point, freezing the claim).
+    func refreshSharedTodayTotal() throws {
         let display = SharedSummary().readPreferredCurrency()
         let rates = ExchangeRateCache().load() ?? SeedRates.table
         let total = try todayTotal(in: display, rates: rates)

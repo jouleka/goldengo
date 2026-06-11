@@ -10,6 +10,7 @@ extension IngestionStore {
         r.isArchived = true
         r.updatedAt = .now
         try modelContext.save()
+        try refreshSharedTodayTotal()   // corrections must reach the lock screen too (review)
     }
 
     /// Undo a soft-delete by clearing the `isArchived` tombstone, bringing the expense back into
@@ -23,6 +24,7 @@ extension IngestionStore {
         r.isArchived = false
         r.updatedAt = .now
         try modelContext.save()
+        try refreshSharedTodayTotal()
     }
 
     /// Edit an existing expense's amount, merchant, note, category, date, and funding pin. An
@@ -48,6 +50,7 @@ extension IngestionStore {
         }
         r.updatedAt = .now
         try modelContext.save()
+        try refreshSharedTodayTotal()
     }
 
     private func fetchActiveExpense(dedupeKey key: String) throws -> ExpenseRecord? {

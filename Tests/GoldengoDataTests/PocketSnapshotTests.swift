@@ -59,10 +59,35 @@ final class PocketSnapshotTests: XCTestCase {
     func test_sharedPayload_writtenOnSave_andRoundTrips() async throws {
         let suite = "pocket-test-\(UUID().uuidString)"
         let summary = SharedSummary(suiteName: suite)
-        let p = PocketPayload(revealedInline: "7 500 L", hiddenInline: "even",
-                              revealedLines: ["7 500 L — even"], hiddenLines: ["Lek — even"], hasWallet: true)
+        let p = PocketPayload(lines: [
+            .init(currencyCode: "ALL", expected: 7500, typicalCashDay: 500, lastMovement: day(2026, 6, 9)),
+        ], hasWallet: true)
         summary.writePocketPayload(p)
         XCTAssertEqual(summary.readPocketPayload(), p)
         XCTAssertNil(SharedSummary(suiteName: "pocket-empty-\(UUID().uuidString)").readPocketPayload())
+    }
+
+    // Review: corrections must reach the lock screen. Delete/restore/update save directly —
+    // each must republish the pocket payload, or the widget asserts pre-correction money.
+    func test_editingPaths_republishThePocketClaim() async throws {
+        let store = try makeStore()
+        _ = try await store.setWalletBalance(9876, currency: .all, tally: nil, at: day(2026, 6, 1))
+        let key = try await store.logManual(amount: 1111, currency: .all, merchant: "Pazar",
+                                            categoryName: nil, date: day(2026, 6, 2))
+        func publishedExpected() -> Decimal? {
+            SharedSummary().readPocketPayload()?.lines.first { $0.currencyCode == "ALL" }?.expected
+        }
+        XCTAssertEqual(publishedExpected(), 8765, "log drains the published claim")
+
+        try await store.deleteExpense(dedupeKey: key)
+        XCTAssertEqual(publishedExpected(), 9876, "delete must republish, not freeze, the claim")
+
+        try await store.restoreExpense(dedupeKey: key)
+        XCTAssertEqual(publishedExpected(), 8765)
+
+        try await store.updateExpense(dedupeKey: key, amount: 2222, merchant: "Pazar",
+                                      categoryName: nil, date: day(2026, 6, 2),
+                                      fundedBySourceID: FundingPin.wallet)
+        XCTAssertEqual(publishedExpected(), 7654, "an amount edit must republish the claim")
     }
 }
