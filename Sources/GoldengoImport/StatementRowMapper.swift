@@ -30,12 +30,16 @@ public enum StatementRowMapper {
         }
 
         let merchant = field(m.merchantIndex)
+        var kindFinal = kind
+        if kindFinal == .expense, ATMKeywords.isWithdrawal(merchant, keywords: m.atmKeywords) {
+            kindFinal = .transfer   // money moved to the wallet, not spend (GOL-95)
+        }
         let ext = field(m.externalIDIndex)
         return NormalizedTransaction(
             externalID: (ext?.isEmpty == false) ? ext : nil,
             amount: amount, currency: m.currency, date: date,
             rawMerchant: (merchant?.isEmpty == false) ? merchant : nil,
-            kind: kind, accountRef: "statement")
+            kind: kindFinal, accountRef: "statement")
     }
 
     static func date(_ s: String, formats: [String]) -> Date? {

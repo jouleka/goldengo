@@ -100,7 +100,8 @@ final class RaiffeisenAlbaniaParserTests: XCTestCase {
         """
         let txns = RaiffeisenAlbaniaParser().parse(text, currency: .all)
         XCTAssertEqual(txns.count, 1)
-        XCTAssertEqual(txns[0].kind, .expense)
+        // GOL-95: an ATM-described debit is a withdrawal feeding the wallet, not spend.
+        XCTAssertEqual(txns[0].kind, .transfer)
         XCTAssertEqual(txns[0].amount, 1234)
         XCTAssertEqual(txns[0].rawMerchant, "ATM-REF FAKE LOCATION")
     }

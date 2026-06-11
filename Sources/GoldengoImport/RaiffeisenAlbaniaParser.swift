@@ -68,7 +68,11 @@ public struct RaiffeisenAlbaniaParser: BankStatementParser {
             let merchant = Range(m.range(at: 2), in: line)
                 .map { String(line[$0]).trimmingCharacters(in: .whitespaces) }
                 .flatMap { $0.isEmpty ? nil : $0 }
-            let kind: TransactionKind = amt < 0 ? .expense : .income
+            var kind: TransactionKind = amt < 0 ? .expense : .income
+            if kind == .expense,
+               ATMKeywords.isWithdrawal(merchant, keywords: StatementProfile.raiffeisenAlbania.atmKeywords) {
+                kind = .transfer   // ATM withdrawal feeds the wallet (GOL-95)
+            }
             out.append(NormalizedTransaction(
                 externalID: nil, amount: abs(amt), currency: currency, date: date,
                 rawMerchant: merchant, kind: kind, accountRef: "statement"))

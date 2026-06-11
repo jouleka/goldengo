@@ -15,6 +15,10 @@ public struct ColumnMapping: Sendable, Equatable {
     public var decimalSeparator: String
     public var groupingSeparator: String
     public var currency: CurrencyCode
+    /// Descriptions matching these (word-boundary, diacritic-insensitive) retag a debit row
+    /// as `.transfer` — an ATM withdrawal feeding the wallet, not spend (GOL-95). Defaulted
+    /// so existing construction sites are untouched; `detectMapping` fills it from the profile.
+    public var atmKeywords: [String] = []
 
     public init(dateIndex: Int, amount: AmountStyle, merchantIndex: Int, externalIDIndex: Int?,
                 dateFormats: [String], decimalSeparator: String, groupingSeparator: String, currency: CurrencyCode) {
