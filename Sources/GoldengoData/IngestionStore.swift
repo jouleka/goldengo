@@ -253,13 +253,14 @@ public actor IngestionStore {
                      categoryName: categoryName, source: .automatic, keyPrefix: "auto", date: date)
     }
 
-    /// Shared insert for the user-facing log paths (`logManual`, `logAutomatic`). A unique
-    /// `<keyPrefix>:<uuid>` dedupeKey means these are never collapsed with each other — only an
-    /// imported statement row reconciles into an `.automatic` entry (see `ingest`).
+    /// Shared insert for the user-facing log paths (`logManual`, `logAutomatic`) and the wallet
+    /// drift entry (`logDrift`, GOL-95 — lives in another file, hence internal not private).
+    /// A unique `<keyPrefix>:<uuid>` dedupeKey means these are never collapsed with each other —
+    /// only an imported statement row reconciles into an `.automatic` entry (see `ingest`).
     @discardableResult
-    private func logEntry(amount: Decimal, currency: CurrencyCode, merchant: String?, note: String?,
-                          categoryName: String?, source: ExpenseSource, keyPrefix: String,
-                          date: Date = .now, fundedBySourceID: String? = nil) throws -> String {
+    func logEntry(amount: Decimal, currency: CurrencyCode, merchant: String?, note: String?,
+                  categoryName: String?, source: ExpenseSource, keyPrefix: String,
+                  date: Date = .now, fundedBySourceID: String? = nil) throws -> String {
         let key = "\(keyPrefix):\(UUID().uuidString)"
         let cleanNote = note?.trimmingCharacters(in: .whitespacesAndNewlines)
         let rec = ExpenseRecord(amount: amount, currencyCode: currency.rawValue, date: date,
