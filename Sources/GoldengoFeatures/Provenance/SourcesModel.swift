@@ -14,6 +14,11 @@ public final class SourcesModel {
     public private(set) var loadFailed = false
     /// The wallet's per-currency lines (GOL-95 v2); empty before the first balance is set.
     public private(set) var wallet: [WalletBalance] = []
+    /// One-shot: a pocket-widget tap should land ON the Adjust screen (GOL-98). In-memory on
+    /// purpose — a persisted flag outlives a killed launch and replays the navigation days
+    /// later as an unprompted sheet (review); losing one tap to a process death is the
+    /// acceptable failure, surprise navigation is not.
+    public var pendingWalletAdjust = false
 
     public init(store: IngestionStore, currency: CurrencyCode = .all) {
         self.store = store; self.currency = currency

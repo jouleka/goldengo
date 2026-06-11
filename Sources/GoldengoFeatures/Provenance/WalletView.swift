@@ -95,10 +95,15 @@ public struct WalletView: View {
             .background(Color.goldengoBackground.ignoresSafeArea())
             .navigationTitle("Wallet")
             // GOL-98: a widget tap pushes straight to Adjust — the reconcile is the point.
+            // onChange too: a tap can land while this sheet is ALREADY visible (review —
+            // onAppear won't re-fire for a live view, and the tap must not silently die).
             .navigationDestination(isPresented: $adjustPresented) {
                 AdjustWalletView(model: model, currency: autoOpenAdjust ?? .all)
             }
             .onAppear { if autoOpenAdjust != nil { adjustPresented = true } }
+            .onChange(of: autoOpenAdjust) { _, target in
+                if target != nil { adjustPresented = true }
+            }
         }
     }
 }

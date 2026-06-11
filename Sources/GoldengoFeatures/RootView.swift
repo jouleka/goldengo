@@ -164,6 +164,9 @@ public struct RootView: View {
             checkReEntry()            // cold-launch re-entry check (onChange(scenePhase) misses the initial .active)
             checkRitual()             // then the daily check-in (Re-entry takes precedence)
             await recentModel.load()  // Home is the landing tab
+            // Recompose the widget summaries so an update/install (or any pre-fix edit) never
+            // leaves the lock screen asserting a stale or missing pocket claim (GOL-98 review).
+            try? await store.refreshSharedSummaries()
         }
         .onChange(of: selectedTab) { _, newTab in
             // Reload the destination tab's data on entry so adds/imports show without a manual refresh.
@@ -191,7 +194,7 @@ public struct RootView: View {
             if Self.isStatementFile(url) {
                 importFile = ImportFile(url: url)            // Share-to-Goldengo: import the shared file
             } else if url.host == "wallet" {
-                SharedSummary().setPendingWalletAdjust(true)   // GOL-98: land on Adjust
+                sourcesModel.pendingWalletAdjust = true   // GOL-98: land on Adjust (in-memory one-shot)
                 route(toTab: 5)
             } else if let tab = Self.tab(forDeepLink: url) {
                 route(toTab: tab)

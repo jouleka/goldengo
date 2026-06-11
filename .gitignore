@@ -31,3 +31,4 @@ secrets/
 
 # Device build derived data
 AppProject/.build-device/
+AppProject/.build-sim/

@@ -63,8 +63,9 @@ struct PocketProvider: TimelineProvider {
         let payload = s.readPocketPayload()
         let reveal = s.read().revealOnLockScreen
         let now = Date.now
-        // One entry per upcoming midnight so "since Tue" wording could go stale at most a day
-        // without app opens; saves/reconciles reload all timelines anyway (existing call).
+        // The payload is DATA; each entry re-renders it at its own date (content(at:)), so fog
+        // advances at the midnights with zero app involvement, and the .atEnd re-request
+        // recomposes at the then-current now — the claim can never freeze at the last save.
         let cal = Calendar.current
         var entries = [PocketEntry(date: now, payload: payload, reveal: reveal)]
         for offset in 1...2 {
@@ -79,14 +80,15 @@ struct PocketProvider: TimelineProvider {
 struct PocketWidgetView: View {
     @Environment(\.widgetFamily) private var family
     var entry: PocketEntry
+    private var content: PocketContent? { entry.payload.map { $0.content(at: entry.date) } }
     var body: some View {
         Group {
             if family == .accessoryInline {
-                Text(entry.payload.map { entry.reveal ? $0.revealedInline : $0.hiddenInline } ?? "Set your wallet")
+                Text(content.map { entry.reveal ? $0.revealedInline : $0.hiddenInline } ?? "Set your wallet")
             } else {
                 VStack(alignment: .leading, spacing: 2) {
-                    if let payload = entry.payload, payload.hasWallet {
-                        ForEach((entry.reveal ? payload.revealedLines : payload.hiddenLines).prefix(3),
+                    if let content, entry.payload?.hasWallet == true {
+                        ForEach((entry.reveal ? content.revealedLines : content.hiddenLines).prefix(3),
                                 id: \.self) { line in
                             Text(line).font(.caption2).minimumScaleFactor(0.7).lineLimit(1)
                         }

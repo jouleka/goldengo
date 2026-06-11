@@ -9,16 +9,24 @@ public struct SourcesView: View {
     @State private var showAddIncome = false
     @State private var showCount = false
     @State private var walletAutoAdjust = false   // GOL-98: widget tap lands ON the Adjust screen
-    @Environment(\.scenePhase) private var scenePhase
     public init(model: SourcesModel) { _model = State(initialValue: model) }
 
     /// Consume the one-shot widget deep-link flag: open the wallet sheet straight at Adjust.
     private func consumePendingWalletAdjust() {
-        let summary = SharedSummary()
-        guard summary.readPendingWalletAdjust() else { return }
-        summary.setPendingWalletAdjust(false)
+        guard model.pendingWalletAdjust else { return }
+        model.pendingWalletAdjust = false
         walletAutoAdjust = true
         showCount = true
+    }
+
+    /// Where a widget tap lands (GOL-98 review): the wallet's own composition decides — ALL
+    /// when tracked, else the sole tracked currency; nil (the wallet list) when empty or
+    /// ambiguous, so a tap can never open a numpad for a currency the user doesn't carry.
+    private func walletAdjustTarget() -> CurrencyCode? {
+        let codes = model.wallet.map(\.currencyCode)
+        if codes.contains(CurrencyCode.all.rawValue) { return .all }
+        if codes.count == 1, let only = codes.first { return CurrencyCode(only) }
+        return nil
     }
 
     public var body: some View {
@@ -101,10 +109,12 @@ public struct SourcesView: View {
                 walletAutoAdjust = false
                 Task { await model.load() }
             }) {
-                WalletView(model: model, autoOpenAdjust: walletAutoAdjust ? .all : nil)
+                WalletView(model: model, autoOpenAdjust: walletAutoAdjust ? walletAdjustTarget() : nil)
             }
             .task { await model.load(); consumePendingWalletAdjust() }
-            .onChange(of: scenePhase) { _, p in if p == .active { consumePendingWalletAdjust() } }
+            // A tap can arrive while this tab is already live (warm open, or the wallet sheet
+            // itself is up) — observe the flag, don't wait for scene phases (GOL-98 review).
+            .onChange(of: model.pendingWalletAdjust) { _, on in if on { consumePendingWalletAdjust() } }
         }
     }
 }
