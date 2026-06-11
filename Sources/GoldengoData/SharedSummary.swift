@@ -70,6 +70,11 @@ public struct SharedSummary {
     public func setReflected(on date: Date = .now) { defaults.set(date, forKey: Self.reflectedDateKey) }
     public func readReflectedDate() -> Date? { defaults.object(forKey: Self.reflectedDateKey) as? Date }
 
+    // GOL-97: a same-day skip marker so the morning prompt presents at most once per day.
+    public static let ritualSkippedDateKey = "ritualSkippedDate"
+    public func setMorningSkipped(on date: Date = .now) { defaults.set(date, forKey: Self.ritualSkippedDateKey) }
+    public func readMorningSkippedDate() -> Date? { defaults.object(forKey: Self.ritualSkippedDateKey) as? Date }
+
     // GOL-93 extras: schedulable nudge times + the intention journal.
     public static let ritualMorningMinutesKey = "ritualMorningMinutes"
     public static let ritualEveningMinutesKey = "ritualEveningMinutes"

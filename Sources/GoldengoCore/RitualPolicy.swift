@@ -12,14 +12,16 @@ public enum RitualPolicy {
     public static let eveningEndHour = 4
 
     public static func prompt(now: Date, intentionDate: Date?, reflectedDate: Date?,
-                              calendar: Calendar = .current) -> RitualPrompt {
+                              skippedDate: Date? = nil, calendar: Calendar = .current) -> RitualPrompt {
         let hour = calendar.component(.hour, from: now)
 
-        // Morning: in the morning window AND no intention captured yet today. The morning window
-        // (5..<12) never crosses midnight, so a plain same-calendar-day check is correct here.
+        // Morning: in the morning window AND no intention captured yet today AND not skipped
+        // today (GOL-97: Skip means skip — at most one morning prompt per day). The morning
+        // window (5..<12) never crosses midnight, so plain same-calendar-day checks are correct.
         if morningHours.contains(hour) {
             let setToday = intentionDate.map { calendar.isDate($0, inSameDayAs: now) } ?? false
-            if !setToday { return .morning }
+            let skippedToday = skippedDate.map { calendar.isDate($0, inSameDayAs: now) } ?? false
+            if !setToday && !skippedToday { return .morning }
         }
         // Evening: in the evening window (18:00..04:00, wraps past midnight) AND not yet reflected
         // THIS evening session. Suppression is keyed on the session — NOT the calendar day — because

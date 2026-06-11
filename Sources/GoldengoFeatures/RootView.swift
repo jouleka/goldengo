@@ -88,7 +88,8 @@ public struct RootView: View {
         guard summary.ritualEnabled() else { return }
         let prompt = RitualPolicy.prompt(now: .now,
                                          intentionDate: summary.readIntentionDate(),
-                                         reflectedDate: summary.readReflectedDate())
+                                         reflectedDate: summary.readReflectedDate(),
+                                         skippedDate: summary.readMorningSkippedDate())
         if prompt != .none { ritualSheet = RitualSheet(kind: prompt) }
     }
 

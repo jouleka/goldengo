@@ -27,6 +27,25 @@ final class RitualPolicyTests: XCTestCase {
                        RitualPolicy.defaultEveningNudgeMinutes)
     }
 
+    func test_skippedToday_suppressesMorning_forTheRestOfTheDay() {
+        // GOL-97: Skip must mean skip — at most one morning prompt per day, ever.
+        let r = RitualPolicy.prompt(now: at(9), intentionDate: nil, reflectedDate: nil,
+                                    skippedDate: at(7), calendar: cal)
+        XCTAssertEqual(r, .none)
+    }
+
+    func test_skippedYesterday_morningPromptsAgainToday() {
+        let r = RitualPolicy.prompt(now: at(8), intentionDate: nil, reflectedDate: nil,
+                                    skippedDate: at(8, day: 8), calendar: cal)
+        XCTAssertEqual(r, .morning, "A skip is for the day, not forever")
+    }
+
+    func test_skippedThisMorning_doesNotSuppressTheEvening() {
+        let r = RitualPolicy.prompt(now: at(20), intentionDate: nil, reflectedDate: nil,
+                                    skippedDate: at(7), calendar: cal)
+        XCTAssertEqual(r, .evening)
+    }
+
     func test_morningWindow_noIntentionToday_returnsMorning() {
         let r = RitualPolicy.prompt(now: at(8), intentionDate: nil, reflectedDate: nil, calendar: cal)
         XCTAssertEqual(r, .morning)

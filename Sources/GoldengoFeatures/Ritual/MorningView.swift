@@ -51,5 +51,13 @@ public struct MorningView: View {
         .contentShape(Rectangle())
         .onTapGesture { focused = false }     // tap-outside dismissal (no keyboard toolbar)
         .onAppear { focused = true }
+        // GOL-97: leaving without saving — Skip button OR an interactive swipe-down — marks the
+        // morning skipped so it never re-prompts today. (A save sets intentionDate, which already
+        // suppresses; the extra marker is harmless then.)
+        .onDisappear {
+            let summary = SharedSummary()
+            let savedToday = summary.readIntentionDate().map { Calendar.current.isDate($0, inSameDayAs: .now) } ?? false
+            if !savedToday { summary.setMorningSkipped(on: .now) }
+        }
     }
 }
