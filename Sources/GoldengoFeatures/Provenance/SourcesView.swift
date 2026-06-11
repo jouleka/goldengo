@@ -6,11 +6,40 @@ import GoldengoCore
 public struct SourcesView: View {
     @State private var model: SourcesModel
     @State private var showAddIncome = false
+    @State private var showCount = false
     public init(model: SourcesModel) { _model = State(initialValue: model) }
 
     public var body: some View {
         NavigationStack {
             List {
+                // The Count (GOL-95): the physical wallet as a place. Never prompted — opened.
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack {
+                        Label("In your wallet", systemImage: "wallet.bifold")
+                            .font(.subheadline.weight(.semibold))
+                        Spacer()
+                        if let w = model.wallet {
+                            Text("~" + Money(amount: w.expectedNow, currency: .all).formatted())
+                                .font(.subheadline.weight(.medium))
+                        }
+                    }
+                    HStack {
+                        if let w = model.wallet {
+                            Text("Counted " + w.baselineDate.formatted(.dateTime.day().month(.abbreviated)))
+                                .font(.caption).foregroundStyle(.secondary)
+                        } else {
+                            Text("Count your wallet to begin.")
+                                .font(.caption).foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        Button("Count") { showCount = true }
+                            .font(.caption.weight(.semibold))
+                            .buttonStyle(.bordered).tint(GoldengoTheme.accent)
+                    }
+                }
+                .padding(.vertical, 4)
+                .listRowBackground(Color.clear)
+
                 ForEach(model.snapshot?.sources ?? []) { b in
                     VStack(alignment: .leading, spacing: 6) {
                         HStack {
@@ -35,16 +64,19 @@ public struct SourcesView: View {
                     }
                     .listRowBackground(Color.clear)
                 }
+
+                // In-list empty state (not an .overlay — it must never cover the wallet card).
+                if (model.snapshot?.sources.isEmpty ?? true) && model.unaccountedText() == nil {
+                    ContentUnavailableView("No sources yet", systemImage: "tray",
+                        description: Text("Add where your money came from — a remittance, a cash withdrawal, your pay."))
+                        .frame(maxWidth: .infinity)
+                        .listRowBackground(Color.clear)
+                        .listRowSeparator(.hidden)
+                }
             }
             .scrollContentBackground(.hidden)
             .background(Color.goldengoBackground.ignoresSafeArea())
             .navigationTitle("Sources")
-            .overlay {
-                if (model.snapshot?.sources.isEmpty ?? true) && model.unaccountedText() == nil {
-                    ContentUnavailableView("No sources yet", systemImage: "tray",
-                        description: Text("Add where your money came from — a remittance, a cash withdrawal, your pay."))
-                }
-            }
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {
                     Button { showAddIncome = true } label: { Label("Add income", systemImage: "plus") }
@@ -54,6 +86,9 @@ public struct SourcesView: View {
                 AddIncomeView(model: model,
                               existingSources: (model.snapshot?.sources ?? []).map(\.name),
                               currency: model.currency, onDone: { showAddIncome = false })
+            }
+            .sheet(isPresented: $showCount, onDismiss: { Task { await model.load() } }) {
+                WalletCountView(model: model)
             }
             .task { await model.load() }
         }

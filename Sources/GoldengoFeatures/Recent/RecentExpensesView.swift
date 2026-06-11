@@ -454,7 +454,7 @@ public struct RecentExpensesView: View {
                             .accessibilityLabel("Auto-logged")
                     }
                 }
-                Text(r.categoryName ?? "Other")
+                Text(r.kind == .transfer ? "→ wallet" : (r.categoryName ?? "Other"))
                     .font(.caption).foregroundStyle(.secondary)
                 if let fundedBy = r.fundedBy {
                     // Quiet funding chip: the source's palette-color dot (matching its Sources-tab
@@ -475,7 +475,11 @@ public struct RecentExpensesView: View {
                 }
             }
             Spacer()
-            if r.kind == .income {
+            if r.kind == .transfer {
+                Text(Money(amount: r.amount, currency: CurrencyCode(r.currencyCode)).formatted())
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(.secondary)   // neutral: moved to the wallet, not earned or spent
+            } else if r.kind == .income {
                 Text("+" + Money(amount: r.amount, currency: CurrencyCode(r.currencyCode)).formatted())
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(.green)
