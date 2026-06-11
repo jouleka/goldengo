@@ -10,14 +10,22 @@ public struct WalletView: View {
     @State private var model: SourcesModel
     public init(model: SourcesModel) { _model = State(initialValue: model) }
 
-    /// Currencies offered for a first line, beyond what already exists.
-    private var addable: [CurrencyCode] {
-        [CurrencyCode.all, .eur, CurrencyCode("USD")]
+    /// Every catalog currency without a wallet line yet — the same catalog the Add-income and
+    /// Settings pickers use (rate-table driven), not a hardcoded shortlist. The common Albanian
+    /// pocket pair (lek, euro) is surfaced directly; the rest sit behind one "another currency" row.
+    private var untracked: [CurrencyCode] {
+        CurrencyCatalog.selectable(from: ExchangeRateCache().load() ?? SeedRates.table)
             .filter { c in !model.wallet.contains { $0.currencyCode == c.rawValue } }
     }
+    private var quickAdds: [CurrencyCode] { untracked.filter { $0 == .all || $0 == .eur } }
+    private var otherAdds: [CurrencyCode] { untracked.filter { $0 != .all && $0 != .eur } }
 
     /// Human label for a wallet line ("ALL" reads as the English word otherwise).
-    private func label(for code: String) -> String { code == "ALL" ? "Lek (ALL)" : code }
+    private func label(for code: String) -> String {
+        let name = Locale.current.localizedString(forCurrencyCode: code)
+        if code == "ALL" { return "Lek (ALL)" }
+        return name.map { "\($0) (\(code))" } ?? code
+    }
 
     public var body: some View {
         NavigationStack {
@@ -42,13 +50,33 @@ public struct WalletView: View {
                     }
                     .listRowBackground(Color.clear)
                 }
-                if !addable.isEmpty {
+                if !untracked.isEmpty {
                     Section {
-                        ForEach(addable, id: \.rawValue) { c in
+                        ForEach(quickAdds, id: \.rawValue) { c in
                             NavigationLink {
                                 AdjustWalletView(model: model, currency: c)
                             } label: {
                                 Label("Track \(label(for: c.rawValue)) cash", systemImage: "plus.circle")
+                                    .font(.subheadline).foregroundStyle(.secondary)
+                            }
+                            .listRowBackground(Color.clear)
+                        }
+                        if !otherAdds.isEmpty {
+                            NavigationLink {
+                                List(otherAdds, id: \.rawValue) { c in
+                                    NavigationLink {
+                                        AdjustWalletView(model: model, currency: c)
+                                    } label: {
+                                        Text(label(for: c.rawValue)).font(.subheadline)
+                                    }
+                                    .listRowBackground(Color.clear)
+                                }
+                                .listStyle(.plain)
+                                .scrollContentBackground(.hidden)
+                                .background(Color.goldengoBackground.ignoresSafeArea())
+                                .navigationTitle("Which currency?")
+                            } label: {
+                                Label("Track another currency", systemImage: "plus.circle")
                                     .font(.subheadline).foregroundStyle(.secondary)
                             }
                             .listRowBackground(Color.clear)
