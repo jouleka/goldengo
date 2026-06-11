@@ -243,6 +243,7 @@ public actor IngestionStore {
         let rates = ExchangeRateCache().load() ?? SeedRates.table
         let total = try todayTotal(in: display, rates: rates)
         SharedSummary().writeTodayTotal(Money(amount: total, currency: display).formatted())
+        try? refreshSharedPocket()   // GOL-98: the pocket claim rides the same choke point
 #if canImport(WidgetKit)
         WidgetCenter.shared.reloadAllTimelines()   // every save path (incl. the Apple Pay automation) refreshes the widget
 #endif

@@ -1,6 +1,9 @@
 import Foundation
 import SwiftData
 import GoldengoCore
+#if canImport(WidgetKit)
+import WidgetKit
+#endif
 
 /// One currency line of the wallet (GOL-95 v2). Sendable snapshot across the actor boundary.
 public struct WalletBalance: Sendable, Equatable, Identifiable {
@@ -44,6 +47,12 @@ extension IngestionStore {
         modelContext.insert(WalletCount(total: newTotal, tally: tally,
                                         currencyCode: currency.rawValue, date: date))
         try modelContext.save()
+        // GOL-98: a reconcile is the pocket claim's most important refresh — snap the lock
+        // screen immediately (logDrift above already refreshed via logEntry when a gap logged).
+        try? refreshSharedPocket()
+        #if canImport(WidgetKit)
+        WidgetCenter.shared.reloadAllTimelines()
+        #endif
         return outcome
     }
 

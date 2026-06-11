@@ -70,6 +70,17 @@ public struct SharedSummary {
     public func setReflected(on date: Date = .now) { defaults.set(date, forKey: Self.reflectedDateKey) }
     public func readReflectedDate() -> Date? { defaults.object(forKey: Self.reflectedDateKey) as? Date }
 
+    // GOL-98: the pocket widget's pre-rendered content (revealed + hidden variants).
+    public static let pocketPayloadKey = "pocketPayload"
+    public func writePocketPayload(_ p: PocketPayload) {
+        defaults.set((try? JSONEncoder().encode(p)) ?? Data(), forKey: Self.pocketPayloadKey)
+    }
+    public func readPocketPayload() -> PocketPayload? {
+        guard let data = defaults.data(forKey: Self.pocketPayloadKey),
+              let p = try? JSONDecoder().decode(PocketPayload.self, from: data) else { return nil }
+        return p
+    }
+
     // GOL-97: a same-day skip marker so the morning prompt presents at most once per day.
     public static let ritualSkippedDateKey = "ritualSkippedDate"
     public func setMorningSkipped(on date: Date = .now) { defaults.set(date, forKey: Self.ritualSkippedDateKey) }
