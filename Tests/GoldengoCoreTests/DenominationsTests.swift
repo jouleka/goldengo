@@ -16,8 +16,31 @@ final class DenominationsTests: XCTestCase {
         XCTAssertEqual(Denominations.notes(for: CurrencyCode("CHF")), [1000, 200, 100, 50, 20, 10])
         XCTAssertEqual(Denominations.notes(for: CurrencyCode("TRY")), [200, 100, 50, 20, 10, 5])
         // Unverified currencies get NO table — typed, never counted with invented note values.
-        XCTAssertTrue(Denominations.notes(for: CurrencyCode("JPY")).isEmpty)
-        XCTAssertTrue(Denominations.coins(for: CurrencyCode("RSD")).isEmpty)
+        XCTAssertTrue(Denominations.notes(for: CurrencyCode("UAH")).isEmpty)
+        XCTAssertTrue(Denominations.coins(for: CurrencyCode("RUB")).isEmpty)
+    }
+
+    func test_tableInvariants_holdForEverySupportedCurrency() {
+        XCTAssertGreaterThanOrEqual(Denominations.counterSupported.count, 20)
+        for code in Denominations.counterSupported {
+            let c = CurrencyCode(code)
+            let notes = Denominations.notes(for: c)
+            let coins = Denominations.coins(for: c)
+            let all = notes + coins
+            XCTAssertEqual(Set(all).count, all.count,
+                           "\(code): a value listed as both note and coin would collide ForEach ids in the counter grid")
+            XCTAssertTrue(all.allSatisfy { $0 > 0 }, "\(code): whole positive major units only")
+            XCTAssertEqual(notes, notes.sorted(by: >), "\(code): notes render largest-first")
+            XCTAssertEqual(coins, coins.sorted(by: >), "\(code): coins render largest-first")
+            XCTAssertFalse(notes.isEmpty, "\(code): a supported table must at least have notes")
+        }
+    }
+
+    func test_recentWithdrawals_areExcluded() {
+        XCTAssertFalse(Denominations.notes(for: CurrencyCode("DKK")).contains(1000),
+                       "1000-kr invalid since 2025-05-31 (Danmarks Nationalbank)")
+        XCTAssertFalse(Denominations.notes(for: CurrencyCode("INR")).contains(2000),
+                       "₹2000 withdrawn from circulation in 2023 (RBI)")
     }
 
     func test_tallyTotal() {
