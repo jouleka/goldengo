@@ -90,4 +90,30 @@ final class PocketSnapshotTests: XCTestCase {
                                       fundedBySourceID: FundingPin.wallet)
         XCTAssertEqual(publishedExpected(), 7654, "an amount edit must republish the claim")
     }
+
+    // The user's question, pinned: a wallet change (reconcile) must land in the published
+    // claim immediately — including the lower-reconcile path, where logDrift refreshes off the
+    // OLD baseline first and the new-baseline refresh must win (one of the review's rejected
+    // double-refresh findings; rejected precisely because the FINAL published value is correct).
+    func test_walletChange_publishesTheClaimImmediately() async throws {
+        let store = try makeStore()
+        func publishedExpected() -> Decimal? {
+            SharedSummary().readPocketPayload()?.lines.first { $0.currencyCode == "ALL" }?.expected
+        }
+        // First-ever set: the claim appears with exactly the typed number.
+        _ = try await store.setWalletBalance(5000, currency: .all, tally: nil, at: day(2026, 6, 1))
+        XCTAssertEqual(publishedExpected(), 5000, "a fresh wallet set must publish at once")
+        XCTAssertEqual(SharedSummary().readPocketPayload()?.hasWallet, true)
+
+        // Raise it — the higher baseline is published with no fabrication.
+        _ = try await store.setWalletBalance(8000, currency: .all, tally: nil, at: day(2026, 6, 2))
+        XCTAssertEqual(publishedExpected(), 8000, "a higher reconcile republishes the new baseline")
+
+        // Lower it — a gap auto-logs (logDrift refreshes off the OLD baseline mid-call), then
+        // the new baseline refresh must be what's left standing. No stale 8000, no double-count.
+        let outcome = try await store.setWalletBalance(6500, currency: .all, tally: nil, at: day(2026, 6, 3))
+        XCTAssertEqual(outcome.unaccountedLogged, 1500, "the 1 500 gap is logged Unaccounted")
+        XCTAssertEqual(publishedExpected(), 6500,
+                       "the lower reconcile's final published claim is the typed number, not the pre-gap value")
+    }
 }
