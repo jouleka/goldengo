@@ -8,7 +8,7 @@ struct GoldengoControl: ControlWidget {
     var body: some ControlWidgetConfiguration {
         StaticControlConfiguration(kind: "GoldengoQuickAddControl") {
             ControlWidgetButton(action: OpenQuickAddIntent()) {
-                Label("Add expense", systemImage: "plus.circle.fill")
+                Label("Add expense", systemImage: "plus")
             }
         }
         .displayName("Add expense")

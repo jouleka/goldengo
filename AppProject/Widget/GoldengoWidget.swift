@@ -4,6 +4,11 @@ import GoldengoCore
 import GoldengoData
 import GoldengoIntents
 
+/// Mirror of the locked Quiet-luxe gold (`GoldengoDesignSystem`). The widget extension doesn't link
+/// the design-system framework; only the home-screen tile shows full color (accessory widgets render
+/// tinted), so a static light-gold is enough here.
+private let goldengoWidgetAccent = Color(red: 182 / 255, green: 138 / 255, blue: 46 / 255)
+
 struct GoldengoEntry: TimelineEntry { let date: Date; let totalText: String; let reveal: Bool }
 
 struct GoldengoProvider: TimelineProvider {
@@ -36,10 +41,10 @@ struct GoldengoWidgetView: View {
     var body: some View {
         VStack(alignment: .leading) {
             Text("Today").font(.caption).foregroundStyle(.secondary)
-            Text(entry.totalText).font(.title2.bold()).minimumScaleFactor(0.6)
+            Text(entry.totalText).font(.title2.bold()).monospacedDigit().minimumScaleFactor(0.6)
                 .privacySensitive(!entry.reveal)   // redacted on Lock Screen unless the user opted in
             Spacer()
-            Label("Add", systemImage: "plus.circle.fill").font(.caption)
+            Label("Add", systemImage: "plus").font(.caption).foregroundStyle(goldengoWidgetAccent)
         }
         .containerBackground(.fill.tertiary, for: .widget)
         .widgetURL(URL(string: "goldengo://quickadd"))
