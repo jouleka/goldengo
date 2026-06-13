@@ -29,4 +29,14 @@ final class FoundationTests: XCTestCase {
     func test_accentGoldHex_matchesLightAccent() {
         XCTAssertEqual(GoldengoTheme.accentGoldHex, GoldengoTheme.Hex.accentLight)
     }
+
+    func test_spacingAliases_matchBaseScale() {
+        XCTAssertEqual(GoldengoTheme.Spacing.xs4, GoldengoTheme.Spacing.xs)
+        XCTAssertEqual(GoldengoTheme.Spacing.s8, GoldengoTheme.Spacing.s)
+        XCTAssertEqual(GoldengoTheme.Spacing.m16, GoldengoTheme.Spacing.m)
+        XCTAssertEqual(GoldengoTheme.Spacing.l24, GoldengoTheme.Spacing.l)
+        XCTAssertEqual(GoldengoTheme.Spacing.xl32, GoldengoTheme.Spacing.xl)
+        XCTAssertEqual(GoldengoTheme.Spacing.xs4, 4)
+        XCTAssertEqual(GoldengoTheme.Spacing.xl32, 32)
+    }
 }

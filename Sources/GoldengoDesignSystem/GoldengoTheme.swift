@@ -69,6 +69,12 @@ public enum GoldengoTheme {
         public static let m: CGFloat = 16
         public static let l: CGFloat = 24
         public static let xl: CGFloat = 32
+        // Named aliases (same values) used by the rewrite spec; additive — base names retained.
+        public static let xs4: CGFloat = xs
+        public static let s8: CGFloat = s
+        public static let m16: CGFloat = m
+        public static let l24: CGFloat = l
+        public static let xl32: CGFloat = xl
     }
 
     public enum Radius {
