@@ -52,18 +52,18 @@ public struct RecentExpensesView: View {
                 if !model.pendingCharges.isEmpty {
                     // Subscription dues outrank habit guesses: a detected billing schedule is
                     // near-certain, so the "Due" section sits above "Today's usuals" (GOL-92).
-                    GoldengoSectionLabel("Due")
+                    GoldengoSerifSectionHeader("Upcoming")
                         .goldengoCardRow(top: GoldengoTheme.Spacing.m, bottom: GoldengoTheme.Spacing.xs)
                     ForEach(model.pendingCharges) { p in dueRow(p) }
                 }
 
                 if !model.ghosts.isEmpty {
-                    GoldengoSectionLabel("Today's usuals")
+                    GoldengoSerifSectionHeader("Today's usuals")
                         .goldengoCardRow(top: GoldengoTheme.Spacing.m, bottom: GoldengoTheme.Spacing.xs)
                     ForEach(model.ghosts) { g in ghostRow(g) }
                 }
 
-                GoldengoSectionLabel("Recent")
+                GoldengoSerifSectionHeader("Recent")
                     .goldengoCardRow(top: GoldengoTheme.Spacing.m, bottom: GoldengoTheme.Spacing.xs)
                 if model.rows.isEmpty {
                     ContentUnavailableView("No expenses yet", systemImage: "tray",
@@ -345,7 +345,7 @@ public struct RecentExpensesView: View {
 
     private func categoriesCard(_ s: DashboardSummary) -> some View {
         VStack(alignment: .leading, spacing: GoldengoTheme.Spacing.m) {
-            GoldengoSectionLabel("Top categories")
+            GoldengoSerifSectionHeader("Top categories")
             ForEach(s.topCategories) { c in
                 VStack(spacing: 6) {
                     HStack {
@@ -485,16 +485,14 @@ public struct RecentExpensesView: View {
             }
             Spacer()
             if r.kind == .transfer {
-                Text(Money(amount: r.amount, currency: CurrencyCode(r.currencyCode)).formatted())
-                    .font(.subheadline.weight(.medium))
-                    .foregroundStyle(.secondary)   // neutral: moved to the wallet, not earned or spent
+                GoldengoAmountText(Money(amount: r.amount, currency: CurrencyCode(r.currencyCode)).formatted(),
+                                   role: .row, color: GoldengoTheme.inkMuted)
             } else if r.kind == .income {
-                Text("+" + Money(amount: r.amount, currency: CurrencyCode(r.currencyCode)).formatted())
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.green)
+                GoldengoAmountText("+" + Money(amount: r.amount, currency: CurrencyCode(r.currencyCode)).formatted(),
+                                   role: .row, color: .green)
             } else {
-                Text(Money(amount: r.amount, currency: CurrencyCode(r.currencyCode)).formatted())
-                    .font(.subheadline.weight(.medium))
+                GoldengoAmountText(Money(amount: r.amount, currency: CurrencyCode(r.currencyCode)).formatted(),
+                                   role: .row)
             }
         }
         .padding(.vertical, 4)
