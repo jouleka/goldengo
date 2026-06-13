@@ -40,6 +40,13 @@ final class FoundationTests: XCTestCase {
         XCTAssertEqual(GoldengoTheme.Spacing.xl32, 32)
     }
 
+    func test_goldButton_stateMapping() {
+        XCTAssertEqual(GoldButton.fill(isEnabled: true), .accent)
+        XCTAssertEqual(GoldButton.fill(isEnabled: false), .field)
+        XCTAssertEqual(GoldButton.labelTint(isEnabled: true), .onAccent)
+        XCTAssertEqual(GoldButton.labelTint(isEnabled: false), .muted)
+    }
+
     func test_amountText_pointSizes_areMonotonicByRole() {
         let hero = GoldengoAmountText.pointSize(for: .hero)
         let title = GoldengoAmountText.pointSize(for: .title)
