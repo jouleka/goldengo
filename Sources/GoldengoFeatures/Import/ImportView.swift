@@ -79,7 +79,7 @@ public struct ImportView: View {
             HStack(spacing: GoldengoTheme.Spacing.m) {
                 Image(systemName: systemImage)
                     .font(.title3)
-                    .foregroundStyle(prominent ? .black : GoldengoTheme.accent)
+                    .foregroundStyle(prominent ? GoldengoTheme.onAccent : GoldengoTheme.accent)
                     .frame(width: 44, height: 44)
                     .background(prominent ? GoldengoTheme.accent : GoldengoTheme.accentSoft)
                     .clipShape(RoundedRectangle(cornerRadius: GoldengoTheme.Radius.chip, style: .continuous))
