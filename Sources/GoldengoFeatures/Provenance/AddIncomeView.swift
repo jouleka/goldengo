@@ -38,22 +38,22 @@ public struct AddIncomeView: View {
     public var body: some View {
         NavigationStack {
             Form {
-                Section("Amount") {
+                Section {
                     TextField("0", text: $amountString)
 #if os(iOS)
                         .keyboardType(.decimalPad)
 #endif
                         .focused($amountFocused)
-                        .font(.title2.weight(.semibold))
-                }
-                Section("Currency") {
+                        .font(.title2.weight(.semibold).monospacedDigit())
+                } header: { GoldengoSerifSectionHeader("Amount") }
+                Section {
                     NavigationLink {
                         CurrencyPickerView(available: availableCurrencies, selectedCode: $currencyCode)
                     } label: {
                         LabeledContent("Currency", value: currencyLabel)
                     }
-                }
-                Section("From") {
+                } header: { GoldengoSerifSectionHeader("Currency") }
+                Section {
                     TextField("Source (e.g. Sister, Freelance)", text: $sourceName)
                     if !existingSources.isEmpty {
                         ScrollView(.horizontal, showsIndicators: false) {
@@ -61,26 +61,28 @@ public struct AddIncomeView: View {
                                 ForEach(existingSources, id: \.self) { s in
                                     Button(s) { sourceName = s }
                                         .font(.caption.weight(.medium))
+                                        .foregroundStyle(GoldengoTheme.inkPrimary)
                                         .padding(.horizontal, GoldengoTheme.Spacing.m).padding(.vertical, 6)
-                                        .background(Color.goldengoSurface).clipShape(Capsule())
+                                        .background(Color.goldengoField).clipShape(Capsule())
                                         .buttonStyle(.plain)
                                 }
                             }
                         }
                     }
-                }
-                Section("Date") {
+                } header: { GoldengoSerifSectionHeader("From") }
+                Section {
                     DatePicker("Date", selection: $date, displayedComponents: .date)
-                }
+                } header: { GoldengoSerifSectionHeader("Date") }
                 Section {
                     Toggle("Cash in hand", isOn: $cashInHand)
                     Text(cashInHand
                          ? "Goes straight into your wallet — the name is kept as where it came from."
                          : "Lands in the bank as a named source; reach it via an ATM withdrawal.")
-                        .font(.caption).foregroundStyle(.secondary)
+                        .font(.caption).foregroundStyle(GoldengoTheme.inkMuted)
                 }
             }
             .navigationTitle("Add income")
+            .tint(GoldengoTheme.accent)
             .scrollContentBackground(.hidden)
             .background(Color.goldengoBackground.ignoresSafeArea())
             .contentShape(Rectangle())
