@@ -32,6 +32,14 @@ public struct SourcesView: View {
     public var body: some View {
         NavigationStack {
             List {
+                if model.loadFailed {
+                    HStack(spacing: GoldengoTheme.Spacing.s) {
+                        Image(systemName: "exclamationmark.triangle")
+                        Text("Couldn't load your money. Pull to refresh.")
+                    }
+                    .font(.subheadline).foregroundStyle(GoldengoTheme.danger)
+                    .listRowBackground(Color.clear)
+                }
                 // The wallet (GOL-95 v2): per-currency cash, money moving through. Tap to adjust.
                 Button { showCount = true } label: {
                     VStack(alignment: .leading, spacing: 6) {
@@ -45,12 +53,13 @@ public struct SourcesView: View {
                                                 currency: CurrencyCode($0.currencyCode)).formatted()
                                 }.joined(separator: " · "))
                                     .font(.subheadline.weight(.medium))
+                                    .foregroundStyle(GoldengoTheme.inkPrimary)
                             }
                         }
                         Text(model.wallet.isEmpty
                              ? "Tap to set what's in your pocket."
                              : "Tap to adjust — cash spends drain this, not your sources.")
-                            .font(.caption).foregroundStyle(.secondary)
+                            .font(.caption).foregroundStyle(GoldengoTheme.inkMuted)
                     }
                     .contentShape(Rectangle())
                 }
@@ -62,23 +71,23 @@ public struct SourcesView: View {
                     VStack(alignment: .leading, spacing: 6) {
                         HStack {
                             Circle().fill(model.color(b)).frame(width: 9, height: 9)
-                            Text(b.name).font(.subheadline.weight(.semibold))
+                            Text(b.name).font(.subheadline.weight(.semibold)).foregroundStyle(GoldengoTheme.inkPrimary)
                             Spacer()
-                            Text(model.remainingText(b)).font(.subheadline.weight(.medium))
+                            GoldengoAmountText(model.remainingText(b), role: .row)
                         }
-                        ProgressView(value: model.fraction(b))
-                            .tint(model.color(b))
-                            .animation(.snappy, value: model.fraction(b))
+                        DrainingPoolBar(fraction: model.fraction(b), tint: model.color(b))
                     }
                     .padding(.vertical, 4)
                     .listRowBackground(Color.clear)
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel("\(b.name), \(model.remainingText(b)) left, \(Int((model.fraction(b) * 100).rounded()))% remaining")
                 }
                 if let unaccounted = model.unaccountedText() {
                     HStack {
                         Label("Unaccounted", systemImage: "questionmark.circle")
-                            .font(.subheadline).foregroundStyle(.secondary)
+                            .font(.subheadline).foregroundStyle(GoldengoTheme.inkMuted)
                         Spacer()
-                        Text(unaccounted).font(.subheadline.weight(.medium)).foregroundStyle(.secondary)
+                        Text(unaccounted).font(.subheadline.weight(.medium)).foregroundStyle(GoldengoTheme.inkMuted)
                     }
                     .listRowBackground(Color.clear)
                 }
@@ -93,6 +102,7 @@ public struct SourcesView: View {
                 }
             }
             .scrollContentBackground(.hidden)
+            .refreshable { await model.load() }
             .background(Color.goldengoBackground.ignoresSafeArea())
             .navigationTitle("Sources")
             .toolbar {
