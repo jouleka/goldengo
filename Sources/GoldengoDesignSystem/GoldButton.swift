@@ -7,9 +7,9 @@ public struct GoldButton: View {
     public enum LabelTint: Equatable, Sendable { case onAccent, muted }
 
     /// Pure state→fill mapping (testable).
-    public static func fill(isEnabled: Bool) -> Fill { isEnabled ? .accent : .field }
+    public nonisolated static func fill(isEnabled: Bool) -> Fill { isEnabled ? .accent : .field }
     /// Pure state→label-tint mapping (testable).
-    public static func labelTint(isEnabled: Bool) -> LabelTint { isEnabled ? .onAccent : .muted }
+    public nonisolated static func labelTint(isEnabled: Bool) -> LabelTint { isEnabled ? .onAccent : .muted }
 
     private let title: String
     private let systemImage: String?

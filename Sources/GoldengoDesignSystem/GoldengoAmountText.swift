@@ -16,7 +16,7 @@ public struct GoldengoAmountText: View {
         self.color = color
     }
 
-    public static func pointSize(for role: Role) -> CGFloat {
+    public nonisolated static func pointSize(for role: Role) -> CGFloat {
         switch role {
         case .hero:  return 44
         case .title: return 30
@@ -25,7 +25,7 @@ public struct GoldengoAmountText: View {
         }
     }
 
-    public static func tracking(for role: Role) -> CGFloat {
+    public nonisolated static func tracking(for role: Role) -> CGFloat {
         switch role {
         case .hero:  return -1.0
         case .title: return -0.5
