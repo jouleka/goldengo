@@ -103,14 +103,13 @@ public struct QuickAddView: View {
     private var amountDisplay: some View {
         VStack(spacing: GoldengoTheme.Spacing.xs) {
             Text("New expense")
-                .font(.subheadline.weight(.medium))
-                .foregroundStyle(.secondary)
+                .font(.system(.title3, design: .serif))
+                .foregroundStyle(GoldengoTheme.inkMuted)
             HStack(alignment: .firstTextBaseline, spacing: 6) {
                 currencyMenu
-                Text(model.amountString.isEmpty ? "0" : model.amountString)
-                    .font(.system(size: 64, weight: .bold, design: .rounded))
-                    .foregroundStyle(model.amountString.isEmpty ? Color.secondary : Color.primary)
-                    .contentTransition(.numericText())
+                GoldengoAmountText(model.amountString.isEmpty ? "0" : model.amountString,
+                                   role: .hero,
+                                   color: model.amountString.isEmpty ? GoldengoTheme.inkMuted : nil)
                     .animation(.snappy, value: model.amountString)
             }
         }
@@ -198,19 +197,10 @@ public struct QuickAddView: View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: GoldengoTheme.Spacing.s) {
                 ForEach(model.quickCategories, id: \.self) { cat in
-                    let selected = model.selectedCategory == cat
-                    Button {
-                        model.selectedCategory = selected ? nil : cat
-                    } label: {
-                        Label(cat, systemImage: GoldengoCategoryIcon.symbol(for: cat))
-                            .font(.subheadline.weight(.medium))
-                            .padding(.horizontal, GoldengoTheme.Spacing.m)
-                            .padding(.vertical, 10)
-                            .background(selected ? GoldengoTheme.accent : Color.goldengoSurface)
-                            .foregroundStyle(selected ? .black : .primary)
-                            .clipShape(Capsule())
+                    SelectableChip(cat, systemImage: GoldengoCategoryIcon.symbol(for: cat),
+                                   isSelected: model.selectedCategory == cat) {
+                        model.selectedCategory = (model.selectedCategory == cat) ? nil : cat
                     }
-                    .buttonStyle(.plain)
                 }
             }
             .padding(.horizontal, 2)
@@ -224,7 +214,7 @@ public struct QuickAddView: View {
     @ViewBuilder private var paidFromRow: some View {
         if !model.sourceBalances.isEmpty {
             HStack {
-                Text("Paid from").font(.subheadline).foregroundStyle(.secondary)
+                GoldengoSectionLabel("Paid from")
                 Spacer()
                 paidFromMenu
             }
@@ -312,19 +302,10 @@ public struct QuickAddView: View {
     // MARK: - Save
 
     private var addButton: some View {
-        Button {
-            noteFocused = false                     // drop the keyboard the moment the expense is added
+        GoldButton("Add expense", isEnabled: model.canSave) {
+            noteFocused = false
             Task { await model.save() }
-        } label: {
-            Text("Add expense")
-                .font(.headline)
-                .frame(maxWidth: .infinity, minHeight: 54)
         }
-        .background(model.canSave ? GoldengoTheme.accent : Color.goldengoField)
-        .foregroundStyle(model.canSave ? .black : .secondary)
-        .clipShape(RoundedRectangle(cornerRadius: GoldengoTheme.Radius.control, style: .continuous))
-        .disabled(!model.canSave)
-        .animation(.snappy, value: model.canSave)
     }
 
     private func tap(_ k: String) { k == "⌫" ? model.backspace() : model.tap(k) }
