@@ -10,12 +10,12 @@ public struct PastNotesView: View {
     public var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: GoldengoTheme.Spacing.l) {
-                Text("Past notes").font(.title2.weight(.bold))
+                Text("Past notes").font(.system(.title2, design: .serif)).foregroundStyle(GoldengoTheme.inkPrimary)
                 ForEach(Array(notes.enumerated()), id: \.offset) { _, note in
                     VStack(alignment: .leading, spacing: 2) {
                         Text(note.date.formatted(.dateTime.day().month(.abbreviated).year()))
-                            .font(.caption).foregroundStyle(.secondary)
-                        Text("“\(note.text)”").font(.body)
+                            .font(.caption).foregroundStyle(GoldengoTheme.inkMuted)
+                        Text("“\(note.text)”").font(.body).foregroundStyle(GoldengoTheme.inkPrimary)
                     }
                 }
             }
