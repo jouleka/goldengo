@@ -45,7 +45,7 @@ public struct RecentExpensesView: View {
             // cards ride on clear, separator-less rows to keep their existing card look.
             List {
                 if model.loadFailed { errorBanner.goldengoCardRow() }
-                monthCard.goldengoCardRow()
+                homeHeader.goldengoCardRow()
                 if model.subscriptionsText() != nil { subscriptionsCard.goldengoCardRow() }
                 if let s = model.summary, !s.topCategories.isEmpty { categoriesCard(s).goldengoCardRow() }
 
@@ -230,51 +230,37 @@ public struct RecentExpensesView: View {
         return list
     }
 
-    private var monthCard: some View {
-        VStack(alignment: .leading, spacing: GoldengoTheme.Spacing.m) {
-            HStack(alignment: .top) {
-                VStack(alignment: .leading, spacing: GoldengoTheme.Spacing.xs) {
-                    GoldengoSectionLabel("This month")
-                    HStack(alignment: .firstTextBaseline, spacing: 6) {
-                        Menu {
-                            ForEach(menuCurrencies, id: \.rawValue) { c in
-                                Button {
-                                    onChangeCurrency(c)
-                                } label: {
-                                    if c.rawValue == model.currency.rawValue {
-                                        Label(menuLabel(c), systemImage: "checkmark")
-                                    } else {
-                                        Text(menuLabel(c))
-                                    }
-                                }
-                            }
-                            Divider()
-                            Button { showCurrencyPicker = true } label: {
-                                Label("More currencies…", systemImage: "ellipsis.circle")
-                            }
-                        } label: {
-                            // Small, fixed-width currency control (gold tint signals it's tappable) so the
-                            // big amount beside it keeps a real width budget and scales instead of clipping.
-                            HStack(alignment: .firstTextBaseline, spacing: 2) {
-                                Text(model.currency.symbol)
-                                    .font(.system(size: 26, weight: .bold, design: .rounded))
-                                Image(systemName: "chevron.down")
-                                    .font(.caption2.weight(.bold))
-                            }
-                            .contentShape(Rectangle())
-                        }
-                        Text(model.monthAmountText())
-                            .font(.system(size: 40, weight: .bold, design: .rounded))
-                            .minimumScaleFactor(0.5)
-                            .lineLimit(1)
-                            .foregroundStyle(.primary)
-                    }
-                    if let asOf = model.ratesAsOf {
-                        Text("Rates as of \(asOf.formatted(date: .abbreviated, time: .omitted))")
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
+    private var currencyMenuControl: some View {
+        Menu {
+            ForEach(menuCurrencies, id: \.rawValue) { c in
+                Button {
+                    onChangeCurrency(c)
+                } label: {
+                    if c.rawValue == model.currency.rawValue {
+                        Label(menuLabel(c), systemImage: "checkmark")
+                    } else {
+                        Text(menuLabel(c))
                     }
                 }
+            }
+            Divider()
+            Button { showCurrencyPicker = true } label: {
+                Label("More currencies…", systemImage: "ellipsis.circle")
+            }
+        } label: {
+            HStack(alignment: .firstTextBaseline, spacing: 2) {
+                Text(model.currency.symbol).font(.system(size: 26, weight: .semibold, design: .rounded))
+                Image(systemName: "chevron.down").font(.caption2.weight(.bold))
+            }
+            .foregroundStyle(GoldengoTheme.accent)
+            .contentShape(Rectangle())
+        }
+    }
+
+    private var homeHeader: some View {
+        VStack(alignment: .leading, spacing: GoldengoTheme.Spacing.l) {
+            HStack(alignment: .firstTextBaseline) {
+                Text("Goldengo").font(.system(.title3, design: .serif)).foregroundStyle(GoldengoTheme.accent)
                 Spacer()
                 Button(action: onAdd) {
                     Label("Add", systemImage: "plus")
@@ -282,19 +268,42 @@ public struct RecentExpensesView: View {
                         .padding(.horizontal, GoldengoTheme.Spacing.m)
                         .padding(.vertical, GoldengoTheme.Spacing.s)
                         .background(GoldengoTheme.accent)
-                        .foregroundStyle(.black)
+                        .foregroundStyle(GoldengoTheme.onAccent)
                         .clipShape(Capsule())
                 }
                 .buttonStyle(.plain)
             }
+
+            VStack(alignment: .leading, spacing: GoldengoTheme.Spacing.xs) {
+                GoldengoSectionLabel("In your pocket")
+                if model.hasWallet {
+                    HStack(alignment: .firstTextBaseline, spacing: 6) {
+                        currencyMenuControl
+                        GoldengoAmountText(model.pocketHeroText, role: .hero)
+                    }
+                    Text(model.pocketCaptionText).font(.caption).foregroundStyle(GoldengoTheme.inkMuted)
+                } else {
+                    Text("Set your wallet to begin").font(.subheadline).foregroundStyle(GoldengoTheme.inkMuted)
+                }
+            }
+
             Divider()
-            HStack {
-                Label("Today", systemImage: "sun.max")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
+
+            HStack(alignment: .firstTextBaseline) {
+                VStack(alignment: .leading, spacing: GoldengoTheme.Spacing.xs) {
+                    GoldengoSerifSectionHeader("This month")
+                    GoldengoAmountText(model.monthAmountText(), role: .title)
+                }
                 Spacer()
-                Text(model.todayTotalText)
-                    .font(.headline)
+                VStack(alignment: .trailing, spacing: GoldengoTheme.Spacing.xs) {
+                    Text("Today").font(.caption).foregroundStyle(GoldengoTheme.inkMuted)
+                    GoldengoAmountText(model.todayTotalText, role: .row)
+                }
+            }
+            if let asOf = model.ratesAsOf {
+                Text("Rates as of \(asOf.formatted(date: .abbreviated, time: .omitted))")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
             }
         }
         .goldengoCard(padding: GoldengoTheme.Spacing.l)
