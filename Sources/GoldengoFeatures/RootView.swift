@@ -127,7 +127,7 @@ public struct RootView: View {
                 .tabItem { Label("Home", systemImage: "house.fill") }
                 .tag(1)
                 SourcesView(model: sourcesModel)
-                    .tabItem { Label("Wallet", systemImage: "wallet") }
+                    .tabItem { Label("Wallet", systemImage: "wallet.bifold") }
                     .tag(5)
             }
             .tint(GoldengoTheme.accent)
@@ -135,14 +135,13 @@ public struct RootView: View {
             // The center action straddling the bar. NOTE: exact vertical placement is visual —
             // tune `.padding(.bottom)` on simulator.
             AddFAB { showAdd = true }
-                .padding(.bottom, GoldengoTheme.Spacing.xs)
+                .padding(.bottom, 28)   // straddle above the tab bar; fine-tune on simulator
         }
         .sheet(isPresented: $showAdd, onDismiss: {
             // A logged expense should appear on Home without a manual refresh.
             Task { await recentModel.load() }
         }) {
-            QuickAddView(model: quickAddModel)
-                .task { await quickAddModel.loadSources() }   // fresh "Paid from" balances (was onChange tab 0, GOL-90)
+            QuickAddView(model: quickAddModel)   // QuickAddView loads its own "Paid from" balances on .task (GOL-90)
         }
         .sheet(isPresented: $showSubscriptions, onDismiss: {
             // Confirming/dismissing a subscription can change Home's "Upcoming" section.
@@ -213,6 +212,8 @@ public struct RootView: View {
                 // An expense may have been logged via the Quick-Log shortcut while we were
                 // backgrounded; reload so it appears on Home without a manual pull-to-refresh.
                 Task { await recentModel.load() }
+                // Keep subscription reminders fresh on long-uptime foregrounds (was the tab-4 trigger).
+                Task { await subsModel.load() }
             case .background:
                 SharedSummary().setLastSeen()
             default:
