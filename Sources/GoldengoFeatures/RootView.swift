@@ -18,6 +18,17 @@ public struct ReEntryPrompt: Identifiable { public let id = UUID(); public let d
 /// per presentation). Only `.morning`/`.evening` are ever wrapped (never `.none`).
 public struct RitualSheet: Identifiable { public let id = UUID(); public let kind: RitualPrompt }
 
+/// Where a legacy tab index resolves under the 3-destination shell. Deep links, widget taps and
+/// Siri `pendingTab` still speak in the old integer indices; this maps them to "select a tab" vs
+/// "present a sheet". Pure + `Equatable` so routing can't silently regress.
+public enum RootRoute: Equatable, Sendable {
+    case tab(Int)          // a real bottom-bar tab: Home (1) or Wallet (5)
+    case add               // present the Add sheet
+    case settings          // present the Settings sheet
+    case statementImport   // present the Import sheet
+    case subscriptions     // go to Home and present the Subscriptions sheet
+}
+
 public struct RootView: View {
     private let store: IngestionStore
     @State private var selectedTab: Int = 1            // Home dashboard is the orienting landing screen.
@@ -205,6 +216,18 @@ public struct RootView: View {
     /// A shared statement arrives as a `file://` URL (vs a `goldengo://` deep link). Extracted so
     /// the routing branch is unit-testable and can't silently regress.
     public nonisolated static func isStatementFile(_ url: URL) -> Bool { url.isFileURL }
+
+    /// Maps a legacy tab index to a `RootRoute`. Extracted (like `tab(forDeepLink:)`) so the
+    /// IA can't silently regress. 0→Add sheet, 1→Home, 2→Settings, 3→Import, 4→Subscriptions, 5→Wallet.
+    public nonisolated static func route(forTab tab: Int) -> RootRoute {
+        switch tab {
+        case 0: return .add
+        case 2: return .settings
+        case 3: return .statementImport
+        case 4: return .subscriptions
+        default: return .tab(tab)   // 1 = Home, 5 = Wallet
+        }
+    }
 
     /// Maps a `goldengo://` deep link to a tab index (extracted so routing is unit-testable
     /// and can't silently regress). `quickadd` -> Add (0), `recent`/`home` -> Home (1),
