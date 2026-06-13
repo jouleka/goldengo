@@ -39,4 +39,16 @@ final class FoundationTests: XCTestCase {
         XCTAssertEqual(GoldengoTheme.Spacing.xs4, 4)
         XCTAssertEqual(GoldengoTheme.Spacing.xl32, 32)
     }
+
+    func test_amountText_pointSizes_areMonotonicByRole() {
+        let hero = GoldengoAmountText.pointSize(for: .hero)
+        let title = GoldengoAmountText.pointSize(for: .title)
+        let row = GoldengoAmountText.pointSize(for: .row)
+        let micro = GoldengoAmountText.pointSize(for: .micro)
+        XCTAssertEqual(hero, 44)
+        XCTAssertEqual(row, 17)
+        XCTAssertGreaterThan(hero, title)
+        XCTAssertGreaterThan(title, row)
+        XCTAssertGreaterThan(row, micro)
+    }
 }
