@@ -4,7 +4,7 @@ import SwiftUI
 /// tracking, and an in-place numeric transition. Takes a pre-formatted string (amounts arrive
 /// already localized from `Money.formatted()`); `role` sets the size.
 public struct GoldengoAmountText: View {
-    public enum Role: CaseIterable { case hero, title, row, micro }
+    public enum Role: CaseIterable, Sendable { case hero, title, row, micro }
 
     private let text: String
     private let role: Role

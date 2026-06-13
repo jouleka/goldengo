@@ -21,11 +21,6 @@ final class FoundationTests: XCTestCase {
         XCTAssertEqual(GoldengoTheme.Hex.onAccent, "#2A2620")
     }
 
-    func test_dynamicColor_isConstructible() {
-        _ = Color(light: "#000000", dark: "#FFFFFF")
-        _ = Color(light: .black, dark: .white)
-    }
-
     func test_accentGoldHex_matchesLightAccent() {
         XCTAssertEqual(GoldengoTheme.accentGoldHex, GoldengoTheme.Hex.accentLight)
     }
@@ -58,4 +53,47 @@ final class FoundationTests: XCTestCase {
         XCTAssertGreaterThan(title, row)
         XCTAssertGreaterThan(row, micro)
     }
+
+#if canImport(AppKit)
+    func test_accent_resolvesLightThenDark() {
+        let light = resolvedSRGB(GoldengoTheme.accent, dark: false)
+        XCTAssertEqual(light.r, 0.714, accuracy: 0.01)  // #B68A2E
+        XCTAssertEqual(light.g, 0.541, accuracy: 0.01)
+        XCTAssertEqual(light.b, 0.180, accuracy: 0.01)
+        let dark = resolvedSRGB(GoldengoTheme.accent, dark: true)
+        XCTAssertEqual(dark.r, 0.878, accuracy: 0.01)   // #E0AE4A
+        XCTAssertEqual(dark.g, 0.682, accuracy: 0.01)
+        XCTAssertEqual(dark.b, 0.290, accuracy: 0.01)
+        // The legs must not be swapped: dark gold is lighter (higher red) than light gold.
+        XCTAssertGreaterThan(dark.r, light.r)
+    }
+
+    func test_accentSoft_alphaIsPerScheme() {
+        XCTAssertEqual(resolvedSRGB(GoldengoTheme.accentSoft, dark: false).a, 0.12, accuracy: 0.01)
+        XCTAssertEqual(resolvedSRGB(GoldengoTheme.accentSoft, dark: true).a, 0.16, accuracy: 0.01)
+    }
+
+    func test_onAccent_isColorConstantAcrossAppearance() {
+        let light = resolvedSRGB(GoldengoTheme.onAccent, dark: false)
+        let dark = resolvedSRGB(GoldengoTheme.onAccent, dark: true)
+        XCTAssertEqual(light.r, dark.r, accuracy: 0.001)
+        XCTAssertEqual(light.g, dark.g, accuracy: 0.001)
+        XCTAssertEqual(light.b, dark.b, accuracy: 0.001)
+    }
+#endif
 }
+
+#if canImport(AppKit)
+import AppKit
+
+private func resolvedSRGB(_ color: Color, dark: Bool) -> (r: CGFloat, g: CGFloat, b: CGFloat, a: CGFloat) {
+    let ns = NSColor(color)
+    let appearance = NSAppearance(named: dark ? .darkAqua : .aqua)!
+    var out: (CGFloat, CGFloat, CGFloat, CGFloat) = (0, 0, 0, 0)
+    appearance.performAsCurrentDrawingAppearance {
+        let resolved = ns.usingColorSpace(.sRGB)!
+        out = (resolved.redComponent, resolved.greenComponent, resolved.blueComponent, resolved.alphaComponent)
+    }
+    return out
+}
+#endif
