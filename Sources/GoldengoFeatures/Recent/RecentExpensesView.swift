@@ -277,10 +277,9 @@ public struct RecentExpensesView: View {
             VStack(alignment: .leading, spacing: GoldengoTheme.Spacing.xs) {
                 GoldengoSectionLabel("In your pocket")
                 if model.hasWallet {
-                    HStack(alignment: .firstTextBaseline, spacing: 6) {
-                        currencyMenuControl
-                        GoldengoAmountText(model.pocketHeroText, role: .hero)
-                    }
+                    // The pocket hero is native cash — its own currency + symbol, no display-currency
+                    // menu (that governs the converted spend totals below, not cash on hand).
+                    GoldengoAmountText(model.pocketHeroText, role: .hero)
                     Text(model.pocketCaptionText).font(.caption).foregroundStyle(GoldengoTheme.inkMuted)
                 } else {
                     Text("Set your wallet to begin").font(.subheadline).foregroundStyle(GoldengoTheme.inkMuted)
@@ -292,7 +291,12 @@ public struct RecentExpensesView: View {
             HStack(alignment: .firstTextBaseline) {
                 VStack(alignment: .leading, spacing: GoldengoTheme.Spacing.xs) {
                     GoldengoSerifSectionHeader("This month")
-                    GoldengoAmountText(model.monthAmountText(), role: .title)
+                    // The display-currency menu lives here, beside the (symbol-stripped) converted
+                    // month total — it provides the symbol, as the old month card did.
+                    HStack(alignment: .firstTextBaseline, spacing: 6) {
+                        currencyMenuControl
+                        GoldengoAmountText(model.monthAmountText(), role: .title)
+                    }
                 }
                 Spacer()
                 VStack(alignment: .trailing, spacing: GoldengoTheme.Spacing.xs) {

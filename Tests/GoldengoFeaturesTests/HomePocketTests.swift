@@ -19,7 +19,8 @@ final class HomePocketTests: XCTestCase {
     }
 
     func test_pocketCaption_threeStates() {
-        XCTAssertEqual(RecentExpensesModel.pocketCaption(for: line("EUR", expected: 100, typical: 0, daysAgo: 0), now: .now),
+        // typical > 0 so the .even result is driven by silentDays == 0, isolating that guard.
+        XCTAssertEqual(RecentExpensesModel.pocketCaption(for: line("EUR", expected: 100, typical: 5, daysAgo: 0), now: .now),
                        "ready to spend")
         let fogged = line("EUR", expected: 100, typical: 5, daysAgo: 4)   // 20 < 100
         XCTAssertEqual(RecentExpensesModel.pocketCaption(for: fogged, now: .now),
