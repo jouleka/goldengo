@@ -1,6 +1,32 @@
 import SwiftUI
+#if canImport(UIKit)
+import UIKit
+#elseif canImport(AppKit)
+import AppKit
+#endif
 
 public enum GoldengoTheme {
+    /// The locked "Quiet luxe" palette as hex (light, dark). This is the stable, testable contract;
+    /// the `Color` tokens below are derived from it.
+    public enum Hex {
+        public static let canvasLight = "#F7F3EA"
+        public static let canvasDark = "#17140F"
+        public static let surfaceLight = "#FCFAF4"
+        public static let surfaceDark = "#211D16"
+        public static let fieldLight = "#EFE7D6"
+        public static let fieldDark = "#2B261D"
+        public static let inkPrimaryLight = "#2A2620"
+        public static let inkPrimaryDark = "#F3ECDD"
+        public static let inkMutedLight = "#8C8373"
+        public static let inkMutedDark = "#A89E89"
+        public static let hairlineLight = "#E7DECE"
+        public static let hairlineDark = "#322C22"
+        public static let accentLight = "#B68A2E"
+        public static let accentDark = "#E0AE4A"
+        /// Label/glyph color on a gold fill — colour-constant (same value in light and dark), so no `*Dark` pair.
+        public static let onAccent = "#2A2620"
+    }
+
     public static let accentGoldHex = "#E8B341"
     public static var accent: Color { Color(hex: accentGoldHex) }
 
@@ -51,6 +77,28 @@ public extension Color {
                   red: Double((rgb >> 16) & 0xFF) / 255,
                   green: Double((rgb >> 8) & 0xFF) / 255,
                   blue: Double(rgb & 0xFF) / 255, opacity: 1)
+    }
+
+    /// Resolves between two colors by the current interface style (light/dark).
+    /// The light/dark legs are evaluated *inside* the trait/appearance closure, so passing an
+    /// already-adaptive `Color` still resolves correctly per appearance — keep them in the closure.
+    init(light: Color, dark: Color) {
+#if canImport(UIKit)
+        self.init(uiColor: UIColor { traits in
+            traits.userInterfaceStyle == .dark ? UIColor(dark) : UIColor(light)
+        })
+#elseif canImport(AppKit)
+        self.init(nsColor: NSColor(name: nil) { appearance in
+            appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua ? NSColor(dark) : NSColor(light)
+        })
+#else
+        self = light
+#endif
+    }
+
+    /// Convenience: resolve between two hex strings.
+    init(light: String, dark: String) {
+        self.init(light: Color(hex: light), dark: Color(hex: dark))
     }
 
     /// The app canvas (the muted backdrop cards sit on).
