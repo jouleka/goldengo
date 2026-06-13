@@ -8,10 +8,12 @@ public struct GoldengoAmountText: View {
 
     private let text: String
     private let role: Role
+    private let color: Color?
 
-    public init(_ text: String, role: Role = .row) {
+    public init(_ text: String, role: Role = .row, color: Color? = nil) {
         self.text = text
         self.role = role
+        self.color = color
     }
 
     public static func pointSize(for role: Role) -> CGFloat {
@@ -37,7 +39,7 @@ public struct GoldengoAmountText: View {
             .font(.system(size: Self.pointSize(for: role), weight: .semibold))
             .monospacedDigit()
             .tracking(Self.tracking(for: role))
-            .foregroundStyle(GoldengoTheme.inkPrimary)
+            .foregroundStyle(color ?? GoldengoTheme.inkPrimary)
             .contentTransition(.numericText())
     }
 }
