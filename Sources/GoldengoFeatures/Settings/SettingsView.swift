@@ -1,6 +1,7 @@
 import SwiftUI
 import GoldengoData
 import GoldengoCore
+import GoldengoDesignSystem
 #if os(iOS)
 import UIKit
 #endif
@@ -48,55 +49,57 @@ public struct SettingsView: View {
     public var body: some View {
         NavigationStack {
             Form {
-                Section("Currency") {
+                Section {
                     NavigationLink {
                         CurrencyPickerView(available: availableCurrencies, selectedCode: $preferredCode)
                     } label: {
                         LabeledContent("Default currency", value: preferredLabel)
                     }
                     Text("Used as the default for new expenses and your dashboard total.")
-                        .font(.caption).foregroundStyle(.secondary)
-                }
-                Section("Quick-log gesture") {
+                        .font(.caption).foregroundStyle(GoldengoTheme.inkMuted)
+                } header: { GoldengoSerifSectionHeader("Currency") }
+                Section {
                     Text("Log an expense without opening Goldengo — a gesture pops up a category list, then the amount. Set it up once:")
-                        .font(.caption).foregroundStyle(.secondary)
+                        .font(.caption).foregroundStyle(GoldengoTheme.inkMuted)
                     Button {
                         if let url = URL(string: "shortcuts://") { openURL(url) }
                     } label: {
                         Label("Open Shortcuts", systemImage: "square.stack.3d.up.fill")
+                            .foregroundStyle(GoldengoTheme.accent)
                     }
                     Label("In Shortcuts: tap ＋, **Add Action**, search **Log Expense**, add it, then name it and tap Done.", systemImage: "1.circle.fill")
                     Label("Then **Settings ▸ Accessibility ▸ Touch ▸ Back Tap ▸ Double (or Triple) Tap** → choose **Log Expense**.", systemImage: "2.circle.fill")
                     Text("Only you can assign the gesture (step 2) — iOS doesn't let apps set Back Tap.")
-                        .font(.caption).foregroundStyle(.secondary)
-                }
-                Section("Apple Pay auto-log") {
+                        .font(.caption).foregroundStyle(GoldengoTheme.inkMuted)
+                } header: { GoldengoSerifSectionHeader("Quick-log gesture") }
+                Section {
                     Text("Auto-add an expense every time you tap to pay in a store — set up an iOS automation once:")
-                        .font(.caption).foregroundStyle(.secondary)
+                        .font(.caption).foregroundStyle(GoldengoTheme.inkMuted)
                     Button {
                         if let url = URL(string: "shortcuts://") { openURL(url) }
                     } label: {
                         Label("Open Shortcuts", systemImage: "creditcard")
+                            .foregroundStyle(GoldengoTheme.accent)
                     }
                     Label("Shortcuts → **Automation** tab → **＋** → **Transaction** → pick your card(s) → choose **Run Immediately** and turn **Notify When Run** on (that's your no-tap 'Logged' banner).", systemImage: "1.circle.fill")
                     Label("**Add Action** → search **Log Payment** → set **Amount** to the transaction's Amount (and **Merchant** to its Merchant) → Done.", systemImage: "2.circle.fill")
                     Text("In-store taps only — online/web Apple Pay can't trigger it (use Import for those). iOS won't let an app set this up for you.")
-                        .font(.caption).foregroundStyle(.secondary)
-                }
-                Section("Privacy") {
+                        .font(.caption).foregroundStyle(GoldengoTheme.inkMuted)
+                } header: { GoldengoSerifSectionHeader("Apple Pay auto-log") }
+                Section {
                     Toggle("Show amounts on Lock Screen", isOn: $reveal)
                     Text("Off by default — your spending stays hidden on the Lock Screen widget.")
-                        .font(.caption).foregroundStyle(.secondary)
-                }
-                Section("Subscriptions") {
+                        .font(.caption).foregroundStyle(GoldengoTheme.inkMuted)
+                } header: { GoldengoSerifSectionHeader("Privacy") }
+                Section {
                     Toggle("Remind me before a charge", isOn: $remind)
                     if remind {
                         Stepper("Days before: \(leadDays)", value: $leadDays, in: 1...7)
                     }
                     Text("Get a local notification before a confirmed subscription's next charge.")
-                        .font(.caption).foregroundStyle(.secondary)
-                }
-                Section("Daily check-in") {
+                        .font(.caption).foregroundStyle(GoldengoTheme.inkMuted)
+                } header: { GoldengoSerifSectionHeader("Subscriptions") }
+                Section {
                     Toggle("Morning + evening check-in", isOn: $ritualEnabled)
                     if ritualEnabled {
                         DatePicker("Morning nudge", selection: $morningNudge,
@@ -108,7 +111,7 @@ public struct SettingsView: View {
                         if notificationsDenied {
                             // Quiet remediation, never a scold: the sheets still self-present on open.
                             Text("Notifications are off — check-ins won't nudge you.")
-                                .font(.caption).foregroundStyle(.secondary)
+                                .font(.caption).foregroundStyle(GoldengoTheme.inkMuted)
                             Button("Open iOS Settings") {
                                 #if os(iOS)
                                 if let url = URL(string: UIApplication.openNotificationSettingsURLString) {
@@ -116,13 +119,15 @@ public struct SettingsView: View {
                                 }
                                 #endif
                             }
+                            .foregroundStyle(GoldengoTheme.accent)
                             .font(.caption)
                         }
                     }
                     Text("A morning intention you set for yourself, surfaced back to you at night with a calm recap. Two gentle nudges a day.")
-                        .font(.caption).foregroundStyle(.secondary)
-                }
+                        .font(.caption).foregroundStyle(GoldengoTheme.inkMuted)
+                } header: { GoldengoSerifSectionHeader("Daily check-in") }
             }
+            .tint(GoldengoTheme.accent)
             .navigationTitle("Settings")
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {

@@ -24,7 +24,10 @@ public struct ImportView: View {
                                      systemImage: "folder", prominent: true) { showingPicker = true }
                         actionButton("Try a sample", subtitle: "See how import works",
                                      systemImage: "doc.text.magnifyingglass", prominent: false) {
-                            Task { await model.importCSV(text: SampleStatement.csv, fileName: "sample.csv") }
+                            Task {
+                                await model.importCSV(text: SampleStatement.csv, fileName: "sample.csv")
+                                if !model.result.isFailure { GoldengoHaptics.spendLanded() }
+                            }
                         }
                     }
                     if !model.resultText.isEmpty { resultCard }
@@ -39,6 +42,7 @@ public struct ImportView: View {
                 guard let autoImport, !didAutoImport else { return }
                 didAutoImport = true
                 await model.importFile(url: autoImport)
+                if !model.result.isFailure { GoldengoHaptics.spendLanded() }
             }
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
@@ -57,14 +61,12 @@ public struct ImportView: View {
 
     private var intro: some View {
         VStack(spacing: GoldengoTheme.Spacing.s) {
-            Image(systemName: "square.and.arrow.down")
-                .font(.system(size: 34, weight: .semibold))
-                .foregroundStyle(GoldengoTheme.accent)
+            GoldGlyphBadge("square.and.arrow.down")
             Text("Import a bank statement")
                 .font(.headline)
             Text("Bring in transactions in one step. Duplicates are skipped automatically.")
                 .font(.subheadline)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(GoldengoTheme.inkMuted)
                 .multilineTextAlignment(.center)
         }
         .frame(maxWidth: .infinity)
@@ -83,7 +85,7 @@ public struct ImportView: View {
                     .clipShape(RoundedRectangle(cornerRadius: GoldengoTheme.Radius.chip, style: .continuous))
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title).font(.subheadline.weight(.semibold)).foregroundStyle(.primary)
-                    Text(subtitle).font(.caption).foregroundStyle(.secondary)
+                    Text(subtitle).font(.caption).foregroundStyle(GoldengoTheme.inkMuted)
                 }
                 Spacer()
                 Image(systemName: "chevron.right").font(.caption.weight(.semibold)).foregroundStyle(.tertiary)
@@ -97,8 +99,8 @@ public struct ImportView: View {
         let failed = model.result.isFailure
         return HStack(spacing: GoldengoTheme.Spacing.s) {
             Image(systemName: failed ? "exclamationmark.triangle.fill" : "checkmark.circle.fill")
-                .foregroundStyle(failed ? GoldengoTheme.danger : .green)
-            Text(model.resultText).font(.subheadline)
+                .foregroundStyle(failed ? GoldengoTheme.danger : GoldengoTheme.accent)
+            Text(model.resultText).font(.subheadline).foregroundStyle(GoldengoTheme.inkPrimary)
             Spacer()
         }
         .goldengoCard()
