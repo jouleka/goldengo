@@ -13,11 +13,16 @@ public struct HomeData: Sendable {
     public let sources: [FundingSourceOption]
     /// Due-but-unlogged subscription charges for the one-tap "Due" ghost section (GOL-92).
     public let pending: [PendingSubscriptionCharge]
+    /// Read-only per-currency wallet snapshot for the Home "In your pocket" hero (UI rewrite).
+    /// Rides the home fetch; Home never writes wallet state.
+    public let pocket: [PocketLine]
 
     public init(rows: [ExpenseSnapshot], todayTotal: Decimal, summary: DashboardSummary,
-                ghosts: [RhythmGhost], sources: [FundingSourceOption], pending: [PendingSubscriptionCharge]) {
+                ghosts: [RhythmGhost], sources: [FundingSourceOption], pending: [PendingSubscriptionCharge],
+                pocket: [PocketLine] = []) {
         self.rows = rows; self.todayTotal = todayTotal; self.summary = summary
         self.ghosts = ghosts; self.sources = sources; self.pending = pending
+        self.pocket = pocket
     }
 }
 
@@ -87,7 +92,9 @@ extension IngestionStore {
             .map { FundingSourceOption(id: $0.id, name: $0.name, colorIndex: $0.colorIndex) }
             .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
 
+        let pocket = (try? pocketSnapshot(now: now)) ?? []
+
         return HomeData(rows: rows, todayTotal: todayTotal, summary: summary, ghosts: ghosts,
-                        sources: options, pending: pending)
+                        sources: options, pending: pending, pocket: pocket)
     }
 }
