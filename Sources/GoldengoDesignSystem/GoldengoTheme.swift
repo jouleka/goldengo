@@ -151,6 +151,10 @@ public struct GoldengoCardStyle: ViewModifier {
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(Color.goldengoSurface)
             .clipShape(RoundedRectangle(cornerRadius: GoldengoTheme.Radius.card, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: GoldengoTheme.Radius.card, style: .continuous)
+                    .strokeBorder(GoldengoTheme.hairline, lineWidth: 1)
+            )
     }
 }
 
