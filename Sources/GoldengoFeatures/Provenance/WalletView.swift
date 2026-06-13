@@ -36,6 +36,14 @@ public struct WalletView: View {
     public var body: some View {
         NavigationStack {
             List {
+                if model.loadFailed {
+                    HStack(spacing: GoldengoTheme.Spacing.s) {
+                        Image(systemName: "exclamationmark.triangle")
+                        Text("Couldn't load your wallet. Pull to refresh.")
+                    }
+                    .font(.subheadline).foregroundStyle(GoldengoTheme.danger)
+                    .listRowBackground(Color.clear)
+                }
                 if model.wallet.isEmpty {
                     Text("Your pocket, by currency. Start by setting what you're actually holding — cash spends drain it from there.")
                         .font(.caption).foregroundStyle(.secondary)
@@ -48,10 +56,11 @@ public struct WalletView: View {
                     } label: {
                         HStack {
                             Text(label(for: line.currencyCode)).font(.subheadline.weight(.semibold))
+                                .foregroundStyle(GoldengoTheme.inkPrimary)
                             Spacer()
-                            Text("~" + Money(amount: line.expectedNow,
-                                             currency: CurrencyCode(line.currencyCode)).formatted())
-                                .font(.subheadline.weight(.medium))
+                            GoldengoAmountText("~" + Money(amount: line.expectedNow,
+                                                           currency: CurrencyCode(line.currencyCode)).formatted(),
+                                               role: .row)
                         }
                     }
                     .listRowBackground(Color.clear)
@@ -91,6 +100,7 @@ public struct WalletView: View {
                 }
             }
             .listStyle(.plain)
+            .refreshable { await model.load() }
             .scrollContentBackground(.hidden)
             .background(Color.goldengoBackground.ignoresSafeArea())
             .navigationTitle("Wallet")
@@ -141,17 +151,17 @@ struct AdjustWalletView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: GoldengoTheme.Spacing.l) {
-                Text("What's in your wallet?").font(.title2.weight(.bold))
+                Text("What's in your wallet?").font(.system(.title2, design: .serif)).foregroundStyle(GoldengoTheme.inkPrimary)
                 if let expected {
                     Text("The books expect " + Money(amount: expected, currency: currency).formatted() + ".")
-                        .font(.caption).foregroundStyle(.secondary)
+                        .font(.caption).foregroundStyle(GoldengoTheme.inkMuted)
                 }
                 TextField("0", text: $amountText)
 #if os(iOS)
                     .keyboardType(.decimalPad)
 #endif
                     .focused($focused)
-                    .font(.system(size: 40, weight: .bold, design: .rounded))
+                    .font(.system(size: 40, weight: .semibold).monospacedDigit())
                     .multilineTextAlignment(.center)
                     .padding(.vertical, GoldengoTheme.Spacing.s)
 
@@ -160,7 +170,7 @@ struct AdjustWalletView: View {
                 }
 
                 if let resultLine {
-                    Text(resultLine).font(.caption).foregroundStyle(.secondary)
+                    Text(resultLine).font(.caption).foregroundStyle(GoldengoTheme.inkMuted)
                 }
 
                 saveButton
@@ -202,7 +212,7 @@ struct AdjustWalletView: View {
     }
 
     private var saveButton: some View {
-        Button {
+        GoldButton("Save", isEnabled: !busy && typedAmount != nil) {
             guard !busy, let total = typedAmount else { return }
             busy = true
             focused = false
@@ -224,11 +234,6 @@ struct AdjustWalletView: View {
                     dismiss()
                 }
             }
-        } label: {
-            Text("Save").font(.headline).frame(maxWidth: .infinity, minHeight: 54)
         }
-        .background(GoldengoTheme.accent).foregroundStyle(.black)
-        .clipShape(RoundedRectangle(cornerRadius: GoldengoTheme.Radius.control, style: .continuous))
-        .disabled(busy || typedAmount == nil)
     }
 }
