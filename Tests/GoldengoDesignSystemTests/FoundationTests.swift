@@ -25,4 +25,8 @@ final class FoundationTests: XCTestCase {
         _ = Color(light: "#000000", dark: "#FFFFFF")
         _ = Color(light: .black, dark: .white)
     }
+
+    func test_accentGoldHex_matchesLightAccent() {
+        XCTAssertEqual(GoldengoTheme.accentGoldHex, GoldengoTheme.Hex.accentLight)
+    }
 }

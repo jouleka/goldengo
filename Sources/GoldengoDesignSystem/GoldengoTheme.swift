@@ -27,11 +27,29 @@ public enum GoldengoTheme {
         public static let onAccent = "#2A2620"
     }
 
-    public static let accentGoldHex = "#E8B341"
-    public static var accent: Color { Color(hex: accentGoldHex) }
+    /// Light-mode gold hex. Kept for back-compat (was the single accent hex). Dark gold is `Hex.accentDark`.
+    public static let accentGoldHex = Hex.accentLight
 
-    /// Faint gold wash used behind icons and selected states.
-    public static var accentSoft: Color { accent.opacity(0.16) }
+    /// The one brand accent. Sparingly used; semantic colors (danger/income) are separate.
+    public static var accent: Color { Color(light: Hex.accentLight, dark: Hex.accentDark) }
+
+    /// Faint gold wash behind icons and selected states. Per-scheme alpha (D6): 0.12 light / 0.16 dark.
+    public static var accentSoft: Color {
+        Color(light: Color(hex: Hex.accentLight).opacity(0.12),
+              dark:  Color(hex: Hex.accentDark).opacity(0.16))
+    }
+
+    /// Foreground color for any label/glyph sitting on a gold fill (D1).
+    public static var onAccent: Color { Color(hex: Hex.onAccent) }
+
+    /// Primary text / amounts.
+    public static var inkPrimary: Color { Color(light: Hex.inkPrimaryLight, dark: Hex.inkPrimaryDark) }
+
+    /// Secondary text, captions.
+    public static var inkMuted: Color { Color(light: Hex.inkMutedLight, dark: Hex.inkMutedDark) }
+
+    /// 1px separators and card strokes.
+    public static var hairline: Color { Color(light: Hex.hairlineLight, dark: Hex.hairlineDark) }
 
     /// Destructive-action red (e.g. swipe-to-delete). Uses the system red so it adapts to light/dark
     /// and reads as the platform's standard "delete" tint.
@@ -101,37 +119,19 @@ public extension Color {
         self.init(light: Color(hex: light), dark: Color(hex: dark))
     }
 
-    /// The app canvas (the muted backdrop cards sit on).
+    /// The app canvas (the warm backdrop cards sit on).
     static var goldengoBackground: Color {
-#if canImport(UIKit)
-        Color(.systemGroupedBackground)
-#elseif canImport(AppKit)
-        Color(.windowBackgroundColor)
-#else
-        Color.gray.opacity(0.1)
-#endif
+        Color(light: GoldengoTheme.Hex.canvasLight, dark: GoldengoTheme.Hex.canvasDark)
     }
 
     /// An elevated card / row surface.
     static var goldengoSurface: Color {
-#if canImport(UIKit)
-        Color(.secondarySystemGroupedBackground)
-#elseif canImport(AppKit)
-        Color(.controlBackgroundColor)
-#else
-        Color.white
-#endif
+        Color(light: GoldengoTheme.Hex.surfaceLight, dark: GoldengoTheme.Hex.surfaceDark)
     }
 
     /// A subtle fill for fields and keypad keys.
     static var goldengoField: Color {
-#if canImport(UIKit)
-        Color(.tertiarySystemFill)
-#elseif canImport(AppKit)
-        Color(.underPageBackgroundColor)
-#else
-        Color.gray.opacity(0.15)
-#endif
+        Color(light: GoldengoTheme.Hex.fieldLight, dark: GoldengoTheme.Hex.fieldDark)
     }
 }
 
