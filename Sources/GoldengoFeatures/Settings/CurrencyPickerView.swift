@@ -36,11 +36,24 @@ struct CurrencyPickerView: View {
         List {
             if query.isEmpty {
                 if !suggested.isEmpty {
-                    Section("Suggested") { ForEach(suggested, id: \.rawValue, content: row) }
+                    Section { ForEach(suggested, id: \.rawValue, content: row) } header: { GoldengoSerifSectionHeader("Suggested") }
                 }
-                Section("All currencies") { ForEach(others, id: \.rawValue, content: row) }
+                Section { ForEach(others, id: \.rawValue, content: row) } header: { GoldengoSerifSectionHeader("All currencies") }
             } else {
-                ForEach(results, id: \.rawValue, content: row)
+                if results.isEmpty {
+                    VStack(spacing: 4) {
+                        Text("No matches")
+                            .font(.system(.title3, design: .serif))
+                            .foregroundStyle(GoldengoTheme.inkPrimary)
+                        Text("Try a different name or 3-letter code.")
+                            .font(.caption)
+                            .foregroundStyle(GoldengoTheme.inkMuted)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .listRowBackground(Color.clear)
+                } else {
+                    ForEach(results, id: \.rawValue, content: row)
+                }
             }
         }
         .searchable(text: $query, prompt: "Search by name or code")
@@ -59,8 +72,8 @@ struct CurrencyPickerView: View {
                     .foregroundStyle(GoldengoTheme.accent)
                     .frame(width: 34, alignment: .center)
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(name(c)).foregroundStyle(.primary)
-                    Text(c.rawValue).font(.caption).foregroundStyle(.secondary)
+                    Text(name(c)).foregroundStyle(GoldengoTheme.inkPrimary)
+                    Text(c.rawValue).font(.caption).foregroundStyle(GoldengoTheme.inkMuted)
                 }
                 Spacer(minLength: GoldengoTheme.Spacing.s)
                 if selected {
@@ -72,5 +85,6 @@ struct CurrencyPickerView: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .listRowBackground(c.rawValue == selectedCode ? GoldengoTheme.accentSoft : nil)
     }
 }

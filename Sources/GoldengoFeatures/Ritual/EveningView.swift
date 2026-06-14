@@ -16,28 +16,28 @@ public struct EveningView: View {
     public var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: GoldengoTheme.Spacing.l) {
-                Text("Close your day").font(.title.weight(.bold))
+                Text("Close your day").font(.system(.title, design: .serif)).foregroundStyle(GoldengoTheme.inkPrimary)
 
                 // This morning's intention (or a gentle "no note" line).
                 if let intention = model.intention {
                     VStack(alignment: .leading, spacing: GoldengoTheme.Spacing.s) {
-                        Text("This morning you said").font(.caption).foregroundStyle(.secondary)
+                        Text("This morning you said").font(.caption).foregroundStyle(GoldengoTheme.inkMuted)
                         Text("“\(intention)”").font(.title3.weight(.semibold))
                     }
                 } else {
                     Text("No note this morning — that's fine.")
-                        .font(.body).foregroundStyle(.secondary)
+                        .font(.body).foregroundStyle(GoldengoTheme.inkMuted)
                 }
 
                 // The quiet journal door (GOL-93) — only when there are PAST notes to read.
                 if !model.pastNotes.isEmpty {
                     Button("Past notes") { showPastNotes = true }
-                        .font(.caption).foregroundStyle(.secondary)
+                        .font(.caption).foregroundStyle(GoldengoTheme.inkMuted)
                 }
 
                 // Today's usuals — one tap each to confirm.
                 if !model.ghosts.isEmpty {
-                    Text("Anything usual today?").font(.headline)
+                    GoldengoSerifSectionHeader("Anything usual today?")
                     ForEach(model.ghosts) { ghost in
                         Button {
                             GoldengoHaptics.spendLanded()
@@ -48,7 +48,7 @@ public struct EveningView: View {
                                 Spacer()
                                 Text(Money(amount: ghost.amount,
                                            currency: CurrencyCode(ghost.currencyCode)).formatted())
-                                    .foregroundStyle(.secondary)
+                                    .foregroundStyle(GoldengoTheme.inkMuted)
                                 Image(systemName: "plus.circle.fill").foregroundStyle(GoldengoTheme.accent)
                             }
                             .padding()
@@ -61,20 +61,16 @@ public struct EveningView: View {
 
                 // Calm spend recap (no judgement framing).
                 HStack {
-                    Text("Today").foregroundStyle(.secondary)
+                    Text("Today").foregroundStyle(GoldengoTheme.inkMuted)
                     Spacer()
-                    Text(model.todayTotalText).font(.headline)
+                    GoldengoAmountText(model.todayTotalText, role: .row)
                 }
                 .padding(.vertical, GoldengoTheme.Spacing.s)
 
                 Text("You were trying. Rest well.")
-                    .font(.body).foregroundStyle(.secondary)
+                    .font(.body).foregroundStyle(GoldengoTheme.inkMuted)
 
-                Button(action: onDone) {
-                    Text("Done").font(.headline).frame(maxWidth: .infinity, minHeight: 54)
-                }
-                .background(GoldengoTheme.accent).foregroundStyle(.black)
-                .clipShape(RoundedRectangle(cornerRadius: GoldengoTheme.Radius.control, style: .continuous))
+                GoldButton("Done") { onDone() }
             }
             .padding(GoldengoTheme.Spacing.l)
         }

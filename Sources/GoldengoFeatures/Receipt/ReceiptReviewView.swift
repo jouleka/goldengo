@@ -19,53 +19,53 @@ public struct ReceiptReviewView: View {
     public var body: some View {
         NavigationStack {
             Form {
-                Section("Amount") {
+                Section {
                     HStack {
-                        Text(model.currency.symbol).foregroundStyle(.secondary)
+                        Text(model.currency.symbol).foregroundStyle(GoldengoTheme.inkMuted)
                         TextField("0", text: $model.amountString)
 #if os(iOS)
                             .keyboardType(.decimalPad)
 #endif
                             .focused($amountFocused)
-                            .font(.title2.weight(.semibold))
+                            .font(.title2.weight(.semibold).monospacedDigit())
                     }
                     if model.amountWasUnreadable {
                         Text("Couldn't read the total — enter it.")
-                            .font(.footnote).foregroundStyle(.secondary)
+                            .font(.footnote).foregroundStyle(GoldengoTheme.inkMuted)
                     }
+                } header: {
+                    GoldengoSerifSectionHeader("Amount")
                 }
-                Section("Merchant") {
+                Section {
                     TextField("Merchant", text: $model.merchant)
                         .focused($merchantFocused)
+                } header: {
+                    GoldengoSerifSectionHeader("Merchant")
                 }
-                Section("Date") {
+                Section {
                     DatePicker("Date",
                                selection: Binding(get: { model.date ?? .now },
                                                   set: { model.date = $0 }),
                                displayedComponents: .date)
+                } header: {
+                    GoldengoSerifSectionHeader("Date")
                 }
-                Section("Category") {
+                Section {
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: GoldengoTheme.Spacing.s) {
                             ForEach(categories, id: \.self) { cat in
-                                let selected = model.selectedCategory == cat
-                                Button {
-                                    model.selectedCategory = selected ? nil : cat
-                                } label: {
-                                    Label(cat, systemImage: GoldengoCategoryIcon.symbol(for: cat))
-                                        .font(.subheadline.weight(.medium))
-                                        .padding(.horizontal, GoldengoTheme.Spacing.m)
-                                        .padding(.vertical, 8)
-                                        .background(selected ? GoldengoTheme.accent : Color.goldengoSurface)
-                                        .foregroundStyle(selected ? .black : .primary)
-                                        .clipShape(Capsule())
+                                SelectableChip(cat, systemImage: GoldengoCategoryIcon.symbol(for: cat),
+                                               isSelected: model.selectedCategory == cat) {
+                                    model.selectedCategory = (model.selectedCategory == cat) ? nil : cat
                                 }
-                                .buttonStyle(.plain)
                             }
                         }
                     }
+                } header: {
+                    GoldengoSerifSectionHeader("Category")
                 }
             }
+            .tint(GoldengoTheme.accent)
             .navigationTitle("Review receipt")
             .scrollContentBackground(.hidden)
             .background(Color.goldengoBackground.ignoresSafeArea())

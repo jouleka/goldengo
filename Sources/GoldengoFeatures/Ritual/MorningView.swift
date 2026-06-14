@@ -22,28 +22,26 @@ public struct MorningView: View {
     public var body: some View {
         VStack(spacing: GoldengoTheme.Spacing.l) {
             Spacer()
-            Image(systemName: "sun.max.fill")
-                .font(.system(size: 48)).foregroundStyle(GoldengoTheme.accent)
+            GoldGlyphBadge("sun.max")
             Text("What's today about?")
-                .font(.title2.weight(.bold))
+                .font(.system(.title2, design: .serif)).foregroundStyle(GoldengoTheme.inkPrimary)
             Text("One line for tonight-you to read back.")
-                .font(.body).foregroundStyle(.secondary).multilineTextAlignment(.center)
+                .font(.body).foregroundStyle(GoldengoTheme.inkMuted).multilineTextAlignment(.center)
                 .padding(.horizontal, GoldengoTheme.Spacing.xl)
             TextField("Today, I want to…", text: $text)
-                .textFieldStyle(.roundedBorder)
                 .focused($focused)
                 .submitLabel(.done)
                 .onSubmit(save)
+                .padding(.horizontal, GoldengoTheme.Spacing.m)
+                .padding(.vertical, 12)
+                .background(Color.goldengoField)
+                .clipShape(RoundedRectangle(cornerRadius: GoldengoTheme.Radius.control, style: .continuous))
                 .padding(.horizontal, GoldengoTheme.Spacing.l)
             Spacer()
-            Button(action: save) {
-                Text("Save").font(.headline).frame(maxWidth: .infinity, minHeight: 54)
-            }
-            .background(GoldengoTheme.accent).foregroundStyle(.black)
-            .clipShape(RoundedRectangle(cornerRadius: GoldengoTheme.Radius.control, style: .continuous))
-            .padding(.horizontal, GoldengoTheme.Spacing.l)
+            GoldButton("Save") { save() }
+                .padding(.horizontal, GoldengoTheme.Spacing.l)
             Button("Skip for today", action: onDone)
-                .font(.subheadline).foregroundStyle(.secondary)
+                .font(.subheadline).foregroundStyle(GoldengoTheme.inkMuted)
                 .padding(.bottom, GoldengoTheme.Spacing.l)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)

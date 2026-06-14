@@ -73,6 +73,7 @@ public struct EditExpenseView: View {
                 dateSection
                 deleteSection
             }
+            .tint(GoldengoTheme.accent)
             .navigationTitle("Edit expense")
 #if canImport(UIKit)
             .navigationBarTitleDisplayMode(.inline)
@@ -110,16 +111,14 @@ public struct EditExpenseView: View {
     // MARK: - Sections
 
     private var amountSection: some View {
-        Section("Amount") {
-            HStack(spacing: GoldengoTheme.Spacing.s) {
-                currencyMenu
-                TextField("0", text: $amountText)
-                    .font(.title3.weight(.medium))
+        Section { HStack(spacing: GoldengoTheme.Spacing.s) {
+            currencyMenu
+            TextField("0", text: $amountText)
+                .font(.title3.weight(.medium).monospacedDigit())
 #if canImport(UIKit)
-                    .keyboardType(.decimalPad)
+                .keyboardType(.decimalPad)
 #endif
-            }
-        }
+        } } header: { GoldengoSerifSectionHeader("Amount") }
     }
 
     /// Tap the currency to change it — popular currencies inline, "More…" opens the full picker.
@@ -145,7 +144,7 @@ public struct EditExpenseView: View {
                 Text(currency.symbol).font(.title3.weight(.semibold))
                 Image(systemName: "chevron.down").font(.caption2.weight(.bold))
             }
-            .foregroundStyle(.secondary)
+            .foregroundStyle(GoldengoTheme.inkMuted)
         }
     }
 
@@ -168,42 +167,29 @@ public struct EditExpenseView: View {
     }
 
     private var merchantSection: some View {
-        Section("Merchant") {
-            TextField("Merchant (optional)", text: $merchant)
-        }
+        Section { TextField("Merchant (optional)", text: $merchant) } header: { GoldengoSerifSectionHeader("Merchant") }
     }
 
     private var noteSection: some View {
-        Section("Note") {
-            TextField("Note (optional)", text: $note)
-        }
+        Section { TextField("Note (optional)", text: $note) } header: { GoldengoSerifSectionHeader("Note") }
     }
 
     private var categorySection: some View {
-        Section("Category") {
+        Section {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: GoldengoTheme.Spacing.s) {
                     ForEach(categories, id: \.self) { cat in
-                        let selected = category == cat
-                        Button {
-                            category = selected ? nil : cat
-                        } label: {
-                            Label(cat, systemImage: GoldengoCategoryIcon.symbol(for: cat))
-                                .font(.subheadline.weight(.medium))
-                                .padding(.horizontal, GoldengoTheme.Spacing.m)
-                                .padding(.vertical, 10)
-                                .background(selected ? GoldengoTheme.accent : Color.goldengoField)
-                                .foregroundStyle(selected ? .black : .primary)
-                                .clipShape(Capsule())
+                        SelectableChip(cat, systemImage: GoldengoCategoryIcon.symbol(for: cat),
+                                       isSelected: category == cat) {
+                            category = (category == cat) ? nil : cat
                         }
-                        .buttonStyle(.plain)
                     }
                 }
                 .padding(.vertical, 2)
             }
             .listRowInsets(EdgeInsets(top: GoldengoTheme.Spacing.s, leading: GoldengoTheme.Spacing.m,
                                       bottom: GoldengoTheme.Spacing.s, trailing: GoldengoTheme.Spacing.m))
-        }
+        } header: { GoldengoSerifSectionHeader("Category") }
     }
 
     /// GOL-89/95: choose which money this expense draws from. "Wallet — cash" drains the wallet
@@ -241,7 +227,7 @@ public struct EditExpenseView: View {
             .listRowInsets(EdgeInsets(top: GoldengoTheme.Spacing.s, leading: GoldengoTheme.Spacing.m,
                                       bottom: GoldengoTheme.Spacing.s, trailing: GoldengoTheme.Spacing.m))
         } header: {
-            Text("Paid from")
+            GoldengoSerifSectionHeader("Paid from")
         } footer: {
             Text(isManualRow
                  ? "Cash drains your wallet. Pick a source to mark this bank-paid instead."
@@ -253,16 +239,15 @@ public struct EditExpenseView: View {
                               action: @escaping () -> Void) -> some View {
         Button(action: action) {
             HStack(spacing: 6) {
-                if let dot {
-                    Circle().fill(dot).frame(width: 8, height: 8)
-                }
+                if let dot { Circle().fill(dot).frame(width: 8, height: 8) }
                 Text(label).font(.subheadline.weight(.medium))
             }
             .padding(.horizontal, GoldengoTheme.Spacing.m)
-            .padding(.vertical, 10)
-            .background(selected ? GoldengoTheme.accent : Color.goldengoField)
-            .foregroundStyle(selected ? .black : .primary)
+            .padding(.vertical, 8)
+            .foregroundStyle(GoldengoTheme.inkPrimary)
+            .background(selected ? GoldengoTheme.accentSoft : Color.goldengoField)
             .clipShape(Capsule())
+            .overlay(Capsule().strokeBorder(selected ? GoldengoTheme.accent : .clear, lineWidth: 1))
         }
         .buttonStyle(.plain)
     }
