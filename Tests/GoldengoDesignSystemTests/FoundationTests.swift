@@ -47,7 +47,7 @@ final class FoundationTests: XCTestCase {
         let title = GoldengoAmountText.pointSize(for: .title)
         let row = GoldengoAmountText.pointSize(for: .row)
         let micro = GoldengoAmountText.pointSize(for: .micro)
-        XCTAssertEqual(hero, 44)
+        XCTAssertEqual(hero, 52)
         XCTAssertEqual(row, 17)
         XCTAssertGreaterThan(hero, title)
         XCTAssertGreaterThan(title, row)

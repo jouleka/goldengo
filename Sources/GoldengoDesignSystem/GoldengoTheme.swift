@@ -27,10 +27,10 @@ public enum GoldengoTheme {
         public static let onAccent = "#2A2620"
         /// Warm terracotta destructive (prototype --danger), not harsh system red.
         public static let dangerLight = "#E0533D"
-        public static let dangerDark = "#EA6A52"
+        public static let dangerDark = "#E8705C"
         /// Soft warm green for income inflow (prototype --income), not loud system green.
         public static let incomeLight = "#4E8B5B"
-        public static let incomeDark = "#5FA06C"
+        public static let incomeDark = "#6FB47E"
     }
 
     /// Light-mode gold hex. Kept for back-compat (was the single accent hex). Dark gold is `Hex.accentDark`.

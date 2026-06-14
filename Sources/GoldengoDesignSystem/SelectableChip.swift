@@ -22,14 +22,14 @@ public struct SelectableChip: View {
             Group {
                 if let systemImage { Label(title, systemImage: systemImage) } else { Text(title) }
             }
-            .font(.subheadline.weight(.medium))
-            .padding(.horizontal, GoldengoTheme.Spacing.m)
-            .padding(.vertical, 8)
+            .font(.system(size: 15, weight: .medium))
+            .padding(.horizontal, 16)
+            .padding(.vertical, 9)
             .foregroundStyle(GoldengoTheme.inkPrimary)
             .background(isSelected ? GoldengoTheme.accentSoft : Color.goldengoField)
             .clipShape(Capsule())
             .overlay(
-                Capsule().strokeBorder(isSelected ? GoldengoTheme.accent : .clear, lineWidth: 1)
+                Capsule().strokeBorder(isSelected ? GoldengoTheme.accentLine : .clear, lineWidth: 1)
             )
         }
         .buttonStyle(.plain)
