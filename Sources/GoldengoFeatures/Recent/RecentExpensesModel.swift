@@ -19,6 +19,8 @@ public final class RecentExpensesModel {
     public private(set) var pendingCharges: [PendingSubscriptionCharge] = []
     /// Named sources for the edit sheet's "Paid from" chips (GOL-89); rides along in homeData.
     public private(set) var fundingSources: [FundingSourceOption] = []
+    /// Read-only per-currency wallet snapshot driving the "In your pocket" hero. Home never writes wallet.
+    public private(set) var pocketLines: [PocketLine] = []
 
     public init(store: any RecentExpensesReading, currency: CurrencyCode = .all) {
         self.reader = store; self.currency = currency
@@ -34,11 +36,54 @@ public final class RecentExpensesModel {
             ghosts = data.ghosts
             pendingCharges = data.pending
             fundingSources = data.sources
+            pocketLines = data.pocket
             loadFailed = false
         } catch {
             // Keep any previously-loaded rows on screen; surface the failure so the user can retry.
             loadFailed = true
         }
+    }
+
+    /// The wallet line the hero shows: the one matching the display currency, else the first
+    /// (balances arrive ALL-first), else nil when there is no wallet.
+    public nonisolated static func heroPocketLine(from lines: [PocketLine], currency: CurrencyCode) -> PocketLine? {
+        if let match = lines.first(where: { $0.currencyCode == currency.rawValue }) { return match }
+        return lines.first
+    }
+
+    /// In-app fog caption (the lock-screen widget keeps its own phrasing). Always paired with the
+    /// REAL figure in the hero — the caption conveys uncertainty, it never hides the number.
+    public nonisolated static func pocketCaption(for line: PocketLine?, now: Date) -> String {
+        guard let line else { return "" }
+        let silent = PocketFog.silentDays(from: line.lastMovement, to: now)
+        switch PocketFog.confidence(silentDays: silent, typicalCashDay: line.typicalCashDay, walletTotal: line.expected) {
+        case .even:   return "ready to spend"
+        case .fogged: return "losing track — reconcile when your wallet's out"
+        case .lost:   return "lost track — reconcile when your wallet's out"
+        }
+    }
+
+    public var hasWallet: Bool { !pocketLines.isEmpty }
+
+    /// The hero's money string (real figure, formatted in the line's own currency), or "" if no wallet.
+    public var pocketHeroText: String {
+        guard let line = Self.heroPocketLine(from: pocketLines, currency: currency) else { return "" }
+        return Money(amount: line.expected, currency: CurrencyCode(line.currencyCode)).formatted()
+    }
+
+    public var pocketCaptionText: String {
+        Self.pocketCaption(for: Self.heroPocketLine(from: pocketLines, currency: currency), now: .now)
+    }
+
+    /// A short summary of the non-hero wallet currencies, e.g. "and €35.00 on hand".
+    /// Returns "" when there are no secondary currencies or no wallet.
+    public var pocketSecondaryText: String {
+        guard hasWallet else { return "" }
+        let heroCode = Self.heroPocketLine(from: pocketLines, currency: currency)?.currencyCode
+        let others = pocketLines.filter { $0.currencyCode != heroCode }
+        guard !others.isEmpty else { return "" }
+        let parts = others.map { Money(amount: $0.expected, currency: CurrencyCode($0.currencyCode)).formatted() }
+        return "and \(parts.joined(separator: " · ")) on hand"
     }
 
     /// The rate date behind the converted totals, when conversion was involved (for the staleness caption).

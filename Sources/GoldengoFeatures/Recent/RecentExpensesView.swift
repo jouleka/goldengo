@@ -44,26 +44,34 @@ public struct RecentExpensesView: View {
             // system's List owns scrolling and swipe together, so they never conflict. The dashboard
             // cards ride on clear, separator-less rows to keep their existing card look.
             List {
+                // 1. Header row — wordmark on the left, icon buttons on the right.
+                headerRow.goldengoCardRow()
+
                 if model.loadFailed { errorBanner.goldengoCardRow() }
-                monthCard.goldengoCardRow()
+
+                // 2. Pocket hero card.
+                pocketHeroCard.goldengoCardRow()
+
+                // Keep subscriptions card and categories card from the original layout.
                 if model.subscriptionsText() != nil { subscriptionsCard.goldengoCardRow() }
                 if let s = model.summary, !s.topCategories.isEmpty { categoriesCard(s).goldengoCardRow() }
 
+                // 3. Upcoming (pending subscription charges).
                 if !model.pendingCharges.isEmpty {
-                    // Subscription dues outrank habit guesses: a detected billing schedule is
-                    // near-certain, so the "Due" section sits above "Today's usuals" (GOL-92).
-                    GoldengoSectionLabel("Due")
+                    GoldengoSerifSectionHeader("Upcoming")
                         .goldengoCardRow(top: GoldengoTheme.Spacing.m, bottom: GoldengoTheme.Spacing.xs)
                     ForEach(model.pendingCharges) { p in dueRow(p) }
                 }
 
+                // 4. Today's usuals (rhythm ghosts).
                 if !model.ghosts.isEmpty {
-                    GoldengoSectionLabel("Today's usuals")
+                    GoldengoSerifSectionHeader("Today's usuals")
                         .goldengoCardRow(top: GoldengoTheme.Spacing.m, bottom: GoldengoTheme.Spacing.xs)
                     ForEach(model.ghosts) { g in ghostRow(g) }
                 }
 
-                GoldengoSectionLabel("Recent")
+                // 5. Recent.
+                GoldengoSerifSectionHeader("Recent")
                     .goldengoCardRow(top: GoldengoTheme.Spacing.m, bottom: GoldengoTheme.Spacing.xs)
                 if model.rows.isEmpty {
                     ContentUnavailableView("No expenses yet", systemImage: "tray",
@@ -77,19 +85,10 @@ public struct RecentExpensesView: View {
             .listStyle(.plain)
             .scrollContentBackground(.hidden)
             .background(Color.goldengoBackground.ignoresSafeArea())
-            .navigationTitle("Goldengo")
-            .toolbar {
-                ToolbarItemGroup(placement: .primaryAction) {
-                    Button { onOpenImport() } label: {
-                        Image(systemName: "square.and.arrow.down")
-                    }
-                    .accessibilityLabel("Import statement")
-                    Button { onOpenSettings() } label: {
-                        Image(systemName: "gearshape")
-                    }
-                    .accessibilityLabel("Settings")
-                }
-            }
+#if canImport(UIKit)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar(.hidden, for: .navigationBar)
+#endif
             .refreshable { await model.load() }
             .alert("Adjust amount", isPresented: Binding(get: { adjusting != nil },
                                                          set: { if !$0 { adjusting = nil } }),
@@ -135,6 +134,134 @@ public struct RecentExpensesView: View {
                 guard !Task.isCancelled else { return }
                 withAnimation(.snappy) { recentlyDeleted = nil }
             }
+        }
+    }
+
+    // MARK: - Header row
+
+    private var headerRow: some View {
+        HStack {
+            Text("Goldengo")
+                .font(.system(.title, design: .serif))
+                .foregroundStyle(GoldengoTheme.accent)
+            Spacer()
+            Button { onOpenImport() } label: {
+                Image(systemName: "square.and.arrow.down")
+                    .font(.title3)
+                    .foregroundStyle(GoldengoTheme.inkMuted)
+            }
+            .accessibilityLabel("Import statement")
+            .buttonStyle(.plain)
+            Button { onOpenSettings() } label: {
+                Image(systemName: "gearshape")
+                    .font(.title3)
+                    .foregroundStyle(GoldengoTheme.inkMuted)
+            }
+            .accessibilityLabel("Settings")
+            .buttonStyle(.plain)
+        }
+        .padding(.top, GoldengoTheme.Spacing.xs)
+    }
+
+    // MARK: - Pocket hero card
+
+    private var pocketHeroCard: some View {
+        VStack(alignment: .leading, spacing: GoldengoTheme.Spacing.m) {
+            GoldengoSectionLabel("In your pocket")
+
+            if model.hasWallet {
+                GoldengoAmountText(model.pocketHeroText, role: .hero)
+                if !model.pocketSecondaryText.isEmpty {
+                    Text(model.pocketSecondaryText)
+                        .font(.subheadline)
+                        .foregroundStyle(GoldengoTheme.inkMuted)
+                }
+            } else {
+                Text("Set your wallet to begin")
+                    .foregroundStyle(GoldengoTheme.inkMuted)
+            }
+
+            Divider().overlay(GoldengoTheme.hairline)
+
+            HStack(alignment: .firstTextBaseline) {
+                VStack(alignment: .leading, spacing: GoldengoTheme.Spacing.xs) {
+                    Text("This month")
+                        .font(.caption)
+                        .foregroundStyle(GoldengoTheme.inkMuted)
+                    HStack(alignment: .firstTextBaseline, spacing: 6) {
+                        currencyMenuControl
+                        GoldengoAmountText(model.monthAmountText(), role: .title)
+                    }
+                }
+                Spacer()
+                VStack(alignment: .trailing, spacing: GoldengoTheme.Spacing.xs) {
+                    Text("Today")
+                        .font(.caption)
+                        .foregroundStyle(GoldengoTheme.inkMuted)
+                    GoldengoAmountText(model.todayTotalText, role: .row)
+                }
+            }
+        }
+        .goldengoCard(padding: GoldengoTheme.Spacing.l)
+        .sheet(isPresented: $showCurrencyPicker) {
+            NavigationStack {
+                CurrencyPickerView(
+                    available: availableCurrencies,
+                    selectedCode: Binding(
+                        get: { model.currency.rawValue },
+                        set: { onChangeCurrency(CurrencyCode($0)) }
+                    )
+                )
+            }
+        }
+    }
+
+    // MARK: - Currency menu (extracted from the old monthCard)
+
+    private func menuLabel(_ c: CurrencyCode) -> String {
+        let name = Locale.current.localizedString(forCurrencyCode: c.rawValue) ?? c.rawValue
+        return "\(c.symbol)  \(name)"
+    }
+    private var availableCurrencies: [CurrencyCode] {
+        CurrencyCatalog.selectable(from: ExchangeRateCache().load() ?? SeedRates.table)
+    }
+    private var menuCurrencies: [CurrencyCode] {
+        let have = Set(availableCurrencies.map(\.rawValue))
+        var list = CurrencyCode.popular.filter { have.contains($0.rawValue) }
+        if !list.contains(where: { $0.rawValue == model.currency.rawValue }) {
+            list.insert(model.currency, at: 0)
+        }
+        return list
+    }
+
+    /// The chevron-menu currency control, reused from the old monthCard.
+    private var currencyMenuControl: some View {
+        Menu {
+            ForEach(menuCurrencies, id: \.rawValue) { c in
+                Button {
+                    onChangeCurrency(c)
+                } label: {
+                    if c.rawValue == model.currency.rawValue {
+                        Label(menuLabel(c), systemImage: "checkmark")
+                    } else {
+                        Text(menuLabel(c))
+                    }
+                }
+            }
+            Divider()
+            Button { showCurrencyPicker = true } label: {
+                Label("More currencies…", systemImage: "ellipsis.circle")
+            }
+        } label: {
+            // Small, fixed-width currency control (gold tint signals it's tappable) so the
+            // big amount beside it keeps a real width budget and scales instead of clipping.
+            HStack(alignment: .firstTextBaseline, spacing: 2) {
+                Text(model.currency.symbol)
+                    .font(.system(size: 26, weight: .bold, design: .rounded))
+                Image(systemName: "chevron.down")
+                    .font(.caption2.weight(.bold))
+            }
+            .contentShape(Rectangle())
         }
     }
 
@@ -212,105 +339,6 @@ public struct RecentExpensesView: View {
             .goldengoCard()
     }
 
-    // MARK: - Display currency
-
-    private func menuLabel(_ c: CurrencyCode) -> String {
-        let name = Locale.current.localizedString(forCurrencyCode: c.rawValue) ?? c.rawValue
-        return "\(c.symbol)  \(name)"
-    }
-    private var availableCurrencies: [CurrencyCode] {
-        CurrencyCatalog.selectable(from: ExchangeRateCache().load() ?? SeedRates.table)
-    }
-    private var menuCurrencies: [CurrencyCode] {
-        let have = Set(availableCurrencies.map(\.rawValue))
-        var list = CurrencyCode.popular.filter { have.contains($0.rawValue) }
-        if !list.contains(where: { $0.rawValue == model.currency.rawValue }) {
-            list.insert(model.currency, at: 0)
-        }
-        return list
-    }
-
-    private var monthCard: some View {
-        VStack(alignment: .leading, spacing: GoldengoTheme.Spacing.m) {
-            HStack(alignment: .top) {
-                VStack(alignment: .leading, spacing: GoldengoTheme.Spacing.xs) {
-                    GoldengoSectionLabel("This month")
-                    HStack(alignment: .firstTextBaseline, spacing: 6) {
-                        Menu {
-                            ForEach(menuCurrencies, id: \.rawValue) { c in
-                                Button {
-                                    onChangeCurrency(c)
-                                } label: {
-                                    if c.rawValue == model.currency.rawValue {
-                                        Label(menuLabel(c), systemImage: "checkmark")
-                                    } else {
-                                        Text(menuLabel(c))
-                                    }
-                                }
-                            }
-                            Divider()
-                            Button { showCurrencyPicker = true } label: {
-                                Label("More currencies…", systemImage: "ellipsis.circle")
-                            }
-                        } label: {
-                            // Small, fixed-width currency control (gold tint signals it's tappable) so the
-                            // big amount beside it keeps a real width budget and scales instead of clipping.
-                            HStack(alignment: .firstTextBaseline, spacing: 2) {
-                                Text(model.currency.symbol)
-                                    .font(.system(size: 26, weight: .bold, design: .rounded))
-                                Image(systemName: "chevron.down")
-                                    .font(.caption2.weight(.bold))
-                            }
-                            .contentShape(Rectangle())
-                        }
-                        Text(model.monthAmountText())
-                            .font(.system(size: 40, weight: .bold, design: .rounded))
-                            .minimumScaleFactor(0.5)
-                            .lineLimit(1)
-                            .foregroundStyle(.primary)
-                    }
-                    if let asOf = model.ratesAsOf {
-                        Text("Rates as of \(asOf.formatted(date: .abbreviated, time: .omitted))")
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-                Spacer()
-                Button(action: onAdd) {
-                    Label("Add", systemImage: "plus")
-                        .font(.subheadline.weight(.semibold))
-                        .padding(.horizontal, GoldengoTheme.Spacing.m)
-                        .padding(.vertical, GoldengoTheme.Spacing.s)
-                        .background(GoldengoTheme.accent)
-                        .foregroundStyle(.black)
-                        .clipShape(Capsule())
-                }
-                .buttonStyle(.plain)
-            }
-            Divider()
-            HStack {
-                Label("Today", systemImage: "sun.max")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                Spacer()
-                Text(model.todayTotalText)
-                    .font(.headline)
-            }
-        }
-        .goldengoCard(padding: GoldengoTheme.Spacing.l)
-        .sheet(isPresented: $showCurrencyPicker) {
-            NavigationStack {
-                CurrencyPickerView(
-                    available: availableCurrencies,
-                    selectedCode: Binding(
-                        get: { model.currency.rawValue },
-                        set: { onChangeCurrency(CurrencyCode($0)) }
-                    )
-                )
-            }
-        }
-    }
-
     private var subscriptionsCard: some View {
         Button(action: onOpenSubscriptions) {
             HStack(spacing: GoldengoTheme.Spacing.m) {
@@ -366,26 +394,31 @@ public struct RecentExpensesView: View {
         .frame(height: 6)
     }
 
-    /// A due-but-unlogged subscription charge (GOL-92) — tap to log it at its due date. Same ghost
-    /// grammar as the rhythm rows (draft opacity, plus-circle), but the chip carries the `repeat`
-    /// symbol users already know as the subscription marker, and the caption leads with the date.
+    /// A due-but-unlogged subscription charge (GOL-92) — tap to log it at its due date.
+    /// Icon chip uses `arrow.triangle.2.circlepath` (the subscription/recurring glyph).
     private func dueRow(_ p: PendingSubscriptionCharge) -> some View {
         Button { GoldengoHaptics.spendLanded(); Task { await model.logPending(p) } } label: {
             HStack(spacing: GoldengoTheme.Spacing.m) {
-                Image(systemName: "repeat")
-                    .font(.subheadline).foregroundStyle(.secondary)
-                    .frame(width: 36, height: 36)
-                    .background(Color.goldengoField)
-                    .clipShape(RoundedRectangle(cornerRadius: GoldengoTheme.Radius.chip, style: .continuous))
+                Image(systemName: "arrow.triangle.2.circlepath")
+                    .font(.subheadline)
+                    .foregroundStyle(GoldengoTheme.accent)
+                    .frame(width: 40, height: 40)
+                    .background(GoldengoTheme.accentSoft)
+                    .clipShape(Circle())
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(p.displayName).font(.subheadline.weight(.medium))
+                    Text(p.displayName)
+                        .font(.subheadline.weight(.medium))
+                        .foregroundStyle(GoldengoTheme.inkPrimary)
                     Text(Money(amount: p.amount, currency: CurrencyCode(p.currencyCode)).formatted()
                          + " · " + p.dueDate.formatted(.dateTime.day().month(.abbreviated))
                          + " · tap to add")
-                        .font(.caption).foregroundStyle(.secondary)
+                        .font(.caption)
+                        .foregroundStyle(GoldengoTheme.inkMuted)
                 }
                 Spacer()
-                Image(systemName: "plus.circle").foregroundStyle(GoldengoTheme.accent)
+                Image(systemName: "plus.circle")
+                    .font(.title3)
+                    .foregroundStyle(GoldengoTheme.accent)
             }
             .padding(.vertical, 4)
             .opacity(0.7)   // reads as a draft
@@ -405,17 +438,23 @@ public struct RecentExpensesView: View {
         Button { GoldengoHaptics.spendLanded(); Task { await model.confirm(g) } } label: {
             HStack(spacing: GoldengoTheme.Spacing.m) {
                 Image(systemName: GoldengoCategoryIcon.symbol(for: g.categoryName))
-                    .font(.subheadline).foregroundStyle(.secondary)
-                    .frame(width: 36, height: 36)
-                    .background(Color.goldengoField)
-                    .clipShape(RoundedRectangle(cornerRadius: GoldengoTheme.Radius.chip, style: .continuous))
+                    .font(.subheadline)
+                    .foregroundStyle(GoldengoTheme.accent)
+                    .frame(width: 40, height: 40)
+                    .background(GoldengoTheme.accentSoft)
+                    .clipShape(Circle())
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(g.displayName).font(.subheadline.weight(.medium))
+                    Text(g.displayName)
+                        .font(.subheadline.weight(.medium))
+                        .foregroundStyle(GoldengoTheme.inkPrimary)
                     Text("~" + Money(amount: g.amount, currency: CurrencyCode(g.currencyCode)).formatted() + " · tap to add")
-                        .font(.caption).foregroundStyle(.secondary)
+                        .font(.caption)
+                        .foregroundStyle(GoldengoTheme.inkMuted)
                 }
                 Spacer()
-                Image(systemName: "plus.circle").foregroundStyle(GoldengoTheme.accent)
+                Image(systemName: "plus.circle")
+                    .font(.title3)
+                    .foregroundStyle(GoldengoTheme.accent)
             }
             .padding(.vertical, 4)
             .opacity(0.7)   // reads as a draft
@@ -435,14 +474,15 @@ public struct RecentExpensesView: View {
         HStack(spacing: GoldengoTheme.Spacing.m) {
             Image(systemName: GoldengoCategoryIcon.symbol(for: r.categoryName))
                 .font(.subheadline)
-                .foregroundStyle(.secondary)
-                .frame(width: 36, height: 36)
-                .background(Color.goldengoField)
-                .clipShape(RoundedRectangle(cornerRadius: GoldengoTheme.Radius.chip, style: .continuous))
+                .foregroundStyle(GoldengoTheme.accent)
+                .frame(width: 40, height: 40)
+                .background(GoldengoTheme.accentSoft)
+                .clipShape(Circle())
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 4) {
                     Text(r.displayTitle)
                         .font(.subheadline.weight(.medium))
+                        .foregroundStyle(GoldengoTheme.inkPrimary)
                     if r.subscriptionName != nil {
                         Image(systemName: "repeat").font(.caption2).foregroundStyle(.secondary)
                             .accessibilityLabel("Recurring")
@@ -455,7 +495,8 @@ public struct RecentExpensesView: View {
                     }
                 }
                 Text(r.kind == .transfer ? "→ wallet" : (r.categoryName ?? "Other"))
-                    .font(.caption).foregroundStyle(.secondary)
+                    .font(.caption)
+                    .foregroundStyle(GoldengoTheme.inkMuted)
                 if let fundedBy = r.fundedBy {
                     // Quiet funding chip: the source's palette-color dot (matching its Sources-tab
                     // bar) + "from <source>", in a soft capsule — calm, glanceable, no iconography.
@@ -476,16 +517,14 @@ public struct RecentExpensesView: View {
             }
             Spacer()
             if r.kind == .transfer {
-                Text(Money(amount: r.amount, currency: CurrencyCode(r.currencyCode)).formatted())
-                    .font(.subheadline.weight(.medium))
-                    .foregroundStyle(.secondary)   // neutral: moved to the wallet, not earned or spent
+                GoldengoAmountText(Money(amount: r.amount, currency: CurrencyCode(r.currencyCode)).formatted(),
+                                   role: .row, color: GoldengoTheme.inkMuted)
             } else if r.kind == .income {
-                Text("+" + Money(amount: r.amount, currency: CurrencyCode(r.currencyCode)).formatted())
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.green)
+                GoldengoAmountText("+" + Money(amount: r.amount, currency: CurrencyCode(r.currencyCode)).formatted(),
+                                   role: .row, color: GoldengoTheme.income)
             } else {
-                Text(Money(amount: r.amount, currency: CurrencyCode(r.currencyCode)).formatted())
-                    .font(.subheadline.weight(.medium))
+                GoldengoAmountText(Money(amount: r.amount, currency: CurrencyCode(r.currencyCode)).formatted(),
+                                   role: .row)
             }
         }
         .padding(.vertical, 4)

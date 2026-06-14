@@ -9,6 +9,12 @@ public struct PocketLine: Sendable, Equatable {
     public var confidence: PocketFog.Confidence
     public var typicalCashDay: Decimal     // 0 = static currency (never fogs)
     public var lastMovement: Date          // latest of: reconcile, any wallet cash flow
+
+    public init(currencyCode: String, expected: Decimal, confidence: PocketFog.Confidence,
+                typicalCashDay: Decimal, lastMovement: Date) {
+        self.currencyCode = currencyCode; self.expected = expected; self.confidence = confidence
+        self.typicalCashDay = typicalCashDay; self.lastMovement = lastMovement
+    }
 }
 
 extension IngestionStore {
