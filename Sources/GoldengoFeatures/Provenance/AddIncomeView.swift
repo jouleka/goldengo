@@ -28,6 +28,19 @@ public struct AddIncomeView: View {
 
     private var amount: Decimal { Decimal(string: amountString) ?? 0 }
 
+    private var allowsDecimal: Bool { CurrencyCode(currencyCode).fractionDigits > 0 }
+    private var keys: [String] { ["1", "2", "3", "4", "5", "6", "7", "8", "9", allowsDecimal ? "." : "", "0", "⌫"] }
+    private func tapKey(_ k: String) {
+        switch k {
+        case "⌫": if !amountString.isEmpty { amountString.removeLast() }
+        case ".": if allowsDecimal, !amountString.contains(".") { amountString = amountString.isEmpty ? "0." : amountString + "." }
+        default:
+            if let dot = amountString.firstIndex(of: "."),
+               amountString.distance(from: amountString.index(after: dot), to: amountString.endIndex) >= CurrencyCode(currencyCode).fractionDigits { return }
+            amountString = (amountString == "0") ? k : amountString + k
+        }
+    }
+
     /// income.jsx: canSave = value > 0 && (!intoSource || name)
     /// "Into a source" requires a name; "Cash in hand" does not.
     private var canSave: Bool {
@@ -41,8 +54,7 @@ public struct AddIncomeView: View {
     /// The formatted amount string for display (income.jsx line 28).
     private var displayAmount: String {
         let sym = CurrencyCode(currencyCode).symbol
-        if amountString.isEmpty { return sym + "0" }
-        return Money(amount: amount, currency: CurrencyCode(currencyCode)).formatted()
+        return sym + (amountString.isEmpty ? "0" : amountString)
     }
 
     /// All suggestion chips: existing source names + the static list, deduped (existing-names first).
@@ -139,6 +151,29 @@ public struct AddIncomeView: View {
                 }
 
                 Spacer(minLength: GoldengoTheme.Spacing.s)
+
+                // ── Amount keypad (income.jsx .gg-key grid) — the amount-entry control ──
+                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 9), count: 3), spacing: 9) {
+                    ForEach(keys, id: \.self) { k in
+                        if k.isEmpty {
+                            Color.clear.frame(maxWidth: .infinity, minHeight: 54)
+                        } else {
+                            Button { tapKey(k) } label: {
+                                Group {
+                                    if k == "⌫" { Image(systemName: "delete.left") } else { Text(k) }
+                                }
+                                .font(.system(size: 26, weight: .medium))
+                                .foregroundStyle(GoldengoTheme.inkPrimary)
+                                .frame(maxWidth: .infinity, minHeight: 54)
+                                .background(Color.goldengoField)
+                                .clipShape(RoundedRectangle(cornerRadius: GoldengoTheme.Radius.control, style: .continuous))
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                }
+                .padding(.horizontal, 22)
+                .padding(.top, 10)
 
                 // ── GoldButton Add income (income.jsx line 85) ───────────────────
                 GoldButton("Add income", isEnabled: canSave) {
