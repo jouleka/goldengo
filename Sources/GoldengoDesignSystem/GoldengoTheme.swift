@@ -1,22 +1,72 @@
 import SwiftUI
+#if canImport(UIKit)
+import UIKit
+#elseif canImport(AppKit)
+import AppKit
+#endif
 
 public enum GoldengoTheme {
-    public static let accentGoldHex = "#E8B341"
-    public static var accent: Color { Color(hex: accentGoldHex) }
+    /// The locked "Quiet luxe" palette as hex (light, dark). This is the stable, testable contract;
+    /// the `Color` tokens below are derived from it.
+    public enum Hex {
+        public static let canvasLight = "#F7F3EA"
+        public static let canvasDark = "#17140F"
+        public static let surfaceLight = "#FCFAF4"
+        public static let surfaceDark = "#211D16"
+        public static let fieldLight = "#EFE7D6"
+        public static let fieldDark = "#2B261D"
+        public static let inkPrimaryLight = "#2A2620"
+        public static let inkPrimaryDark = "#F3ECDD"
+        public static let inkMutedLight = "#8C8373"
+        public static let inkMutedDark = "#A89E89"
+        public static let hairlineLight = "#E7DECE"
+        public static let hairlineDark = "#322C22"
+        public static let accentLight = "#B68A2E"
+        public static let accentDark = "#E0AE4A"
+        /// Label/glyph color on a gold fill — colour-constant (same value in light and dark), so no `*Dark` pair.
+        public static let onAccent = "#2A2620"
+        /// Warm terracotta destructive (prototype --danger), not harsh system red.
+        public static let dangerLight = "#E0533D"
+        public static let dangerDark = "#EA6A52"
+        /// Soft warm green for income inflow (prototype --income), not loud system green.
+        public static let incomeLight = "#4E8B5B"
+        public static let incomeDark = "#5FA06C"
+    }
 
-    /// Faint gold wash used behind icons and selected states.
-    public static var accentSoft: Color { accent.opacity(0.16) }
+    /// Light-mode gold hex. Kept for back-compat (was the single accent hex). Dark gold is `Hex.accentDark`.
+    public static let accentGoldHex = Hex.accentLight
 
-    /// Destructive-action red (e.g. swipe-to-delete). Uses the system red so it adapts to light/dark
-    /// and reads as the platform's standard "delete" tint.
-    public static var danger: Color {
-#if canImport(UIKit)
-        Color(uiColor: .systemRed)
-#elseif canImport(AppKit)
-        Color(nsColor: .systemRed)
-#else
-        .red
-#endif
+    /// The one brand accent. Sparingly used; semantic colors (danger/income) are separate.
+    public static var accent: Color { Color(light: Hex.accentLight, dark: Hex.accentDark) }
+
+    /// Faint gold wash behind icons and selected states. Per-scheme alpha (D6): 0.12 light / 0.16 dark.
+    public static var accentSoft: Color {
+        Color(light: Color(hex: Hex.accentLight).opacity(0.12),
+              dark:  Color(hex: Hex.accentDark).opacity(0.16))
+    }
+
+    /// Foreground color for any label/glyph sitting on a gold fill (D1).
+    public static var onAccent: Color { Color(hex: Hex.onAccent) }
+
+    /// Primary text / amounts.
+    public static var inkPrimary: Color { Color(light: Hex.inkPrimaryLight, dark: Hex.inkPrimaryDark) }
+
+    /// Secondary text, captions.
+    public static var inkMuted: Color { Color(light: Hex.inkMutedLight, dark: Hex.inkMutedDark) }
+
+    /// 1px separators and card strokes.
+    public static var hairline: Color { Color(light: Hex.hairlineLight, dark: Hex.hairlineDark) }
+
+    /// Destructive-action red — a warm terracotta (prototype --danger), not harsh system red.
+    public static var danger: Color { Color(light: Hex.dangerLight, dark: Hex.dangerDark) }
+
+    /// Income inflow — a soft warm green (prototype --income), not loud system green.
+    public static var income: Color { Color(light: Hex.incomeLight, dark: Hex.incomeDark) }
+
+    /// A 55%-opacity gold for hairline accents / selected rings (prototype --accent-line).
+    public static var accentLine: Color {
+        Color(light: Color(hex: Hex.accentLight).opacity(0.55),
+              dark:  Color(hex: Hex.accentDark).opacity(0.55))
     }
 
     public enum Spacing {
@@ -25,6 +75,12 @@ public enum GoldengoTheme {
         public static let m: CGFloat = 16
         public static let l: CGFloat = 24
         public static let xl: CGFloat = 32
+        // Named aliases (same values) used by the rewrite spec; additive — base names retained.
+        public static let xs4: CGFloat = xs
+        public static let s8: CGFloat = s
+        public static let m16: CGFloat = m
+        public static let l24: CGFloat = l
+        public static let xl32: CGFloat = xl
     }
 
     public enum Radius {
@@ -35,7 +91,10 @@ public enum GoldengoTheme {
 
     /// The shared per-source palette (by `SourceRecord.colorIndex`) — the Sources tab bars and the
     /// funded-by chips must agree on a source's color, so both resolve through here.
-    public static let sourcePalette: [Color] = [.blue, .teal, .green, .orange, .pink, .purple, .indigo, .brown]
+    public static let sourcePalette: [Color] = [
+        Color(hex: "#5B8DC9"), Color(hex: "#3FA9A0"), Color(hex: "#5FA86B"), Color(hex: "#D08A3E"),
+        Color(hex: "#C77B9A"), Color(hex: "#8A77C0"), Color(hex: "#6E78C9"), Color(hex: "#9C7B5B"),
+    ]
     public static func sourceColor(_ index: Int) -> Color {
         let n = sourcePalette.count
         return sourcePalette[((index % n) + n) % n]
@@ -53,37 +112,41 @@ public extension Color {
                   blue: Double(rgb & 0xFF) / 255, opacity: 1)
     }
 
-    /// The app canvas (the muted backdrop cards sit on).
-    static var goldengoBackground: Color {
+    /// Resolves between two colors by the current interface style (light/dark).
+    /// The light/dark legs are evaluated *inside* the trait/appearance closure, so passing an
+    /// already-adaptive `Color` still resolves correctly per appearance — keep them in the closure.
+    init(light: Color, dark: Color) {
 #if canImport(UIKit)
-        Color(.systemGroupedBackground)
+        self.init(uiColor: UIColor { traits in
+            traits.userInterfaceStyle == .dark ? UIColor(dark) : UIColor(light)
+        })
 #elseif canImport(AppKit)
-        Color(.windowBackgroundColor)
+        self.init(nsColor: NSColor(name: nil) { appearance in
+            appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua ? NSColor(dark) : NSColor(light)
+        })
 #else
-        Color.gray.opacity(0.1)
+        self = light
 #endif
+    }
+
+    /// Convenience: resolve between two hex strings.
+    init(light: String, dark: String) {
+        self.init(light: Color(hex: light), dark: Color(hex: dark))
+    }
+
+    /// The app canvas (the warm backdrop cards sit on).
+    static var goldengoBackground: Color {
+        Color(light: GoldengoTheme.Hex.canvasLight, dark: GoldengoTheme.Hex.canvasDark)
     }
 
     /// An elevated card / row surface.
     static var goldengoSurface: Color {
-#if canImport(UIKit)
-        Color(.secondarySystemGroupedBackground)
-#elseif canImport(AppKit)
-        Color(.controlBackgroundColor)
-#else
-        Color.white
-#endif
+        Color(light: GoldengoTheme.Hex.surfaceLight, dark: GoldengoTheme.Hex.surfaceDark)
     }
 
     /// A subtle fill for fields and keypad keys.
     static var goldengoField: Color {
-#if canImport(UIKit)
-        Color(.tertiarySystemFill)
-#elseif canImport(AppKit)
-        Color(.underPageBackgroundColor)
-#else
-        Color.gray.opacity(0.15)
-#endif
+        Color(light: GoldengoTheme.Hex.fieldLight, dark: GoldengoTheme.Hex.fieldDark)
     }
 }
 
@@ -97,6 +160,10 @@ public struct GoldengoCardStyle: ViewModifier {
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(Color.goldengoSurface)
             .clipShape(RoundedRectangle(cornerRadius: GoldengoTheme.Radius.card, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: GoldengoTheme.Radius.card, style: .continuous)
+                    .strokeBorder(GoldengoTheme.hairline, lineWidth: 1)
+            )
     }
 }
 
