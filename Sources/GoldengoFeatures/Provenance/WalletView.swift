@@ -3,33 +3,31 @@ import GoldengoCore
 import GoldengoData
 import GoldengoDesignSystem
 
-/// The wallet (GOL-95 v2): per-currency cash lines. Tap a line, type what's actually in your
-/// pocket, Save — five seconds. The denomination grid is an optional helper that fills the same
-/// number. Lower than expected auto-logs one visible "Unaccounted" entry; higher just is.
+/// Per-currency wallet sheet: lists tracked currencies as tappable rows → AdjustWalletView.
+/// "Track another currency" quick-adds ALL/EUR or navigates to a full picker for others.
+/// GOL-98: `autoOpenAdjust` skips the list and pushes straight to the adjust screen.
 public struct WalletView: View {
     @State private var model: SourcesModel
-    /// GOL-98: a widget tap lands straight on this currency's Adjust screen.
     let autoOpenAdjust: CurrencyCode?
     @State private var adjustPresented = false
+    @Environment(\.dismiss) private var dismiss
+
     public init(model: SourcesModel, autoOpenAdjust: CurrencyCode? = nil) {
         _model = State(initialValue: model)
         self.autoOpenAdjust = autoOpenAdjust
     }
 
-    /// Every catalog currency without a wallet line yet — the same catalog the Add-income and
-    /// Settings pickers use (rate-table driven), not a hardcoded shortlist. The common Albanian
-    /// pocket pair (lek, euro) is surfaced directly; the rest sit behind one "another currency" row.
+    /// Every catalog currency without a wallet line yet.
     private var untracked: [CurrencyCode] {
         CurrencyCatalog.selectable(from: ExchangeRateCache().load() ?? SeedRates.table)
             .filter { c in !model.wallet.contains { $0.currencyCode == c.rawValue } }
     }
     private var quickAdds: [CurrencyCode] { untracked.filter { $0 == .all || $0 == .eur } }
-    private var otherAdds: [CurrencyCode] { untracked.filter { $0 != .all && $0 != .eur } }
+    private var otherAdds: [CurrencyCode]  { untracked.filter { $0 != .all && $0 != .eur } }
 
-    /// Human label for a wallet line ("ALL" reads as the English word otherwise).
     private func label(for code: String) -> String {
-        let name = Locale.current.localizedString(forCurrencyCode: code)
         if code == "ALL" { return "Lek (ALL)" }
+        let name = Locale.current.localizedString(forCurrencyCode: code)
         return name.map { "\($0) (\(code))" } ?? code
     }
 
@@ -42,20 +40,27 @@ public struct WalletView: View {
                         .listRowBackground(Color.clear)
                         .listRowSeparator(.hidden)
                 }
+
+                // Tracked currencies → adjust
                 ForEach(model.wallet) { line in
                     NavigationLink {
                         AdjustWalletView(model: model, currency: CurrencyCode(line.currencyCode))
                     } label: {
                         HStack {
-                            Text(label(for: line.currencyCode)).font(.subheadline.weight(.semibold))
+                            Text(label(for: line.currencyCode))
+                                .font(.subheadline.weight(.semibold))
                             Spacer()
-                            Text("~" + Money(amount: line.expectedNow,
-                                             currency: CurrencyCode(line.currencyCode)).formatted())
-                                .font(.subheadline.weight(.medium))
+                            GoldengoAmountText(
+                                "~" + Money(amount: line.expectedNow,
+                                            currency: CurrencyCode(line.currencyCode)).formatted(),
+                                role: .row
+                            )
                         }
                     }
                     .listRowBackground(Color.clear)
                 }
+
+                // Track another currency
                 if !untracked.isEmpty {
                     Section {
                         ForEach(quickAdds, id: \.rawValue) { c in
@@ -94,9 +99,7 @@ public struct WalletView: View {
             .scrollContentBackground(.hidden)
             .background(Color.goldengoBackground.ignoresSafeArea())
             .navigationTitle("Wallet")
-            // GOL-98: a widget tap pushes straight to Adjust — the reconcile is the point.
-            // onChange too: a tap can land while this sheet is ALREADY visible (review —
-            // onAppear won't re-fire for a live view, and the tap must not silently die).
+            // GOL-98: widget tap pushes straight to Adjust.
             .navigationDestination(isPresented: $adjustPresented) {
                 AdjustWalletView(model: model, currency: autoOpenAdjust ?? .all)
             }
@@ -108,8 +111,9 @@ public struct WalletView: View {
     }
 }
 
-/// Set one currency's real balance. Type it (prefilled with what the books expect) or open the
-/// note counter to add it up — both feed the same number. No ceremony on save: one quiet line.
+/// Set one currency's real balance (wallet.jsx AdjustSheet). Type the total or use the
+/// denomination counter (DisclosureGroup + steppers) — both set the same number.
+/// No ceremony on save: one result line, then dismiss. Lower than expected auto-logs Unaccounted.
 struct AdjustWalletView: View {
     @State var model: SourcesModel
     let currency: CurrencyCode
@@ -124,9 +128,8 @@ struct AdjustWalletView: View {
     private var expected: Decimal? {
         model.wallet.first { $0.currencyCode == currency.rawValue }?.expectedNow
     }
-    /// STRICT parse: the whole string must be a plain non-negative amount (one optional decimal
-    /// part). A pasted grouped amount ("10 000", "10,000") must REJECT — Decimal(string:)'s
-    /// prefix-parsing would read it as 10 and auto-log a fabricated 9,990 gap (v2 review).
+
+    /// STRICT parse: whole string must be a plain non-negative amount. Grouped formats reject.
     private var typedAmount: Decimal? {
         let cleaned = amountText.trimmingCharacters(in: .whitespaces)
             .replacingOccurrences(of: ",", with: ".")
@@ -134,42 +137,93 @@ struct AdjustWalletView: View {
         else { return nil }
         return Decimal(string: cleaned)
     }
+
     private var hasDenominationTable: Bool {
         !(Denominations.notes(for: currency) + Denominations.coins(for: currency)).isEmpty
+    }
+
+    /// Gap between what's typed and what the books expect — shown as the result hint.
+    private var gap: Decimal? {
+        guard let exp = expected, let typed = typedAmount, typed > 0 else { return nil }
+        let g = typed - exp
+        return abs(g) > (currency == .all ? 0 : Decimal(string: "0.001")!) ? g : nil
     }
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: GoldengoTheme.Spacing.l) {
-                Text("What's in your wallet?").font(.title2.weight(.bold))
-                if let expected {
-                    Text("The books expect " + Money(amount: expected, currency: currency).formatted() + ".")
-                        .font(.caption).foregroundStyle(.secondary)
+
+                // Serif title (wallet.jsx AdjustSheet line 138-144)
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("What's in your wallet?")
+                        .font(.system(.title2, design: .serif))
+                        .foregroundStyle(GoldengoTheme.inkPrimary)
+                    if let expected {
+                        Text("The books expect " + Money(amount: expected, currency: currency).formatted() + ". Count it and set what's real.")
+                            .font(.caption)
+                            .foregroundStyle(GoldengoTheme.inkMuted)
+                    }
                 }
+
+                // Big monospaced amount input (wallet.jsx line 147-149)
                 TextField("0", text: $amountText)
 #if os(iOS)
                     .keyboardType(.decimalPad)
 #endif
                     .focused($focused)
-                    .font(.system(size: 40, weight: .bold, design: .rounded))
+                    .font(.system(size: 40, weight: .semibold).monospacedDigit())
+                    .tracking(-1)
                     .multilineTextAlignment(.center)
                     .padding(.vertical, GoldengoTheme.Spacing.s)
+                    .foregroundStyle(amountText.isEmpty ? GoldengoTheme.inkMuted : GoldengoTheme.inkPrimary)
 
+                // Denomination counter (wallet.jsx implied by design — DisclosureGroup + steppers)
                 if hasDenominationTable {
                     counterDisclosure
                 }
 
-                if let resultLine {
-                    Text(resultLine).font(.caption).foregroundStyle(.secondary)
+                // Gap hint (wallet.jsx lines 152-158)
+                if let g = gap {
+                    Text(g < 0
+                         ? Money(amount: -g, currency: currency).formatted() + " less than expected → logged as Unaccounted"
+                         : Money(amount: g, currency: currency).formatted() + " more than expected — that's fine")
+                        .font(.caption)
+                        .foregroundStyle(GoldengoTheme.inkMuted)
+                        .multilineTextAlignment(.center)
+                        .frame(maxWidth: .infinity)
                 }
 
-                saveButton
+                // Result line (after save)
+                if let resultLine {
+                    Text(resultLine).font(.caption).foregroundStyle(GoldengoTheme.inkMuted)
+                }
+
+                // GoldButton Save (wallet.jsx line 167)
+                GoldButton("Save", isEnabled: !busy && typedAmount != nil) {
+                    guard !busy, let total = typedAmount else { return }
+                    busy = true
+                    focused = false
+                    GoldengoHaptics.spendLanded()
+                    Task {
+                        let tallyToSave = (showCounter && tally.total == total) ? tally : nil
+                        let outcome = await model.setWalletBalance(total, currency: currency, tally: tallyToSave)
+                        if outcome == nil {
+                            resultLine = "Couldn't save — try again."
+                            busy = false
+                        } else if let gap = outcome?.unaccountedLogged {
+                            resultLine = Money(amount: gap, currency: currency).formatted()
+                                + " logged as Unaccounted — delete it in Recent if that's wrong."
+                            busy = false
+                        } else {
+                            dismiss()
+                        }
+                    }
+                }
             }
             .padding(GoldengoTheme.Spacing.l)
         }
         .background(Color.goldengoBackground.ignoresSafeArea())
-        .contentShape(Rectangle())
-        .onTapGesture { focused = false }     // tap-outside dismissal (no keyboard toolbar)
+        .goldengoDismissKeyboard()
         .onAppear {
             if amountText.isEmpty, let expected, expected > 0 { amountText = "\(expected)" }
         }
@@ -181,7 +235,8 @@ struct AdjustWalletView: View {
                 ForEach(Denominations.notes(for: currency) + Denominations.coins(for: currency),
                         id: \.self) { d in
                     HStack {
-                        Text("\(d)").font(.headline.monospacedDigit())
+                        Text("\(d)")
+                            .font(.headline.monospacedDigit())
                             .frame(width: 76, alignment: .leading)
                         Spacer()
                         Stepper(value: Binding(
@@ -198,37 +253,7 @@ struct AdjustWalletView: View {
                 }
             }
         }
-        .font(.caption).foregroundStyle(.secondary)
-    }
-
-    private var saveButton: some View {
-        Button {
-            guard !busy, let total = typedAmount else { return }
-            busy = true
-            focused = false
-            GoldengoHaptics.spendLanded()
-            Task {
-                // Persist the tally only when it actually IS the saved number — the user may
-                // have counted, then corrected the text by hand (review: no stale tallies).
-                let tallyToSave = (showCounter && tally.total == total) ? tally : nil
-                let outcome = await model.setWalletBalance(total, currency: currency, tally: tallyToSave)
-                if outcome == nil {
-                    // Store failure must never look like success (review finding).
-                    resultLine = "Couldn't save — try again."
-                    busy = false
-                } else if let gap = outcome?.unaccountedLogged {
-                    resultLine = Money(amount: gap, currency: currency).formatted()
-                        + " logged as Unaccounted — delete it in Recent if that's wrong."
-                    busy = false   // let the line be read; user leaves via Back
-                } else {
-                    dismiss()
-                }
-            }
-        } label: {
-            Text("Save").font(.headline).frame(maxWidth: .infinity, minHeight: 54)
-        }
-        .background(GoldengoTheme.accent).foregroundStyle(.black)
-        .clipShape(RoundedRectangle(cornerRadius: GoldengoTheme.Radius.control, style: .continuous))
-        .disabled(busy || typedAmount == nil)
+        .font(.caption)
+        .foregroundStyle(GoldengoTheme.inkMuted)
     }
 }

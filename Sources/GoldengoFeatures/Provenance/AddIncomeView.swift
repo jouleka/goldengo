@@ -3,18 +3,21 @@ import GoldengoDesignSystem
 import GoldengoCore
 import GoldengoData
 
-/// Minimal income capture: amount, currency (so a EUR remittance can be logged), source name
-/// with suggestions, date.
+/// Add income sheet (income.jsx): serif "Money in" title, amount + tappable currency symbol,
+/// "Cash in hand" vs "Into a source" segmented choice, suggestion chips, gold Add button.
+/// Preserves `cashInHand`/`addIncome`, the strict amount check, currency picker nav.
 public struct AddIncomeView: View {
     @State private var model: SourcesModel
     let existingSources: [String]
     let onDone: () -> Void
+
     @State private var amountString = ""
     @State private var sourceName = ""
     @State private var currencyCode: String
-    @State private var date = Date.now
-    @State private var cashInHand = false   // GOL-95 v2: the money is physically in the wallet
-    @FocusState private var amountFocused: Bool
+    @State private var cashInHand = false       // income.jsx `intoSource` = !cashInHand
+    @State private var showCurrencyPicker = false
+
+    private static let suggestions = ["Remittance", "Pay", "ATM", "Cash gift", "Refund"]
 
     public init(model: SourcesModel, existingSources: [String], currency: CurrencyCode, onDone: @escaping () -> Void) {
         _model = State(initialValue: model)
@@ -24,80 +27,149 @@ public struct AddIncomeView: View {
     }
 
     private var amount: Decimal { Decimal(string: amountString) ?? 0 }
-    private var canSave: Bool { amount > 0 && !sourceName.trimmingCharacters(in: .whitespaces).isEmpty }
+
+    /// income.jsx: canSave = value > 0 && (!intoSource || name)
+    /// "Into a source" requires a name; "Cash in hand" does not.
+    private var canSave: Bool {
+        amount > 0 && (cashInHand || !sourceName.trimmingCharacters(in: .whitespaces).isEmpty)
+    }
 
     private var availableCurrencies: [CurrencyCode] {
         CurrencyCatalog.selectable(from: ExchangeRateCache().load() ?? SeedRates.table)
     }
-    private var currencyLabel: String {
-        let c = CurrencyCode(currencyCode)
-        let n = Locale.current.localizedString(forCurrencyCode: c.rawValue) ?? c.rawValue
-        return "\(c.symbol) · \(n)"
+
+    /// The formatted amount string for display (income.jsx line 28).
+    private var displayAmount: String {
+        let sym = CurrencyCode(currencyCode).symbol
+        if amountString.isEmpty { return sym + "0" }
+        return Money(amount: amount, currency: CurrencyCode(currencyCode)).formatted()
+    }
+
+    /// All suggestion chips: existing source names + the static list, deduped (existing-names first).
+    private var chips: [String] {
+        let existingSet = Set(existingSources)
+        let extras = Self.suggestions.filter { !existingSet.contains($0) }
+        return existingSources + extras
     }
 
     public var body: some View {
         NavigationStack {
-            Form {
-                Section("Amount") {
-                    TextField("0", text: $amountString)
-#if os(iOS)
-                        .keyboardType(.decimalPad)
-#endif
-                        .focused($amountFocused)
-                        .font(.title2.weight(.semibold))
-                }
-                Section("Currency") {
-                    NavigationLink {
-                        CurrencyPickerView(available: availableCurrencies, selectedCode: $currencyCode)
-                    } label: {
-                        LabeledContent("Currency", value: currencyLabel)
+            VStack(spacing: 0) {
+
+                // ── Drag handle (income.jsx line 38-39) ──────────────────────────────
+                RoundedRectangle(cornerRadius: 3)
+                    .fill(GoldengoTheme.hairline)
+                    .frame(width: 38, height: 5)
+                    .padding(.top, 14)
+                    .padding(.bottom, 8)
+
+                // ── Serif "Money in" title + amount + currency (income.jsx lines 46-54) ──
+                VStack(spacing: 0) {
+                    Text("Money in")
+                        .font(.system(size: 22, design: .serif))
+                        .foregroundStyle(GoldengoTheme.inkMuted)
+                        .padding(.bottom, 14)
+
+                    // currency symbol (tappable) + amount
+                    HStack(alignment: .bottom, spacing: 6) {
+                        Button {
+                            showCurrencyPicker = true
+                        } label: {
+                            HStack(alignment: .bottom, spacing: 2) {
+                                Text(CurrencyCode(currencyCode).symbol)
+                                    .font(.system(size: 28, weight: .semibold))
+                                    .foregroundStyle(GoldengoTheme.inkMuted)
+                                Image(systemName: "chevron.down")
+                                    .font(.system(size: 11, weight: .semibold))
+                                    .foregroundStyle(GoldengoTheme.inkMuted)
+                                    .padding(.bottom, 5)
+                            }
+                        }
+                        .buttonStyle(.plain)
+
+                        Text(displayAmount)
+                            .font(.system(size: 48, weight: .semibold).monospacedDigit())
+                            .tracking(-2)
+                            .foregroundStyle(amountString.isEmpty ? GoldengoTheme.inkMuted : GoldengoTheme.income)
+                            .contentTransition(.numericText())
+                            .animation(.easeIn(duration: 0.14), value: amountString)
                     }
                 }
-                Section("From") {
-                    TextField("Source (e.g. Sister, Freelance)", text: $sourceName)
-                    if !existingSources.isEmpty {
-                        ScrollView(.horizontal, showsIndicators: false) {
-                            HStack(spacing: GoldengoTheme.Spacing.s) {
-                                ForEach(existingSources, id: \.self) { s in
-                                    Button(s) { sourceName = s }
-                                        .font(.caption.weight(.medium))
-                                        .padding(.horizontal, GoldengoTheme.Spacing.m).padding(.vertical, 6)
-                                        .background(Color.goldengoSurface).clipShape(Capsule())
-                                        .buttonStyle(.plain)
+                .frame(maxWidth: .infinity)
+                .padding(.horizontal, 22)
+
+                // ── Cash in hand / Into a source toggle (income.jsx lines 57-67) ───
+                HStack(spacing: 0) {
+                    ForEach([("Cash in hand", true), ("Into a source", false)], id: \.0) { label, isCash in
+                        Button {
+                            withAnimation(.easeInOut(duration: 0.18)) { cashInHand = isCash }
+                        } label: {
+                            Text(label)
+                                .font(.system(size: 14, weight: .semibold))
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 9)
+                                .foregroundStyle(cashInHand == isCash ? GoldengoTheme.inkPrimary : GoldengoTheme.inkMuted)
+                                .background(cashInHand == isCash ? Color.goldengoSurface : Color.clear)
+                                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(4)
+                .background(Color.goldengoField)
+                .clipShape(RoundedRectangle(cornerRadius: GoldengoTheme.Radius.control, style: .continuous))
+                .padding(.horizontal, 22)
+                .padding(.top, 22)
+
+                // ── Suggestion chips for source name (income.jsx lines 68-74) ──────
+                // Shown when "Into a source" is selected (!cashInHand).
+                if !cashInHand {
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 8) {
+                            ForEach(chips, id: \.self) { s in
+                                SelectableChip(s, isSelected: sourceName == s) {
+                                    sourceName = (sourceName == s) ? "" : s
                                 }
                             }
                         }
+                        .padding(.horizontal, 22)
+                        .padding(.vertical, 2)
+                    }
+                    .padding(.top, 12)
+                }
+
+                Spacer(minLength: GoldengoTheme.Spacing.s)
+
+                // ── GoldButton Add income (income.jsx line 85) ───────────────────
+                GoldButton("Add income", isEnabled: canSave) {
+                    Task {
+                        await model.addIncome(
+                            amount: amount,
+                            currency: CurrencyCode(currencyCode),
+                            sourceName: cashInHand
+                                ? (sourceName.trimmingCharacters(in: .whitespaces).isEmpty ? "Cash" : sourceName)
+                                : sourceName,
+                            intoWallet: cashInHand
+                        )
+                        onDone()
                     }
                 }
-                Section("Date") {
-                    DatePicker("Date", selection: $date, displayedComponents: .date)
-                }
-                Section {
-                    Toggle("Cash in hand", isOn: $cashInHand)
-                    Text(cashInHand
-                         ? "Goes straight into your wallet — the name is kept as where it came from."
-                         : "Lands in the bank as a named source; reach it via an ATM withdrawal.")
-                        .font(.caption).foregroundStyle(.secondary)
-                }
+                .padding(.horizontal, 22)
+                .padding(.bottom, max(GoldengoTheme.Spacing.l, 34))
             }
-            .navigationTitle("Add income")
-            .scrollContentBackground(.hidden)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             .background(Color.goldengoBackground.ignoresSafeArea())
-            .contentShape(Rectangle())
-            .onTapGesture { amountFocused = false }
+            // Currency picker sheet (income.jsx CcyMini popup)
+            .navigationDestination(isPresented: $showCurrencyPicker) {
+                CurrencyPickerView(available: availableCurrencies, selectedCode: $currencyCode)
+            }
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { onDone() } }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Add") {
-                        amountFocused = false
-                        Task {
-                            await model.addIncome(amount: amount, currency: CurrencyCode(currencyCode),
-                                                  sourceName: sourceName, intoWallet: cashInHand)
-                            onDone()
-                        }
-                    }.disabled(!canSave)
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { onDone() }
                 }
             }
         }
+        .presentationDetents([.large])
+        .presentationDragIndicator(.hidden) // we draw our own
     }
 }
