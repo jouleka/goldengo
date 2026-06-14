@@ -33,4 +33,13 @@ final class RootViewRoutingTests: XCTestCase {
         XCTAssertFalse(RootView.isStatementFile(deepLink))
         XCTAssertEqual(RootView.tab(forDeepLink: deepLink), 3)
     }
+
+    func test_routeForTab_mapsTabsAndSheets() {
+        XCTAssertEqual(RootView.route(forTab: 0), .add)              // quickadd → Add sheet
+        XCTAssertEqual(RootView.route(forTab: 1), .tab(1))           // Home tab
+        XCTAssertEqual(RootView.route(forTab: 2), .settings)         // Settings sheet
+        XCTAssertEqual(RootView.route(forTab: 3), .statementImport)  // Import sheet
+        XCTAssertEqual(RootView.route(forTab: 4), .subscriptions)    // Subscriptions sheet (was a tab)
+        XCTAssertEqual(RootView.route(forTab: 5), .tab(5))           // Wallet tab
+    }
 }

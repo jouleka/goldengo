@@ -18,11 +18,24 @@ public struct ReEntryPrompt: Identifiable { public let id = UUID(); public let d
 /// per presentation). Only `.morning`/`.evening` are ever wrapped (never `.none`).
 public struct RitualSheet: Identifiable { public let id = UUID(); public let kind: RitualPrompt }
 
+/// Where a legacy tab index resolves under the 3-destination shell. Deep links, widget taps and
+/// Siri `pendingTab` still speak in the old integer indices; this maps them to "select a tab" vs
+/// "present a sheet". Pure + `Equatable` so routing can't silently regress.
+public enum RootRoute: Equatable, Sendable {
+    case tab(Int)          // a real bottom-bar tab: Home (1) or Wallet (5)
+    case add               // present the Add sheet
+    case settings          // present the Settings sheet
+    case statementImport   // present the Import sheet
+    case subscriptions     // go to Home and present the Subscriptions sheet
+}
+
 public struct RootView: View {
     private let store: IngestionStore
     @State private var selectedTab: Int = 1            // Home dashboard is the orienting landing screen.
     @State private var showSettings = false
     @State private var showImport = false
+    @State private var showAdd = false            // center FAB → Add sheet (QuickAdd)
+    @State private var showSubscriptions = false  // Home "Upcoming" → Subscriptions management sheet
     @State private var importFile: ImportFile?            // a statement shared into the app (Share / Open in)
     @State private var reEntryPrompt: ReEntryPrompt?      // welcome-back soft-landing after a gap
     @State private var ritualSheet: RitualSheet?          // daily check-in (GOL-85), opt-in
@@ -42,13 +55,15 @@ public struct RootView: View {
         _sourcesModel = State(initialValue: SourcesModel(store: store, currency: preferred))
     }
 
-    /// Settings (2) and Import (3) live behind the Home toolbar as sheets rather than permanent
-    /// tabs, so deep links / widget / Siri targeting them open the matching sheet instead of a tab.
+    /// Applies a legacy tab index (from deep links / widget / Siri `pendingTab`) under the
+    /// 3-destination shell: real tabs select, the rest present their sheet. See `route(forTab:)`.
     private func route(toTab tab: Int) {
-        switch tab {
-        case 2: showSettings = true
-        case 3: showImport = true
-        default: selectedTab = tab
+        switch Self.route(forTab: tab) {
+        case .tab(let t):       selectedTab = t
+        case .add:              showAdd = true
+        case .settings:         showSettings = true
+        case .statementImport:  showImport = true
+        case .subscriptions:    selectedTab = 1; showSubscriptions = true
         }
     }
 
@@ -94,33 +109,47 @@ public struct RootView: View {
     }
 
     public var body: some View {
-        TabView(selection: $selectedTab) {
-            QuickAddView(model: quickAddModel)
-                .tabItem { Label("Add", systemImage: "plus.circle.fill") }
-                .tag(0)
-            RecentExpensesView(
-                model: recentModel,
-                onAdd: { selectedTab = 0 },
-                onOpenImport: { showImport = true },
-                onOpenSettings: { showSettings = true },
-                onOpenSubscriptions: { selectedTab = 4 },
-                onChangeCurrency: { code in
-                    SharedSummary().setPreferredCurrency(code)
-                    quickAddModel.currency = code
-                    recentModel.currency = code
-                    Task { await recentModel.load() }
-                }
-            )
-            .tabItem { Label("Home", systemImage: "house.fill") }
-            .tag(1)
-            SubscriptionsView(model: subsModel)
-                .tabItem { Label("Subscriptions", systemImage: "arrow.triangle.2.circlepath") }
-                .tag(4)
-            SourcesView(model: sourcesModel)
-                .tabItem { Label("Sources", systemImage: "circle.grid.2x2") }
-                .tag(5)
+        ZStack(alignment: .bottom) {
+            TabView(selection: $selectedTab) {
+                RecentExpensesView(
+                    model: recentModel,
+                    onAdd: { showAdd = true },
+                    onOpenImport: { showImport = true },
+                    onOpenSettings: { showSettings = true },
+                    onOpenSubscriptions: { showSubscriptions = true },
+                    onChangeCurrency: { code in
+                        SharedSummary().setPreferredCurrency(code)
+                        quickAddModel.currency = code
+                        recentModel.currency = code
+                        Task { await recentModel.load() }
+                    }
+                )
+                .tabItem { Label("Home", systemImage: "house.fill") }
+                .tag(1)
+                SourcesView(model: sourcesModel)
+                    .tabItem { Label("Wallet", systemImage: "wallet.bifold") }
+                    .tag(5)
+            }
+            .tint(GoldengoTheme.accent)
+
+            // The center action straddling the bar. NOTE: exact vertical placement is visual —
+            // tune `.padding(.bottom)` on simulator.
+            AddFAB { showAdd = true }
+                .padding(.bottom, 28)   // straddle above the tab bar; fine-tune on simulator
         }
-        .tint(GoldengoTheme.accent)
+        .sheet(isPresented: $showAdd, onDismiss: {
+            // A logged expense should appear on Home without a manual refresh.
+            Task { await recentModel.load() }
+        }) {
+            QuickAddView(model: quickAddModel)   // QuickAddView loads its own "Paid from" balances on .task (GOL-90)
+        }
+        .sheet(isPresented: $showSubscriptions, onDismiss: {
+            // Confirming/dismissing a subscription can change Home's "Upcoming" section.
+            Task { await recentModel.load() }
+        }) {
+            SubscriptionsView(model: subsModel)
+                .task { await subsModel.load() }   // load on present; also re-syncs reminders (was tab 4 entry)
+        }
         .sheet(isPresented: $showSettings, onDismiss: {
             // Adopt a changed preferred currency: update the new-expense default + dashboard display
             // currency, and reload Home only when it actually changed.
@@ -164,15 +193,14 @@ public struct RootView: View {
             checkReEntry()            // cold-launch re-entry check (onChange(scenePhase) misses the initial .active)
             checkRitual()             // then the daily check-in (Re-entry takes precedence)
             await recentModel.load()  // Home is the landing tab
+            await subsModel.load()    // re-sync subscription reminders on cold launch (was tab-4 entry)
             // Recompose the widget summaries so an update/install (or any pre-fix edit) never
             // leaves the lock screen asserting a stale or missing pocket claim (GOL-98 review).
             try? await store.refreshSharedSummaries()
         }
         .onChange(of: selectedTab) { _, newTab in
             // Reload the destination tab's data on entry so adds/imports show without a manual refresh.
-            if newTab == 0 { Task { await quickAddModel.loadSources() } }   // fresh "Paid from" balances (GOL-90)
             if newTab == 1 { Task { await recentModel.load() } }
-            if newTab == 4 { Task { await subsModel.load() } }
             if newTab == 5 { Task { await sourcesModel.load() } }
         }
         .onChange(of: scenePhase) { _, newPhase in
@@ -184,6 +212,8 @@ public struct RootView: View {
                 // An expense may have been logged via the Quick-Log shortcut while we were
                 // backgrounded; reload so it appears on Home without a manual pull-to-refresh.
                 Task { await recentModel.load() }
+                // Keep subscription reminders fresh on long-uptime foregrounds (was the tab-4 trigger).
+                Task { await subsModel.load() }
             case .background:
                 SharedSummary().setLastSeen()
             default:
@@ -205,6 +235,18 @@ public struct RootView: View {
     /// A shared statement arrives as a `file://` URL (vs a `goldengo://` deep link). Extracted so
     /// the routing branch is unit-testable and can't silently regress.
     public nonisolated static func isStatementFile(_ url: URL) -> Bool { url.isFileURL }
+
+    /// Maps a legacy tab index to a `RootRoute`. Extracted (like `tab(forDeepLink:)`) so the
+    /// IA can't silently regress. 0→Add sheet, 1→Home, 2→Settings, 3→Import, 4→Subscriptions, 5→Wallet.
+    public nonisolated static func route(forTab tab: Int) -> RootRoute {
+        switch tab {
+        case 0: return .add
+        case 2: return .settings
+        case 3: return .statementImport
+        case 4: return .subscriptions
+        default: return .tab(tab)   // 1 = Home, 5 = Wallet
+        }
+    }
 
     /// Maps a `goldengo://` deep link to a tab index (extracted so routing is unit-testable
     /// and can't silently regress). `quickadd` -> Add (0), `recent`/`home` -> Home (1),
