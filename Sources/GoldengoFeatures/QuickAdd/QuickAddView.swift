@@ -10,38 +10,50 @@ public struct QuickAddView: View {
     @State private var model: QuickAddModel
     @State private var showAdded = false
     @State private var showCurrencyPicker = false
-    @FocusState private var noteFocused: Bool
 #if os(iOS)
     @State private var showScanner = false
     @State private var scanModel: ReceiptScanModel?
 #endif
     public init(model: QuickAddModel) { _model = State(initialValue: model) }
 
+    // gg-key height: matches quickadd.jsx `keyH` at density "regular" = 60
+    private let keyHeight: CGFloat = 60
+
     private var keys: [String] {
-        // Hide the decimal key for currencies with no minor unit (e.g. lek) — it would do nothing.
         ["1", "2", "3", "4", "5", "6", "7", "8", "9", model.allowsDecimal ? "." : "", "0", "⌫"]
     }
 
     public var body: some View {
-        VStack(spacing: GoldengoTheme.Spacing.l) {
-            amountDisplay
-            noteField
+        // Stacked layout — padding mirrors quickadd.jsx StackedLayout: 14px top, 22px h, 34px bottom
+        VStack(spacing: 0) {
+            amountBlock
+                .padding(.top, 8)               // paddingTop: 8 on AmountBlock wrapper
+
             categoryChips
-            paidFromRow
-            Spacer(minLength: 0)
+                .padding(.top, 22)              // marginTop: 22
+
+            if !model.sourceBalances.isEmpty {
+                paidFromRow
+                    .padding(.top, 16)          // marginTop: 16
+            }
+
+            Spacer(minLength: 0)                // flex: 1
+
             keypad
+                .padding(.top, 16)             // marginTop: 16
+
 #if os(iOS)
             scanReceiptButton
+                .padding(.top, 10)             // marginTop: 10
 #endif
+
             addButton
+                .padding(.top, 8)              // marginTop: 8
         }
-        .padding(.horizontal, GoldengoTheme.Spacing.l)
-        .padding(.bottom, GoldengoTheme.Spacing.m)
-        .background(
-            Color.goldengoBackground
-                .ignoresSafeArea()
-                .onTapGesture { noteFocused = false }   // tap anywhere off the field dismisses the keyboard
-        )
+        .padding(.top, 14)                      // outer container top: 14px
+        .padding(.horizontal, 22)               // outer container h: 22px
+        .padding(.bottom, 34)                   // outer container bottom: 34px
+        .background(Color.goldengoBackground.ignoresSafeArea())
         .sheet(isPresented: $showCurrencyPicker) {
             NavigationStack {
                 CurrencyPickerView(
@@ -85,8 +97,7 @@ public struct QuickAddView: View {
                     .transition(.move(edge: .top).combined(with: .opacity))
             }
         }
-        .task { await model.loadSources() }   // populate the "Paid from" picker (hidden if no sources)
-        // Fire only on a *new* save (not on returning to this tab), so the confirmation isn't replayed.
+        .task { await model.loadSources() }
         .onChange(of: model.savedCount) { _, newCount in
             guard newCount > 0 else { return }
             GoldengoHaptics.spendLanded()
@@ -98,50 +109,63 @@ public struct QuickAddView: View {
         }
     }
 
-    // MARK: - Amount
+    // MARK: - Amount block
+    // Matches AmountBlock in quickadd.jsx:
+    //   serif "New expense" title at 19px/muted, then sym (30px/600/muted) + amount (hero, dynamic size)
 
-    private var amountDisplay: some View {
-        VStack(spacing: GoldengoTheme.Spacing.xs) {
+    private var amountBlock: some View {
+        VStack(spacing: 0) {
             Text("New expense")
-                .font(.subheadline.weight(.medium))
-                .foregroundStyle(.secondary)
+                .font(.custom("Georgia", size: 19).weight(.medium))   // gg-serif-title at 19px
+                .foregroundStyle(GoldengoTheme.inkMuted)
+                .padding(.bottom, 14)                                  // marginBottom: 14
+
             HStack(alignment: .firstTextBaseline, spacing: 6) {
                 currencyMenu
-                Text(model.amountString.isEmpty ? "0" : model.amountString)
-                    .font(.system(size: 64, weight: .bold, design: .rounded))
-                    .foregroundStyle(model.amountString.isEmpty ? Color.secondary : Color.primary)
-                    .contentTransition(.numericText())
-                    .animation(.snappy, value: model.amountString)
+                heroAmount
             }
+            .frame(maxWidth: .infinity, alignment: .center)
         }
-        .padding(.top, GoldengoTheme.Spacing.xl)
+        .multilineTextAlignment(.center)
     }
 
-    // MARK: - Note
-
-    private var noteField: some View {
-        HStack(spacing: GoldengoTheme.Spacing.s) {
-            Image(systemName: "pencil")
-                .font(.subheadline)
-                .foregroundStyle(noteFocused ? GoldengoTheme.accent : .secondary)
-            TextField("Add a note (optional)", text: $model.note)
-                .font(.subheadline)
-                .focused($noteFocused)
-                .submitLabel(.done)
-                .onSubmit { noteFocused = false }
-                .tint(GoldengoTheme.accent)
-#if canImport(UIKit)
-                .textInputAutocapitalization(.sentences)
-#endif
-        }
-        .padding(.horizontal, GoldengoTheme.Spacing.m)
-        .padding(.vertical, 12)
-        .background(Color.goldengoField)
-        .clipShape(RoundedRectangle(cornerRadius: GoldengoTheme.Radius.control, style: .continuous))
-        .animation(.snappy, value: noteFocused)
+    // Dynamic size: base 50pt (JSX big=false), shrinks for strings longer than 7 chars
+    private var heroFontSize: CGFloat {
+        let base: CGFloat = 50
+        let len = displayAmountBody.count
+        guard len > 7 else { return base }
+        return max(30, (base * 7 / CGFloat(len)).rounded())
     }
 
-    // MARK: - Currency
+    // The formatted body (no symbol), matching JSX formatTyped
+    private var displayAmountBody: String {
+        let s = model.amountString
+        guard !s.isEmpty else { return "0" }
+        let parts = s.split(separator: ".", maxSplits: 1, omittingEmptySubsequences: false).map(String.init)
+        var intPart = parts[0].isEmpty ? "0" : parts[0]
+        // add thousands grouping
+        if let n = Int(intPart) {
+            intPart = n.formatted(.number.grouping(.automatic))
+        }
+        if parts.count == 2 {
+            return intPart + "." + parts[1]
+        }
+        return intPart
+    }
+
+    private var heroAmount: some View {
+        Text(displayAmountBody)
+            .font(.system(size: heroFontSize, weight: .semibold))
+            .monospacedDigit()
+            .tracking(-2)
+            .foregroundStyle(model.amountString.isEmpty ? GoldengoTheme.inkMuted : GoldengoTheme.inkPrimary)
+            .contentTransition(.numericText())
+            .animation(.easeInOut(duration: 0.15), value: heroFontSize)
+            .animation(.easeInOut(duration: 0.2), value: model.amountString.isEmpty)
+    }
+
+    // MARK: - Currency menu
+    // Matches CurrencyMenu in quickadd.jsx: sym at 30px/600/muted + chevron.down at 12px
 
     private var currencyMenu: some View {
         Menu {
@@ -163,13 +187,14 @@ public struct QuickAddView: View {
                 Label("More currencies…", systemImage: "ellipsis.circle")
             }
         } label: {
-            HStack(alignment: .firstTextBaseline, spacing: 2) {
+            HStack(alignment: .firstTextBaseline, spacing: 1) {
                 Text(model.currency.symbol)
-                    .font(.system(size: 28, weight: .semibold, design: .rounded))
+                    .font(.system(size: 30, weight: .semibold))
                 Image(systemName: "chevron.down")
-                    .font(.system(size: 11, weight: .bold))
+                    .font(.system(size: 12, weight: .bold))
+                    .padding(.top, 6)              // marginTop: 6 on the chevron in JSX
             }
-            .foregroundStyle(.secondary)
+            .foregroundStyle(GoldengoTheme.inkMuted)
             .contentShape(Rectangle())
         }
     }
@@ -187,47 +212,39 @@ public struct QuickAddView: View {
         let have = Set(availableCurrencies.map(\.rawValue))
         var list = CurrencyCode.popular.filter { have.contains($0.rawValue) }
         if !list.contains(where: { $0.rawValue == model.currency.rawValue }) {
-            list.insert(model.currency, at: 0)   // keep the current currency reachable
+            list.insert(model.currency, at: 0)
         }
         return list
     }
 
-    // MARK: - Categories
+    // MARK: - Category chips
+    // Matches Chips in quickadd.jsx: horizontal scroll, gap: 9, SelectableChip (= .gg-chip)
 
     private var categoryChips: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: GoldengoTheme.Spacing.s) {
+            HStack(spacing: 9) {
                 ForEach(model.quickCategories, id: \.self) { cat in
-                    let selected = model.selectedCategory == cat
-                    Button {
-                        model.selectedCategory = selected ? nil : cat
-                    } label: {
-                        Label(cat, systemImage: GoldengoCategoryIcon.symbol(for: cat))
-                            .font(.subheadline.weight(.medium))
-                            .padding(.horizontal, GoldengoTheme.Spacing.m)
-                            .padding(.vertical, 10)
-                            .background(selected ? GoldengoTheme.accent : Color.goldengoSurface)
-                            .foregroundStyle(selected ? .black : .primary)
-                            .clipShape(Capsule())
+                    SelectableChip(
+                        cat,
+                        systemImage: GoldengoCategoryIcon.symbol(for: cat),
+                        isSelected: model.selectedCategory == cat
+                    ) {
+                        model.selectedCategory = model.selectedCategory == cat ? nil : cat
                     }
-                    .buttonStyle(.plain)
                 }
             }
-            .padding(.horizontal, 2)
+            .padding(.vertical, 2)              // padding: '2px 0'
         }
     }
 
-    // MARK: - Paid from (GOL-90)
+    // MARK: - Paid from
+    // Matches PaidFrom in quickadd.jsx: gg-eyebrow label + pill menu on goldengoField
 
-    /// Optional funding-source picker — only when the user has named sources. "Automatic" (FIFO) is
-    /// the zero-tap default; choosing a source pins this expense to it.
-    @ViewBuilder private var paidFromRow: some View {
-        if !model.sourceBalances.isEmpty {
-            HStack {
-                Text("Paid from").font(.subheadline).foregroundStyle(.secondary)
-                Spacer()
-                paidFromMenu
-            }
+    private var paidFromRow: some View {
+        HStack {
+            GoldengoSectionLabel("Paid from")   // .gg-eyebrow: 12px/600/uppercase/0.6 tracking/ink-muted
+            Spacer()
+            paidFromMenu
         }
     }
 
@@ -237,8 +254,6 @@ public struct QuickAddView: View {
 
     private var paidFromMenu: some View {
         Menu {
-            // GOL-95 v2: a hand-logged spend is CASH by default — it drains the wallet.
-            // Picking a source below marks it bank-paid instead (pins that source).
             Button { model.selectedSourceID = nil } label: {
                 if model.selectedSourceID == nil {
                     Label("Wallet — cash", systemImage: "checkmark")
@@ -257,17 +272,28 @@ public struct QuickAddView: View {
                 }
             }
         } label: {
-            HStack(spacing: 7) {
+            // pill: goldengoField bg, gap: 8, padding: '8px 14px', borderRadius: 9999
+            HStack(spacing: 8) {
                 if let s = selectedSource {
-                    Circle().fill(GoldengoTheme.sourceColor(s.colorIndex)).frame(width: 9, height: 9)
-                    Text(s.name).font(.subheadline.weight(.medium)).foregroundStyle(.primary)
+                    Circle()
+                        .fill(GoldengoTheme.sourceColor(s.colorIndex))
+                        .frame(width: 9, height: 9)
+                    Text(s.name)
+                        .font(.system(size: 14.5, weight: .semibold))
+                        .foregroundStyle(GoldengoTheme.inkPrimary)
                 } else {
-                    Image(systemName: "wallet.bifold").font(.caption).foregroundStyle(.secondary)
-                    Text("Wallet").font(.subheadline.weight(.medium)).foregroundStyle(.secondary)
+                    Image(systemName: "wallet.bifold")
+                        .font(.system(size: 16))
+                        .foregroundStyle(GoldengoTheme.inkMuted)
+                    Text("Wallet — cash")
+                        .font(.system(size: 14.5, weight: .semibold))
+                        .foregroundStyle(GoldengoTheme.inkPrimary)
                 }
-                Image(systemName: "chevron.down").font(.system(size: 11, weight: .bold)).foregroundStyle(.tertiary)
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundStyle(GoldengoTheme.inkMuted)
             }
-            .padding(.horizontal, GoldengoTheme.Spacing.m)
+            .padding(.horizontal, 14)
             .padding(.vertical, 8)
             .background(Color.goldengoField)
             .clipShape(Capsule())
@@ -281,65 +307,77 @@ public struct QuickAddView: View {
     }
 
     // MARK: - Keypad
+    // Matches Keypad in quickadd.jsx: 3-col grid, gap: 9, each key = .gg-key style
+    // .gg-key: goldengoField bg, radius.control, 26px/500, height = keyHeight (60)
 
     private var keypad: some View {
-        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: GoldengoTheme.Spacing.s), count: 3),
-                  spacing: GoldengoTheme.Spacing.s) {
-            ForEach(keys, id: \.self) { k in
+        LazyVGrid(
+            columns: Array(repeating: GridItem(.flexible(), spacing: 9), count: 3),
+            spacing: 9
+        ) {
+            ForEach(Array(keys.enumerated()), id: \.offset) { _, k in
                 if k.isEmpty {
-                    Color.clear.frame(maxWidth: .infinity, minHeight: 60)   // keeps 0 / ⌫ aligned
+                    Color.clear
+                        .frame(maxWidth: .infinity, minHeight: keyHeight)
                 } else {
                     Button { tap(k) } label: {
                         Group {
                             if k == "⌫" {
                                 Image(systemName: "delete.left")
+                                    .font(.system(size: 26))
                             } else {
                                 Text(k)
+                                    .font(.system(size: 26, weight: .medium))
                             }
                         }
-                        .font(.title2.weight(.medium))
-                        .frame(maxWidth: .infinity, minHeight: 60)
+                        .foregroundStyle(GoldengoTheme.inkPrimary)
+                        .frame(maxWidth: .infinity, minHeight: keyHeight)
                         .background(Color.goldengoField)
                         .clipShape(RoundedRectangle(cornerRadius: GoldengoTheme.Radius.control, style: .continuous))
                     }
-                    .buttonStyle(.plain)
-                    .foregroundStyle(.primary)
+                    .buttonStyle(KeypadButtonStyle())
                 }
             }
         }
     }
 
-    // MARK: - Save
-
-    private var addButton: some View {
-        Button {
-            noteFocused = false                     // drop the keyboard the moment the expense is added
-            Task { await model.save() }
-        } label: {
-            Text("Add expense")
-                .font(.headline)
-                .frame(maxWidth: .infinity, minHeight: 54)
-        }
-        .background(model.canSave ? GoldengoTheme.accent : Color.goldengoField)
-        .foregroundStyle(model.canSave ? .black : .secondary)
-        .clipShape(RoundedRectangle(cornerRadius: GoldengoTheme.Radius.control, style: .continuous))
-        .disabled(!model.canSave)
-        .animation(.snappy, value: model.canSave)
-    }
-
     private func tap(_ k: String) { k == "⌫" ? model.backspace() : model.tap(k) }
+
+    // MARK: - Scan receipt
+    // Matches ScanBtn in quickadd.jsx: accent color, "doc.viewfinder", 15px/600, minHeight: 40
 
 #if os(iOS)
     @ViewBuilder private var scanReceiptButton: some View {
         if DocumentScannerView.isSupported {
             Button { showScanner = true } label: {
                 Label("Scan receipt", systemImage: "doc.viewfinder")
-                    .font(.subheadline.weight(.medium))
-                    .frame(maxWidth: .infinity, minHeight: 44)
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(GoldengoTheme.accent)
+                    .frame(maxWidth: .infinity, minHeight: 40)
+                    .padding(.vertical, 6)          // padding: '6px 0'
             }
             .buttonStyle(.plain)
-            .foregroundStyle(GoldengoTheme.accent)
         }
     }
 #endif
+
+    // MARK: - Add button
+    // Matches .gg-btn: GoldButton full-width, "Add expense"
+
+    private var addButton: some View {
+        GoldButton("Add expense", isEnabled: model.canSave) {
+            Task { await model.save() }
+        }
+    }
+}
+
+// MARK: - Keypad button style
+// Matches .gg-key:active — scale(.94) + accent-tinted background
+
+private struct KeypadButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.94 : 1)
+            .animation(.easeInOut(duration: 0.09), value: configuration.isPressed)
+    }
 }
