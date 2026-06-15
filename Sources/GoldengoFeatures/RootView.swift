@@ -108,34 +108,92 @@ public struct RootView: View {
         if prompt != .none { ritualSheet = RitualSheet(kind: prompt) }
     }
 
+    // MARK: — Custom bottom bar (matches chrome.jsx TabBar exactly)
+
+    @ViewBuilder
+    private var contentView: some View {
+        switch selectedTab {
+        case 5:
+            SourcesView(model: sourcesModel)
+                .safeAreaInset(edge: .bottom) { Color.clear.frame(height: 64) }
+        default:
+            RecentExpensesView(
+                model: recentModel,
+                onAdd: { showAdd = true },
+                onOpenImport: { showImport = true },
+                onOpenSettings: { showSettings = true },
+                onOpenSubscriptions: { showSubscriptions = true },
+                onChangeCurrency: { code in
+                    SharedSummary().setPreferredCurrency(code)
+                    quickAddModel.currency = code
+                    recentModel.currency = code
+                    Task { await recentModel.load() }
+                }
+            )
+            .safeAreaInset(edge: .bottom) { Color.clear.frame(height: 64) }
+        }
+    }
+
+    private var goldengoTabBar: some View {
+        HStack(alignment: .bottom, spacing: 0) {
+            // Home tab button
+            Button {
+                selectedTab = 1
+            } label: {
+                VStack(spacing: 3) {
+                    Image(systemName: "house")
+                        .font(.system(size: 25, weight: selectedTab == 1 ? .semibold : .regular))
+                    Text("Home")
+                        .font(.system(size: 10, weight: .semibold))
+                }
+                .foregroundStyle(selectedTab == 1 ? GoldengoTheme.accent : GoldengoTheme.inkMuted)
+                .frame(width: 84)
+            }
+            .buttonStyle(.plain)
+
+            Spacer()
+
+            // Center Add FAB — raised above the bar (marginTop: -22 → offset y: -18)
+            AddFAB { showAdd = true }
+                .offset(y: -18)
+
+            Spacer()
+
+            // Wallet tab button
+            Button {
+                selectedTab = 5
+            } label: {
+                VStack(spacing: 3) {
+                    Image(systemName: "wallet.bifold")
+                        .font(.system(size: 25, weight: selectedTab == 5 ? .semibold : .regular))
+                    Text("Wallet")
+                        .font(.system(size: 10, weight: .semibold))
+                }
+                .foregroundStyle(selectedTab == 5 ? GoldengoTheme.accent : GoldengoTheme.inkMuted)
+                .frame(width: 84)
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal, 34)
+        .padding(.top, 10)
+        .padding(.bottom, 24)
+        .background(
+            LinearGradient(
+                stops: [
+                    .init(color: Color.goldengoBackground, location: 0),
+                    .init(color: .clear, location: 1),
+                ],
+                startPoint: .bottom,
+                endPoint: .top
+            )
+            .ignoresSafeArea(edges: .bottom)
+        )
+    }
+
     public var body: some View {
         ZStack(alignment: .bottom) {
-            TabView(selection: $selectedTab) {
-                RecentExpensesView(
-                    model: recentModel,
-                    onAdd: { showAdd = true },
-                    onOpenImport: { showImport = true },
-                    onOpenSettings: { showSettings = true },
-                    onOpenSubscriptions: { showSubscriptions = true },
-                    onChangeCurrency: { code in
-                        SharedSummary().setPreferredCurrency(code)
-                        quickAddModel.currency = code
-                        recentModel.currency = code
-                        Task { await recentModel.load() }
-                    }
-                )
-                .tabItem { Label("Home", systemImage: "house.fill") }
-                .tag(1)
-                SourcesView(model: sourcesModel)
-                    .tabItem { Label("Wallet", systemImage: "wallet.bifold") }
-                    .tag(5)
-            }
-            .tint(GoldengoTheme.accent)
-
-            // The center action straddling the bar. NOTE: exact vertical placement is visual —
-            // tune `.padding(.bottom)` on simulator.
-            AddFAB { showAdd = true }
-                .padding(.bottom, 28)   // straddle above the tab bar; fine-tune on simulator
+            contentView
+            goldengoTabBar
         }
         .sheet(isPresented: $showAdd, onDismiss: {
             // A logged expense should appear on Home without a manual refresh.
