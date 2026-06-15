@@ -135,62 +135,56 @@ public struct RootView: View {
     }
 
     private var goldengoTabBar: some View {
-        VStack(spacing: 0) {
-            // A short fade ABOVE the bar so scrolling content melts into it rather than hard-cutting
-            // (chrome.jsx: `linear-gradient(to top, canvas 62%, transparent)` — i.e. solid bar, soft top edge).
-            LinearGradient(
-                stops: [.init(color: Color.goldengoBackground.opacity(0), location: 0),
-                        .init(color: Color.goldengoBackground, location: 1)],
-                startPoint: .top, endPoint: .bottom
-            )
-            .frame(height: 24)
-            .allowsHitTesting(false)
-
-            HStack(alignment: .bottom, spacing: 0) {
-                // Home tab button
-                Button {
-                    selectedTab = 1
-                } label: {
-                    VStack(spacing: 3) {
-                        Image(systemName: "house")
-                            .font(.system(size: 25, weight: selectedTab == 1 ? .semibold : .regular))
-                        Text("Home")
-                            .font(.system(size: 10, weight: .semibold))
-                    }
-                    .foregroundStyle(selectedTab == 1 ? GoldengoTheme.accent : GoldengoTheme.inkMuted)
-                    .frame(width: 84)
+        HStack(alignment: .bottom, spacing: 0) {
+            // Home tab button
+            Button {
+                selectedTab = 1
+            } label: {
+                VStack(spacing: 3) {
+                    Image(systemName: "house")
+                        .font(.system(size: 25, weight: selectedTab == 1 ? .semibold : .regular))
+                    Text("Home")
+                        .font(.system(size: 10, weight: .semibold))
                 }
-                .buttonStyle(.plain)
-
-                Spacer()
-
-                // Center Add FAB — raised above the bar (marginTop: -22 → offset y: -18)
-                AddFAB { showAdd = true }
-                    .offset(y: -18)
-
-                Spacer()
-
-                // Wallet tab button
-                Button {
-                    selectedTab = 5
-                } label: {
-                    VStack(spacing: 3) {
-                        Image(systemName: "wallet.bifold")
-                            .font(.system(size: 25, weight: selectedTab == 5 ? .semibold : .regular))
-                        Text("Wallet")
-                            .font(.system(size: 10, weight: .semibold))
-                    }
-                    .foregroundStyle(selectedTab == 5 ? GoldengoTheme.accent : GoldengoTheme.inkMuted)
-                    .frame(width: 84)
-                }
-                .buttonStyle(.plain)
+                .foregroundStyle(selectedTab == 1 ? GoldengoTheme.accent : GoldengoTheme.inkMuted)
+                .frame(width: 84)
             }
-            .padding(.horizontal, 34)
-            .padding(.top, 4)
-            .padding(.bottom, 24)
-            .background(Color.goldengoBackground)   // SOLID behind the labels — no content bleed-through
+            .buttonStyle(.plain)
+
+            Spacer()
+
+            // Center Add FAB — raised above the bar (marginTop: -22 → offset y: -18)
+            AddFAB { showAdd = true }
+                .offset(y: -18)
+
+            Spacer()
+
+            // Wallet tab button
+            Button {
+                selectedTab = 5
+            } label: {
+                VStack(spacing: 3) {
+                    Image(systemName: "wallet.bifold")
+                        .font(.system(size: 25, weight: selectedTab == 5 ? .semibold : .regular))
+                    Text("Wallet")
+                        .font(.system(size: 10, weight: .semibold))
+                }
+                .foregroundStyle(selectedTab == 5 ? GoldengoTheme.accent : GoldengoTheme.inkMuted)
+                .frame(width: 84)
+            }
+            .buttonStyle(.plain)
         }
-        .background(Color.goldengoBackground.ignoresSafeArea(edges: .bottom))
+        .padding(.horizontal, 34)
+        .padding(.top, 12)
+        .padding(.bottom, 24)
+        // A bit translucent: a frosted blur (content softly blurs behind it) warmed with the canvas tint,
+        // so the bar reads light/airy like the design yet the Home/Wallet labels stay legible.
+        .background {
+            Rectangle()
+                .fill(.regularMaterial)
+                .overlay(Color.goldengoBackground.opacity(0.32))
+                .ignoresSafeArea(edges: .bottom)
+        }
     }
 
     public var body: some View {
