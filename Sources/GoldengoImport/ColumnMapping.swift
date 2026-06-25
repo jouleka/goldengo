@@ -21,6 +21,10 @@ public struct ColumnMapping: Sendable, Equatable {
     public var atmKeywords: [String] = []
     /// Fee/commission wording that vetoes the ATM match — a fee is spend, never a wallet inflow.
     public var atmExclusionKeywords: [String] = []
+    /// Substrings marking non-transaction rows (opening/closing balance, totals). A CSV row whose
+    /// joined cells contain one of these is skipped — the PDF path already enforces this; defaulted
+    /// so existing construction sites are untouched and `detectMapping` fills it from the profile.
+    public var skipRowKeywords: [String] = []
 
     public init(dateIndex: Int, amount: AmountStyle, merchantIndex: Int, externalIDIndex: Int?,
                 dateFormats: [String], decimalSeparator: String, groupingSeparator: String, currency: CurrencyCode) {

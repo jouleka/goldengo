@@ -71,6 +71,7 @@ public struct StatementProfile: Sendable {
                 currency: currency)
             mapping.atmKeywords = p.atmKeywords
             mapping.atmExclusionKeywords = p.atmExclusionKeywords
+            mapping.skipRowKeywords = p.skipRowKeywords
             return mapping
         }
         return nil

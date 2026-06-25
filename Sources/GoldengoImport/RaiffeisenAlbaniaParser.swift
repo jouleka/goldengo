@@ -16,6 +16,8 @@ public struct RaiffeisenAlbaniaParser: BankStatementParser {
         pattern: #"^(\d{2}/\d{2}/\d{2})\s+(?:(.+?)\s+)?(\d{2}/\d{2}/\d{2})\s+(-?[\d,]+\.\d{2})\s+(-?[\d,]+\.\d{2})$"#
     )
     private static let dateOnlyRegex: NSRegularExpression? = try? NSRegularExpression(pattern: #"^\d{2}/\d{2}/\d{2}$"#)
+    /// Tolerance for matching |Δbalance| against a row's printed amount (both 2-dp, same currency).
+    private static let balanceEpsilon = Decimal(string: "0.005")!
 
     public func canParse(_ text: String) -> Bool {
         let l = text.lowercased()
@@ -53,22 +55,37 @@ public struct RaiffeisenAlbaniaParser: BankStatementParser {
         }
 
         var out: [NormalizedTransaction] = []
+        var previousBalance: Decimal?
         for line in lines {
             guard line.count <= 400 else { continue }   // ReDoS guard
             if skipKeywords.contains(where: { line.lowercased().contains($0) }) { continue }
             let range = NSRange(line.startIndex..., in: line)
             guard let m = re.firstMatch(in: line, range: range),
                   let dateRange = Range(m.range(at: 1), in: line),
-                  let amtRange  = Range(m.range(at: 4), in: line)
+                  let amtRange  = Range(m.range(at: 4), in: line),
+                  let balRange  = Range(m.range(at: 5), in: line)
             else { continue }
             guard let date = df.date(from: String(line[dateRange])),
-                  let amt  = Self.decimal(String(line[amtRange]))
+                  let amt  = Self.decimal(String(line[amtRange])),
+                  let balance = Self.decimal(String(line[balRange]))
             else { continue }
             // Description (group 2) is optional — absent when it was on a separate line.
             let merchant = Range(m.range(at: 2), in: line)
                 .map { String(line[$0]).trimmingCharacters(in: .whitespaces) }
                 .flatMap { $0.isEmpty ? nil : $0 }
-            var kind: TransactionKind = amt < 0 ? .expense : .income
+            // Direction from the running-balance delta, NOT the amount's sign: PDFKit flattening can
+            // drop the leading minus on a debit, so a sign-only rule books real debits as income.
+            // Trust the delta only when |Δbalance| matches THIS row's amount (confirming this row is
+            // what moved the balance); otherwise — the first row (no prior balance) or rows not in
+            // balance order — fall back to the sign, so we are never worse than the old heuristic.
+            let magnitude = abs(amt)
+            var kind: TransactionKind
+            if let prev = previousBalance, abs(abs(balance - prev) - magnitude) < Self.balanceEpsilon {
+                kind = balance < prev ? .expense : .income
+            } else {
+                kind = amt < 0 ? .expense : .income
+            }
+            previousBalance = balance
             if kind == .expense,
                ATMKeywords.isWithdrawal(merchant,
                                         keywords: StatementProfile.raiffeisenAlbania.atmKeywords,
@@ -76,7 +93,7 @@ public struct RaiffeisenAlbaniaParser: BankStatementParser {
                 kind = .transfer   // ATM withdrawal feeds the wallet (GOL-95)
             }
             out.append(NormalizedTransaction(
-                externalID: nil, amount: abs(amt), currency: currency, date: date,
+                externalID: nil, amount: magnitude, currency: currency, date: date,
                 rawMerchant: merchant, kind: kind, accountRef: "statement"))
         }
         return out

@@ -88,6 +88,24 @@ final class RaiffeisenAlbaniaParserTests: XCTestCase {
         XCTAssertEqual(txns[0].rawMerchant, "FAKE-REF TEST LOCATION")
     }
 
+    // Direction must come from the running-balance delta, not the amount's sign: a Raiffeisen DEBIT
+    // printed WITHOUT a leading minus (a real PDFKit flattening) must still be classified as an
+    // expense. Row 1 has no prior balance so it still relies on sign; rows 2+ are delta-classified.
+    func test_unsignedDebit_classifiedByBalanceDelta() {
+        let text = """
+        NXJERRJE LLOGARIE DEBI KREDI PERSHKRIMI
+        Balanca e Fillimit 10,000.00
+        01/06/26 TEST SALARY 01/06/26 5,000.00 15,000.00
+        02/06/26 TEST MARKET 02/06/26 2,000.00 13,000.00
+        03/06/26 TERHEQJE ATM BANKOMAT 03/06/26 3,000.00 10,000.00
+        """
+        let txns = RaiffeisenAlbaniaParser().parse(text, currency: .all)
+        XCTAssertEqual(txns.count, 3)
+        XCTAssertEqual(txns[0].kind, .income);   XCTAssertEqual(txns[0].amount, 5000)  // balance rose 10k→15k
+        XCTAssertEqual(txns[1].kind, .expense);  XCTAssertEqual(txns[1].amount, 2000)  // UNSIGNED debit, balance fell
+        XCTAssertEqual(txns[2].kind, .transfer); XCTAssertEqual(txns[2].amount, 3000)  // unsigned ATM debit → transfer
+    }
+
     // PDFKit often puts the transaction date on its OWN line, with the rest on the next line.
     // The parser merges the lone-date line with the following one before matching.
     func test_parses_dateOnSeparateLine() {

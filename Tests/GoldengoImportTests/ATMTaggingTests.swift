@@ -50,5 +50,18 @@ final class ATMTaggingTests: XCTestCase {
         let header = ["Data e transaksionit", "Pershkrimi", "Debi", "Kredi"]
         let mapping = try XCTUnwrap(StatementProfile.detectMapping(header: header, currency: .all))
         XCTAssertEqual(mapping.atmKeywords, StatementProfile.raiffeisenAlbania.atmKeywords)
+        XCTAssertEqual(mapping.atmExclusionKeywords, StatementProfile.raiffeisenAlbania.atmExclusionKeywords)
+        XCTAssertEqual(mapping.skipRowKeywords, StatementProfile.raiffeisenAlbania.skipRowKeywords)
+    }
+
+    // End-to-end: a fee row matches an ATM keyword ('terheqje') but the exclusion must veto the
+    // transfer retag through a mapping built by detectMapping (not just the ATMKeywords unit).
+    func test_detectMapping_feeRowThroughMapper_isExpenseNotTransfer() throws {
+        let header = ["Data e transaksionit", "Pershkrimi", "Debi", "Kredi"]
+        let mapping = try XCTUnwrap(StatementProfile.detectMapping(header: header, currency: .all))
+        let fee = StatementRowMapper.map(row: ["05/06/2026", "KOMISION TERHEQJE ATM", "150", ""], using: mapping)
+        XCTAssertEqual(fee?.kind, .expense, "A commission/fee is spend, never a wallet transfer")
+        let atm = StatementRowMapper.map(row: ["05/06/2026", "TERHEQJE ATM", "10000", ""], using: mapping)
+        XCTAssertEqual(atm?.kind, .transfer, "A non-fee ATM withdrawal still tags as transfer")
     }
 }
