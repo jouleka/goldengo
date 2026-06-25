@@ -38,6 +38,26 @@ final class CurrencyConverterTests: XCTestCase {
         }
     }
 
+    // A non-positive rate is corrupt data (a malformed feed) — treat it as missing and throw, never
+    // divide by it. Decimal division by zero yields a NaN-flagged value that would silently poison sums.
+    func test_zeroSourceRate_throwsMissingRate() {
+        let bad = RateTable(base: CurrencyCode("USD"),
+                            rates: ["USD": 1, "ALL": 0, "EUR": Decimal(string: "0.9")!], asOf: Date())
+        let c = CurrencyConverter(table: bad)
+        XCTAssertThrowsError(try c.convert(100, from: .all, to: .eur)) { error in
+            XCTAssertEqual(error as? CurrencyConverter.ConversionError, .missingRate(.all))
+        }
+    }
+
+    func test_negativeTargetRate_throwsMissingRate() {
+        let bad = RateTable(base: CurrencyCode("USD"),
+                            rates: ["USD": 1, "ALL": 100, "EUR": -1], asOf: Date())
+        let c = CurrencyConverter(table: bad)
+        XCTAssertThrowsError(try c.convert(100, from: .all, to: .eur)) { error in
+            XCTAssertEqual(error as? CurrencyConverter.ConversionError, .missingRate(.eur))
+        }
+    }
+
     // Money convenience overload tags the result with the target currency.
     func test_convertMoney_setsTargetCurrency() throws {
         let c = CurrencyConverter(table: table())

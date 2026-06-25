@@ -10,7 +10,7 @@ public struct Money: Hashable, Sendable {
     }
 
     /// Display-only formatting: locale-independent (explicit separators), with the
-    /// magnitude formatted and the sign placed before the symbol (e.g. "-L 1,500").
+    /// magnitude formatted and the sign placed before the symbol (e.g. "-ALL 1,500").
     /// Rounding is explicit and lossy — never use this output for serialization or keys.
     public func formatted() -> String {
         let (sign, body) = signAndBody()
@@ -25,16 +25,45 @@ public struct Money: Hashable, Sendable {
     }
 
     private func signAndBody() -> (sign: String, body: String) {
-        let f = NumberFormatter()
-        f.numberStyle = .decimal
-        f.groupingSeparator = ","
-        f.decimalSeparator = "."
-        f.usesGroupingSeparator = true
-        f.roundingMode = .halfUp
-        f.minimumFractionDigits = currency.fractionDigits
-        f.maximumFractionDigits = currency.fractionDigits
-        let magnitude = NSDecimalNumber(decimal: abs(amount))
-        let body = f.string(from: magnitude) ?? "\(abs(amount))"
-        return (amount < 0 ? "-" : "", body)
+        let digits = currency.fractionDigits
+        let magnitude = abs(amount)
+        let body = Money.format(magnitude, fractionDigits: digits)
+        // Derive the sign from the ROUNDED magnitude, not the raw amount: a sub-unit negative residue
+        // (e.g. -0.004 left by a cross-rate division) rounds to "0.00"/"0", and a minus on a zero body
+        // ("-€ 0.00") is wrong. Emit the sign only when the displayed magnitude is non-zero. `.plain`
+        // (round half away from zero) matches the formatter's `.halfUp` on a non-negative magnitude.
+        var rounded = Decimal()
+        var mag = magnitude
+        NSDecimalRound(&rounded, &mag, digits, .plain)
+        let sign = (amount < 0 && rounded != 0) ? "-" : ""
+        return (sign, body)
+    }
+
+    /// Configured `NumberFormatter`s are expensive to build, and an amount is formatted once per
+    /// SwiftUI body pass (Home/Recent render dozens), so reuse one per fraction-digit count. The
+    /// config varies only by min/max fraction digits. `NumberFormatter` is not `Sendable` and
+    /// `string(from:)` isn't guaranteed concurrency-safe, so the lock is held across the format call —
+    /// still far cheaper than allocating + configuring a fresh formatter on every call.
+    nonisolated(unsafe) private static var formatters: [Int: NumberFormatter] = [:]
+    private static let formattersLock = NSLock()
+
+    private static func format(_ value: Decimal, fractionDigits: Int) -> String {
+        formattersLock.lock()
+        defer { formattersLock.unlock() }
+        let f: NumberFormatter
+        if let cached = formatters[fractionDigits] {
+            f = cached
+        } else {
+            f = NumberFormatter()
+            f.numberStyle = .decimal
+            f.groupingSeparator = ","
+            f.decimalSeparator = "."
+            f.usesGroupingSeparator = true
+            f.roundingMode = .halfUp
+            f.minimumFractionDigits = fractionDigits
+            f.maximumFractionDigits = fractionDigits
+            formatters[fractionDigits] = f
+        }
+        return f.string(from: NSDecimalNumber(decimal: value)) ?? "\(value)"
     }
 }

@@ -31,6 +31,21 @@ final class MoneyTests: XCTestCase {
         XCTAssertEqual(m.formatted(), "-€ 12.50")
     }
 
+    // A negative magnitude smaller than half a minor unit rounds to zero — it must NOT keep the
+    // minus sign (no "-€ 0.00" / "-ALL 0"). The sign comes from the displayed magnitude, not the
+    // raw amount, because cross-rate division leaves tiny unrounded negative residues.
+    func test_subUnitNegative_doesNotRenderNegativeZero_eur() {
+        let m = Money(amount: Decimal(string: "-0.004")!, currency: .eur)
+        XCTAssertEqual(m.formatted(), "€ 0.00")
+        XCTAssertEqual(m.amountText(), "0.00")
+    }
+
+    func test_subUnitNegative_doesNotRenderNegativeZero_lek() {
+        let m = Money(amount: Decimal(string: "-0.4")!, currency: .all)
+        XCTAssertEqual(m.formatted(), "ALL 0")
+        XCTAssertEqual(m.amountText(), "0")
+    }
+
     // amountText() is the signed number WITHOUT the symbol — for layouts that render the currency
     // separately (e.g. the dashboard's tappable currency control beside the amount).
     func test_amountText_omitsCurrencySymbol() {

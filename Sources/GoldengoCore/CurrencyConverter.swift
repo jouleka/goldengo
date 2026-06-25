@@ -16,8 +16,10 @@ public struct CurrencyConverter: Sendable {
     /// Cross-rate through the base: `(amount * rate[to]) / rate[from]`. Same-currency is identity.
     public func convert(_ amount: Decimal, from: CurrencyCode, to: CurrencyCode) throws -> Decimal {
         if from == to { return amount }
-        guard let rateFrom = table.rates[from.rawValue] else { throw ConversionError.missingRate(from) }
-        guard let rateTo = table.rates[to.rawValue] else { throw ConversionError.missingRate(to) }
+        // A non-positive rate is corrupt data (a malformed feed) — treat it as missing rather than
+        // dividing by it: Decimal ÷ 0 yields a NaN-flagged value that would silently poison sums.
+        guard let rateFrom = table.rates[from.rawValue], rateFrom > 0 else { throw ConversionError.missingRate(from) }
+        guard let rateTo = table.rates[to.rawValue], rateTo > 0 else { throw ConversionError.missingRate(to) }
         return (amount * rateTo) / rateFrom
     }
 
