@@ -117,4 +117,37 @@ final class ReceiptParserTests: XCTestCase {
         XCTAssertEqual(ReceiptParser.parse(lines, currency: .all).amount, 950,
                        "A long id/code must never be mistaken for the total.")
     }
+
+    // The fallback date guard must catch slash- and dash-separated dates too, not just dot-dates —
+    // otherwise the year (e.g. 2025) leaks in as a digit run and wins the .max() fallback.
+    func test_amount_ignoresSlashDateTokenInFallback() {
+        let lines = [
+            line("Cafe Elida", y: 0.95),
+            line("30/05/2025", y: 0.30),   // a date, NOT the total
+            line("1200", y: 0.15),         // the real (unlabeled) total
+        ]
+        XCTAssertEqual(ReceiptParser.parse(lines, currency: .all).amount, 1200,
+                       "A slash-separated date must never be mistaken for the total.")
+    }
+
+    func test_amount_ignoresDashDateTokenInFallback() {
+        let lines = [
+            line("Cafe Elida", y: 0.95),
+            line("30-05-2025", y: 0.30),
+            line("1200", y: 0.15),
+        ]
+        XCTAssertEqual(ReceiptParser.parse(lines, currency: .all).amount, 1200,
+                       "A dash-separated date must never be mistaken for the total.")
+    }
+
+    // A genuinely large lek total the user LABELED with a TOTAL keyword must survive the over-length
+    // guard (the guard exists for unlabeled footer ids/phones, not for the labeled total).
+    func test_amount_acceptsLargeLekTotalOnKeywordLine() {
+        let lines = [
+            line("SPAR TIRANA", y: 0.95),
+            line("TOTALI 12.345.678 L", y: 0.20),
+        ]
+        XCTAssertEqual(ReceiptParser.parse(lines, currency: .all).amount, 12345678,
+                       "A large labeled total must not be rejected as an over-long id.")
+    }
 }

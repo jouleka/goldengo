@@ -36,18 +36,24 @@ public enum ReceiptParser {
     private static let totalKeywordRegex = try? NSRegularExpression(
         pattern: #"\b(TOTALI|TOTAL|AMOUNT DUE|SHUMA|VLERA)\b"#, options: [.caseInsensitive])
 
+    /// A labeled total may legitimately be large (a 7-figure lek total), so the over-long-digit-run
+    /// guard is relaxed on keyword lines; the unlabeled fallback keeps the tighter limit to reject
+    /// footer ids/phone numbers. Both still block 11+ digit runs (barcodes/long codes).
+    private static let keywordMaxDigitRun = 10
+    private static let fallbackMaxDigitRun = 7
+
     static func extractAmount(_ lines: [RecognizedLine], currency: CurrencyCode) -> Decimal? {
         let digits = currency.fractionDigits
         // 1) Total-keyword lines; among them the bottom-most (the final total sits near the bottom).
         let keywordLines = lines
-            .filter { hasTotalKeyword($0.text) && !amounts(in: $0.text, digits: digits).isEmpty }
+            .filter { hasTotalKeyword($0.text) && !amounts(in: $0.text, digits: digits, maxDigitRun: keywordMaxDigitRun).isEmpty }
             .sorted { $0.boundingBox.midY < $1.boundingBox.midY }
         if let best = keywordLines.first {
-            return amounts(in: best.text, digits: digits).max()
+            return amounts(in: best.text, digits: digits, maxDigitRun: keywordMaxDigitRun).max()
         }
         // 2) Fallback: the largest amount in the lower half of the receipt.
         let lowerHalf = lines.filter { $0.boundingBox.midY < 0.5 }
-        return lowerHalf.flatMap { amounts(in: $0.text, digits: digits) }.max()
+        return lowerHalf.flatMap { amounts(in: $0.text, digits: digits, maxDigitRun: fallbackMaxDigitRun) }.max()
     }
 
     static func hasTotalKeyword(_ text: String) -> Bool {
@@ -55,19 +61,35 @@ public enum ReceiptParser {
         return re.firstMatch(in: text, range: NSRange(location: 0, length: (text as NSString).length)) != nil
     }
 
+    private static let amountTokenRegex = try? NSRegularExpression(pattern: #"\d[\d.,]*\d|\d"#)
+
     /// Every parseable money amount in a string. Currency symbols/letters are ignored; tokens that
     /// are clearly NOT prices are rejected so they can't win the `.max()` fallback:
-    ///  - date-shaped tokens (e.g. "30.05.2025" would collapse to 30052025), and
-    ///  - over-long digit runs (tax ids / phone numbers / codes — a receipt total isn't 8+ digits).
-    static func amounts(in text: String, digits: Int) -> [Decimal] {
-        guard let re = try? NSRegularExpression(pattern: #"\d[\d.,]*\d|\d"#) else { return [] }
-        let ns = text as NSString
-        return re.matches(in: text, range: NSRange(location: 0, length: ns.length)).compactMap { m -> Decimal? in
+    ///  - any date-shaped substring (dot/slash/dash/ISO) is blanked BEFORE tokenizing, so a date's
+    ///    individual parts (e.g. the "2025" in "30/05/2025", which a per-token check misses because
+    ///    the slash splits the run) can't leak in as a digit run, and
+    ///  - over-long digit runs (tax ids / phone numbers / codes) above `maxDigitRun`.
+    static func amounts(in text: String, digits: Int, maxDigitRun: Int) -> [Decimal] {
+        guard let re = amountTokenRegex else { return [] }
+        let ns = blankingDates(text) as NSString
+        return re.matches(in: ns as String, range: NSRange(location: 0, length: ns.length)).compactMap { m -> Decimal? in
             let token = ns.substring(with: m.range)
-            if dateString(in: token) != nil { return nil }
-            if token.filter(\.isNumber).count > 7 { return nil }
+            if token.filter(\.isNumber).count > maxDigitRun { return nil }
             return parseAmount(token, fractionDigits: digits)
         }
+    }
+
+    /// Replace every date-shaped substring with equal-length spaces, so date digits never survive as
+    /// amount tokens. Spaces (not removal) keep other token ranges intact.
+    static func blankingDates(_ text: String) -> String {
+        guard let re = dateRegex else { return text }
+        let ns = text as NSString
+        let result = NSMutableString(string: text)
+        let matches = re.matches(in: text, range: NSRange(location: 0, length: ns.length))
+        for m in matches.reversed() {
+            result.replaceCharacters(in: m.range, with: String(repeating: " ", count: m.range.length))
+        }
+        return result as String
     }
 
     /// Parse one numeric token to Decimal, resolving `,`/`.` as decimal vs. thousands separators.
@@ -125,9 +147,11 @@ public enum ReceiptParser {
         return nil
     }
 
+    private static let dateRegex = try? NSRegularExpression(pattern: #"\d{1,4}[./-]\d{1,2}[./-]\d{1,4}"#)
+
     /// The first date-shaped substring in a line, or nil.
     static func dateString(in text: String) -> String? {
-        guard let re = try? NSRegularExpression(pattern: #"\d{1,4}[./-]\d{1,2}[./-]\d{1,4}"#) else { return nil }
+        guard let re = dateRegex else { return nil }
         let ns = text as NSString
         guard let m = re.firstMatch(in: text, range: NSRange(location: 0, length: ns.length)) else { return nil }
         return ns.substring(with: m.range)
