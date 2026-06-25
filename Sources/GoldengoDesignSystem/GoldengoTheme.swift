@@ -102,14 +102,31 @@ public enum GoldengoTheme {
 }
 
 public extension Color {
+    /// Parse `#RGB`, `#RRGGBB`, or `#RRGGBBAA` (the leading `#` is optional). Malformed input resolves
+    /// to a loud debug magenta — never a silent black that hides the typo at a glance.
     init(hex: String) {
-        let h = hex.hasPrefix("#") ? String(hex.dropFirst()) : hex
-        var rgb: UInt64 = 0
-        Scanner(string: h).scanHexInt64(&rgb)
-        self.init(.sRGB,
-                  red: Double((rgb >> 16) & 0xFF) / 255,
-                  green: Double((rgb >> 8) & 0xFF) / 255,
-                  blue: Double(rgb & 0xFF) / 255, opacity: 1)
+        let raw = hex.hasPrefix("#") ? String(hex.dropFirst()) : hex
+        // Expand 3-digit shorthand (#RGB → #RRGGBB).
+        let h = raw.count == 3 ? raw.map { "\($0)\($0)" }.joined() : raw
+        guard h.count == 6 || h.count == 8, let value = UInt64(h, radix: 16) else {
+            #if DEBUG
+            print("⚠️ Color(hex:) got malformed hex '\(hex)' — expected #RGB, #RRGGBB, or #RRGGBBAA")
+            #endif
+            self.init(.sRGB, red: 1, green: 0, blue: 1, opacity: 1)  // debug magenta, not silent black
+            return
+        }
+        if h.count == 8 {   // #RRGGBBAA
+            self.init(.sRGB,
+                      red: Double((value >> 24) & 0xFF) / 255,
+                      green: Double((value >> 16) & 0xFF) / 255,
+                      blue: Double((value >> 8) & 0xFF) / 255,
+                      opacity: Double(value & 0xFF) / 255)
+        } else {            // #RRGGBB
+            self.init(.sRGB,
+                      red: Double((value >> 16) & 0xFF) / 255,
+                      green: Double((value >> 8) & 0xFF) / 255,
+                      blue: Double(value & 0xFF) / 255, opacity: 1)
+        }
     }
 
     /// Resolves between two colors by the current interface style (light/dark).

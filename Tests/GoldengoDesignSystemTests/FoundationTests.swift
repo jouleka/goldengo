@@ -80,6 +80,39 @@ final class FoundationTests: XCTestCase {
         XCTAssertEqual(light.g, dark.g, accuracy: 0.001)
         XCTAssertEqual(light.b, dark.b, accuracy: 0.001)
     }
+
+    func test_hex_sixDigit_parsesRGB() {
+        let c = resolvedSRGB(Color(hex: "#FF8000"), dark: false)
+        XCTAssertEqual(c.r, 1, accuracy: 0.01)
+        XCTAssertEqual(c.g, 0.502, accuracy: 0.01)
+        XCTAssertEqual(c.b, 0, accuracy: 0.01)
+        XCTAssertEqual(c.a, 1, accuracy: 0.01)
+    }
+
+    // #RRGGBBAA — the trailing byte is alpha (0x80 ≈ 0.5), not discarded.
+    func test_hex_eightDigit_parsesAlpha() {
+        let c = resolvedSRGB(Color(hex: "#FF800080"), dark: false)
+        XCTAssertEqual(c.r, 1, accuracy: 0.01)
+        XCTAssertEqual(c.g, 0.502, accuracy: 0.01)
+        XCTAssertEqual(c.b, 0, accuracy: 0.01)
+        XCTAssertEqual(c.a, 0.502, accuracy: 0.01)
+    }
+
+    func test_hex_threeDigit_shorthandExpands() {
+        let c = resolvedSRGB(Color(hex: "#F00"), dark: false)
+        XCTAssertEqual(c.r, 1, accuracy: 0.01)
+        XCTAssertEqual(c.g, 0, accuracy: 0.01)
+        XCTAssertEqual(c.b, 0, accuracy: 0.01)
+    }
+
+    // Malformed input must be VISIBLY wrong (debug magenta), never a silent black that hides the bug.
+    func test_hex_malformed_isNotSilentBlack() {
+        let c = resolvedSRGB(Color(hex: "nope"), dark: false)
+        XCTAssertFalse(c.r == 0 && c.g == 0 && c.b == 0, "Malformed hex must not silently resolve to black")
+        XCTAssertEqual(c.r, 1, accuracy: 0.01)
+        XCTAssertEqual(c.g, 0, accuracy: 0.01)
+        XCTAssertEqual(c.b, 1, accuracy: 0.01)
+    }
 #endif
 }
 
