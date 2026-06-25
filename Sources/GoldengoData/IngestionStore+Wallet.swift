@@ -75,7 +75,15 @@ extension IngestionStore {
             return WalletBalance(currencyCode: baseline.currencyCode,
                                  baselineDate: baseline.date, expectedNow: expected)
         }
-        .sorted { $0.currencyCode == "ALL" ? true : ($1.currencyCode == "ALL" ? false : $0.currencyCode < $1.currencyCode) }
+        // ALL (the user's primary currency) first, then alphabetical. Written as a strict weak
+        // ordering — equal codes compare false (the old form returned true for two "ALL"s, an
+        // irreflexivity violation that can trap `sort` if a currency ever duplicates).
+        .sorted {
+            if $0.currencyCode == $1.currencyCode { return false }
+            if $0.currencyCode == "ALL" { return true }
+            if $1.currencyCode == "ALL" { return false }
+            return $0.currencyCode < $1.currencyCode
+        }
     }
 
     /// Record an auto-logged gap as an ordinary, visible "Unaccounted" expense.

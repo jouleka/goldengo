@@ -2,7 +2,7 @@ import Foundation
 import SwiftData
 import GoldengoCore
 
-/// Everything the Home dashboard needs, from ONE expense fetch. Sendable value snapshot.
+/// Everything the Home dashboard needs in one call. Sendable value snapshot.
 public struct HomeData: Sendable {
     public let rows: [ExpenseSnapshot]      // recent 50 (both kinds), expense rows carry fundedBy
     public let todayTotal: Decimal          // displayCurrency
@@ -27,10 +27,12 @@ public struct HomeData: Sendable {
 }
 
 extension IngestionStore {
-    /// One fetch of all non-archived expense records → derive recent-50 / today total / month summary
-    /// / rhythm ghosts in memory (replacing the four separate reader calls + their redundant scans).
-    /// Funding labels use the SharedSummary preferred currency (matching `recentExpenses`); the totals
-    /// use `displayCurrency`. The FIFO allocation goes through the fingerprint cache.
+    /// One fetch of all non-archived expense records drives recent-50 / today total / month summary /
+    /// rhythm ghosts / funding labels in memory (replacing those four separate reader calls + their
+    /// redundant scans). The pocket (per-currency wallet) and pending-subscription sections still do
+    /// their own small, self-contained fetches — pocket reads WalletCounts and pending needs archived
+    /// rows that `all` deliberately excludes. Funding labels use the SharedSummary preferred currency
+    /// (matching `recentExpenses`); the totals use `displayCurrency`. The FIFO allocation is cached.
     public func homeData(in displayCurrency: CurrencyCode = .all, rates: RateTable,
                          now: Date = .now, topCategoryLimit: Int = 4) throws -> HomeData {
         let expenseRaw = TransactionKind.expense.rawValue

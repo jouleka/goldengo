@@ -1,6 +1,9 @@
 import Foundation
 import SwiftData
 import GoldengoCore
+#if canImport(WidgetKit)
+import WidgetKit
+#endif
 
 public struct SourceBalance: Sendable, Identifiable, Equatable {
     public let id: String
@@ -57,7 +60,16 @@ extension IngestionStore {
         }
         modelContext.insert(rec)
         try modelContext.save()
-        // Income doesn't change today's EXPENSE total, so no shared-summary/widget refresh needed.
+        // Income doesn't change today's EXPENSE total — but "cash in hand" raises the WALLET balance,
+        // which the pocket claim is computed from, so that path must republish the claim and refresh
+        // the widget (mirroring setWalletBalance). Into-a-source income touches neither the wallet nor
+        // the today-total, so it needs no shared-summary refresh.
+        if intoWallet {
+            try? refreshSharedPocket()
+            #if canImport(WidgetKit)
+            WidgetCenter.shared.reloadAllTimelines()
+            #endif
+        }
     }
 
     // Internal/intra-actor only — returns a non-Sendable @Model, so never expose it across the actor boundary.

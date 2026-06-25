@@ -91,6 +91,23 @@ final class PocketSnapshotTests: XCTestCase {
         XCTAssertEqual(publishedExpected(), 7654, "an amount edit must republish the claim")
     }
 
+    // Cash-in-hand income raises the wallet balance, so it must republish the pocket claim too —
+    // otherwise the lock-screen widget keeps asserting the OLD, lower balance until an unrelated
+    // save (an expense/edit/reconcile) next reaches the choke point.
+    func test_walletIncome_republishesThePocketClaim() async throws {
+        let store = try makeStore()
+        func publishedExpected() -> Decimal? {
+            SharedSummary().readPocketPayload()?.lines.first { $0.currencyCode == "ALL" }?.expected
+        }
+        _ = try await store.setWalletBalance(5000, currency: .all, tally: nil, at: day(2026, 6, 1))
+        XCTAssertEqual(publishedExpected(), 5000)
+
+        try await store.logIncome(amount: 3000, currency: .all, sourceName: "Cash gift",
+                                  date: day(2026, 6, 2), intoWallet: true)
+        XCTAssertEqual(publishedExpected(), 8000,
+                       "wallet cash income must republish the claim at once, not leave it at 5000")
+    }
+
     // The user's question, pinned: a wallet change (reconcile) must land in the published
     // claim immediately — including the lower-reconcile path, where logDrift refreshes off the
     // OLD baseline first and the new-baseline refresh must win (one of the review's rejected
