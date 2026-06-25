@@ -32,7 +32,13 @@ struct GoldengoApp: App {
     var body: some Scene {
         WindowGroup {
             RootView(store: GoldengoStore.shared())
-                .task { await GoldengoStore.refreshExchangeRates() }
+                .task {
+                    await GoldengoStore.refreshExchangeRates()
+                    // Recompute the widget summaries AFTER rates land so a multi-currency today-total
+                    // isn't published at yesterday's rates. RootView's own launch refresh can race
+                    // ahead of the fetch; this one runs once the fresh rates are cached.
+                    try? await GoldengoStore.shared().refreshSharedSummaries()
+                }
         }
         .modelContainer(GoldengoStore.container)
     }

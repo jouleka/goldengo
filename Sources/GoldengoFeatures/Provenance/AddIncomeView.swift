@@ -14,7 +14,7 @@ public struct AddIncomeView: View {
     @State private var amountString = ""
     @State private var sourceName = ""
     @State private var currencyCode: String
-    @State private var cashInHand = false       // income.jsx `intoSource` = !cashInHand
+    @State private var cashInHand = true        // income.jsx `intoSource` = !cashInHand defaults false (cash-first)
     @State private var showCurrencyPicker = false
 
     private static let suggestions = ["Remittance", "Pay", "ATM", "Cash gift", "Refund"]
@@ -27,6 +27,17 @@ public struct AddIncomeView: View {
     }
 
     private var amount: Decimal { Decimal(string: amountString) ?? 0 }
+
+    /// Truncate a typed amount string to a currency's fraction-digit count (drops the "." entirely
+    /// for a zero-decimal currency). Pure, so it's unit-tested. Truncates (never rounds) — it's
+    /// re-fitting in-progress input, not computing a value.
+    static func refitAmount(_ s: String, toFractionDigits digits: Int) -> String {
+        guard let dot = s.firstIndex(of: ".") else { return s }
+        if digits == 0 { return String(s[..<dot]) }
+        let frac = s[s.index(after: dot)...]
+        guard frac.count > digits else { return s }
+        return String(s[..<dot]) + "." + frac.prefix(digits)
+    }
 
     private var allowsDecimal: Bool { CurrencyCode(currencyCode).fractionDigits > 0 }
     private var keys: [String] { ["1", "2", "3", "4", "5", "6", "7", "8", "9", allowsDecimal ? "." : "", "0", "⌫"] }
@@ -114,7 +125,12 @@ public struct AddIncomeView: View {
                 HStack(spacing: 0) {
                     ForEach([("Cash in hand", true), ("Into a source", false)], id: \.0) { label, isCash in
                         Button {
-                            withAnimation(.easeInOut(duration: 0.18)) { cashInHand = isCash }
+                            withAnimation(.easeInOut(duration: 0.18)) {
+                                cashInHand = isCash
+                                // Cash-in-hand has no name field, so a source name picked in the other
+                                // mode must not ride along as the cash origin label (it should be "Cash").
+                                if isCash { sourceName = "" }
+                            }
                         } label: {
                             Text(label)
                                 .font(.system(size: 14, weight: .semibold))
@@ -194,6 +210,11 @@ public struct AddIncomeView: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             .background(Color.goldengoBackground.ignoresSafeArea())
+            // Switching to a zero-decimal currency (e.g. ALL) must re-fit an already-typed fractional
+            // amount, or "12.50" would be logged as a fractional lek value the keypad can no longer edit.
+            .onChange(of: currencyCode) { _, newCode in
+                amountString = Self.refitAmount(amountString, toFractionDigits: CurrencyCode(newCode).fractionDigits)
+            }
             // Currency picker sheet (income.jsx CcyMini popup)
             .navigationDestination(isPresented: $showCurrencyPicker) {
                 CurrencyPickerView(available: availableCurrencies, selectedCode: $currencyCode)

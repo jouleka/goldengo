@@ -14,7 +14,6 @@ public struct RecentExpensesView: View {
     @State private var undoDeadline: Date?
     /// How long the Undo toast stays before auto-dismissing.
     private let undoWindow: TimeInterval = 4
-    private let onAdd: () -> Void
     private let onOpenImport: () -> Void
     private let onOpenSettings: () -> Void
     private let onOpenSubscriptions: () -> Void
@@ -24,13 +23,11 @@ public struct RecentExpensesView: View {
     @State private var adjustAmount = ""
 
     public init(model: RecentExpensesModel,
-                onAdd: @escaping () -> Void = {},
                 onOpenImport: @escaping () -> Void = {},
                 onOpenSettings: @escaping () -> Void = {},
                 onOpenSubscriptions: @escaping () -> Void = {},
                 onChangeCurrency: @escaping (CurrencyCode) -> Void = { _ in }) {
         self.model = model
-        self.onAdd = onAdd
         self.onOpenImport = onOpenImport
         self.onOpenSettings = onOpenSettings
         self.onOpenSubscriptions = onOpenSubscriptions
@@ -151,6 +148,9 @@ public struct RecentExpensesView: View {
                 .foregroundStyle(GoldengoTheme.accent)
             Spacer()
             HStack(spacing: 6) {
+                // In-app entry to Subscriptions management (the redesign dropped the only button;
+                // it was otherwise reachable only via Siri/deeplink).
+                circleIconButton("repeat", label: "Subscriptions", action: onOpenSubscriptions)
                 circleIconButton("square.and.arrow.down", label: "Import statement", action: onOpenImport)
                 circleIconButton("gearshape", label: "Settings", action: onOpenSettings)
             }

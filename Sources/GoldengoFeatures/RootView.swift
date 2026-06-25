@@ -119,7 +119,6 @@ public struct RootView: View {
         default:
             RecentExpensesView(
                 model: recentModel,
-                onAdd: { showAdd = true },
                 onOpenImport: { showImport = true },
                 onOpenSettings: { showSettings = true },
                 onOpenSubscriptions: { showSubscriptions = true },
@@ -127,7 +126,11 @@ public struct RootView: View {
                     SharedSummary().setPreferredCurrency(code)
                     quickAddModel.currency = code
                     recentModel.currency = code
+                    sourcesModel.currency = code   // keep the Wallet tab on the just-chosen display currency
                     Task { await recentModel.load() }
+                    // Re-render the widget's cached today-total string in the new currency (it stores a
+                    // pre-formatted, currency-bearing string), else the lock screen keeps the old one.
+                    Task { try? await store.refreshSharedSummaries() }
                 }
             )
             .safeAreaInset(edge: .bottom) { Color.clear.frame(height: 64) }
@@ -213,7 +216,13 @@ public struct RootView: View {
             quickAddModel.currency = preferred
             recentModel.currency = preferred
             sourcesModel.currency = preferred
-            if changed { Task { await recentModel.load() }; Task { await sourcesModel.load() } }
+            if changed {
+                Task { await recentModel.load() }
+                Task { await sourcesModel.load() }
+                // Re-publish the widget today-total in the new currency (the cached string is
+                // currency-bearing; without this the lock screen keeps the old currency/symbol).
+                Task { try? await store.refreshSharedSummaries() }
+            }
         }) { SettingsView() }
         .sheet(isPresented: $showImport, onDismiss: {
             // A statement import adds expenses AND may form new recurring patterns — refresh both.
