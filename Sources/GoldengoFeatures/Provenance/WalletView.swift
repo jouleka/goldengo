@@ -11,6 +11,9 @@ public struct WalletView: View {
     let autoOpenAdjust: CurrencyCode?
     @State private var adjustPresented = false
     @Environment(\.dismiss) private var dismiss
+    /// Selectable currencies, decoded once on appear (the "track another currency" section reads
+    /// `untracked` directly in body — was re-decoding from UserDefaults on every pass).
+    @State private var selectableCurrencies: [CurrencyCode] = []
 
     public init(model: SourcesModel, autoOpenAdjust: CurrencyCode? = nil) {
         _model = State(initialValue: model)
@@ -19,8 +22,7 @@ public struct WalletView: View {
 
     /// Every catalog currency without a wallet line yet.
     private var untracked: [CurrencyCode] {
-        CurrencyCatalog.selectable(from: ExchangeRateCache().load() ?? SeedRates.table)
-            .filter { c in !model.wallet.contains { $0.currencyCode == c.rawValue } }
+        selectableCurrencies.filter { c in !model.wallet.contains { $0.currencyCode == c.rawValue } }
     }
     private var quickAdds: [CurrencyCode] { untracked.filter { $0 == .all || $0 == .eur } }
     private var otherAdds: [CurrencyCode]  { untracked.filter { $0 != .all && $0 != .eur } }
@@ -103,7 +105,10 @@ public struct WalletView: View {
             .navigationDestination(isPresented: $adjustPresented) {
                 AdjustWalletView(model: model, currency: autoOpenAdjust ?? .all)
             }
-            .onAppear { if autoOpenAdjust != nil { adjustPresented = true } }
+            .onAppear {
+                selectableCurrencies = CurrencyCatalog.selectable(from: ExchangeRateCache().load() ?? SeedRates.table)
+                if autoOpenAdjust != nil { adjustPresented = true }
+            }
             .onChange(of: autoOpenAdjust) { _, target in
                 if target != nil { adjustPresented = true }
             }

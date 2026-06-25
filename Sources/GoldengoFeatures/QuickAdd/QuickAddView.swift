@@ -10,6 +10,8 @@ public struct QuickAddView: View {
     @State private var model: QuickAddModel
     @State private var showAdded = false
     @State private var showCurrencyPicker = false
+    /// Selectable currencies, decoded once on appear (the currency Menu reads it in body).
+    @State private var selectableCurrencies: [CurrencyCode] = []
 #if os(iOS)
     @State private var showScanner = false
     @State private var scanModel: ReceiptScanModel?
@@ -98,6 +100,7 @@ public struct QuickAddView: View {
             }
         }
         .task { await model.loadSources() }
+        .onAppear { selectableCurrencies = CurrencyCatalog.selectable(from: ExchangeRateCache().load() ?? SeedRates.table) }
         .onChange(of: model.savedCount) { _, newCount in
             guard newCount > 0 else { return }
             GoldengoHaptics.spendLanded()
@@ -204,9 +207,7 @@ public struct QuickAddView: View {
         return "\(c.symbol)  \(name)"
     }
 
-    private var availableCurrencies: [CurrencyCode] {
-        CurrencyCatalog.selectable(from: ExchangeRateCache().load() ?? SeedRates.table)
-    }
+    private var availableCurrencies: [CurrencyCode] { selectableCurrencies }
 
     private var menuCurrencies: [CurrencyCode] {
         let have = Set(availableCurrencies.map(\.rawValue))

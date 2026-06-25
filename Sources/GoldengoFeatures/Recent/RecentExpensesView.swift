@@ -21,6 +21,9 @@ public struct RecentExpensesView: View {
     @State private var showCurrencyPicker = false
     @State private var adjusting: RhythmGhost?
     @State private var adjustAmount = ""
+    /// Selectable currencies, decoded once on appear — not re-read from UserDefaults + re-decoded on
+    /// every body pass (the currency Menu/picker read it directly in body).
+    @State private var selectableCurrencies: [CurrencyCode] = []
 
     public init(model: RecentExpensesModel,
                 onOpenImport: @escaping () -> Void = {},
@@ -80,6 +83,7 @@ public struct RecentExpensesView: View {
             .toolbar(.hidden, for: .navigationBar)
 #endif
             .refreshable { await model.load() }
+            .onAppear { selectableCurrencies = CurrencyCatalog.selectable(from: ExchangeRateCache().load() ?? SeedRates.table) }
             .alert("Adjust amount", isPresented: Binding(get: { adjusting != nil },
                                                          set: { if !$0 { adjusting = nil } }),
                    presenting: adjusting) { g in
@@ -257,9 +261,7 @@ public struct RecentExpensesView: View {
         let name = Locale.current.localizedString(forCurrencyCode: c.rawValue) ?? c.rawValue
         return "\(c.symbol)  \(name)"
     }
-    private var availableCurrencies: [CurrencyCode] {
-        CurrencyCatalog.selectable(from: ExchangeRateCache().load() ?? SeedRates.table)
-    }
+    private var availableCurrencies: [CurrencyCode] { selectableCurrencies }
     private var menuCurrencies: [CurrencyCode] {
         let have = Set(availableCurrencies.map(\.rawValue))
         var list = CurrencyCode.popular.filter { have.contains($0.rawValue) }

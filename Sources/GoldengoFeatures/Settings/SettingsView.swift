@@ -24,6 +24,9 @@ public struct SettingsView: View {
     @State private var morningNudge: Date = SettingsView.date(fromMinutes: SharedSummary().ritualMorningMinutes())
     @State private var eveningNudge: Date = SettingsView.date(fromMinutes: SharedSummary().ritualEveningMinutes())
     @State private var notificationsDenied = false
+    /// Selectable currencies, decoded once on appear (the picker NavigationLink destination is built
+    /// in body, so the computed form re-read UserDefaults + re-decoded on every Settings render).
+    @State private var selectableCurrencies: [CurrencyCode] = []
 
     /// Minutes ↔ Date on a fixed reference day — the pickers only ever read hour+minute.
     private static func date(fromMinutes m: Int) -> Date {
@@ -37,9 +40,7 @@ public struct SettingsView: View {
 
     public init() {}
 
-    private var availableCurrencies: [CurrencyCode] {
-        CurrencyCatalog.selectable(from: ExchangeRateCache().load() ?? SeedRates.table)
-    }
+    private var availableCurrencies: [CurrencyCode] { selectableCurrencies }
     private var preferredLabel: String {
         let c = CurrencyCode(preferredCode)
         let n = Locale.current.localizedString(forCurrencyCode: c.rawValue) ?? c.rawValue
@@ -172,6 +173,7 @@ public struct SettingsView: View {
                 Task { await LocalNotificationScheduler.scheduleRitual() }
             }
             .task { notificationsDenied = await LocalNotificationScheduler.authorizationDenied() }
+            .onAppear { selectableCurrencies = CurrencyCatalog.selectable(from: ExchangeRateCache().load() ?? SeedRates.table) }
         }
     }
 }

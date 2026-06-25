@@ -24,6 +24,8 @@ public struct EditExpenseView: View {
     @State private var fundedBySourceID: String?
     @State private var showDeleteConfirm = false
     @State private var showCurrencyPicker = false
+    /// Selectable currencies, decoded once on appear (the currency Menu reads it in body).
+    @State private var selectableCurrencies: [CurrencyCode] = []
 
     /// Base quick categories, shared with QuickAdd; the snapshot's current category is appended
     /// (if not already present) so editing never silently drops an existing assignment.
@@ -74,6 +76,7 @@ public struct EditExpenseView: View {
                 deleteSection
             }
             .tint(GoldengoTheme.accent)
+            .onAppear { selectableCurrencies = CurrencyCatalog.selectable(from: ExchangeRateCache().load() ?? SeedRates.table) }
             .navigationTitle("Edit expense")
 #if canImport(UIKit)
             .navigationBarTitleDisplayMode(.inline)
@@ -153,9 +156,7 @@ public struct EditExpenseView: View {
         return "\(c.symbol)  \(name)"
     }
 
-    private var availableCurrencies: [CurrencyCode] {
-        CurrencyCatalog.selectable(from: ExchangeRateCache().load() ?? SeedRates.table)
-    }
+    private var availableCurrencies: [CurrencyCode] { selectableCurrencies }
 
     private var menuCurrencies: [CurrencyCode] {
         let have = Set(availableCurrencies.map(\.rawValue))
