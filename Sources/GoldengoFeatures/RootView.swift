@@ -82,9 +82,9 @@ public struct RootView: View {
     /// later same-session `.active` a 0-day no-op and also seeds the baseline on first-ever launch.
     private func checkReEntry() {
         let summary = SharedSummary()
-        if reEntryPrompt == nil,
-           let days = ReEntryPolicy.daysAway(lastSeen: summary.readLastSeen()),
-           days >= ReEntryPolicy.thresholdDays {
+        let lastSeen = summary.readLastSeen()
+        if reEntryPrompt == nil, ReEntryPolicy.shouldShow(lastSeen: lastSeen),
+           let days = ReEntryPolicy.daysAway(lastSeen: lastSeen) {
             reEntryPrompt = ReEntryPrompt(days: days)
             // Re-entry takes precedence: drop any ritual sheet left open across the background gap so
             // the .fullScreenCover never stacks on a leftover .sheet (which would wedge the modal stack).

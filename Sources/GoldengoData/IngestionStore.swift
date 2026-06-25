@@ -340,9 +340,6 @@ public actor IngestionStore {
         return c
     }
 
-    /// Remembered default category for a merchant (matched by normalized name), bumping
-    /// its usage stats. Returns nil for empty/unknown merchants — the empty guard avoids
-    /// matching a merchant row that happens to have an empty normalized name.
     public struct ImportSummary: Sendable, Equatable { public var imported: Int; public var deduped: Int }
 
     public func importStatement(_ transactions: [NormalizedTransaction], fileName: String) throws -> ImportSummary {
@@ -364,6 +361,9 @@ public actor IngestionStore {
         try modelContext.fetchCount(FetchDescriptor<ImportBatch>())
     }
 
+    /// Remembered default category for a merchant (matched by normalized name), bumping
+    /// its usage stats. Returns nil for empty/unknown merchants — the empty guard avoids
+    /// matching a merchant row that happens to have an empty normalized name.
     private func defaultCategory(forMerchant rawMerchant: String?) throws -> CategoryRecord? {
         let norm = MerchantNormalizer.normalize(rawMerchant)
         guard !norm.isEmpty else { return nil }
