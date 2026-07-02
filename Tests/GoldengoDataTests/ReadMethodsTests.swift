@@ -8,6 +8,20 @@ final class ReadMethodsTests: XCTestCase {
     private let rates = RateTable(base: CurrencyCode("USD"), rates: ["USD": 1, "ALL": 100, "EUR": 1],
                                   asOf: Date(timeIntervalSince1970: 1_780_444_800))
 
+    func test_recentCategoryNames_mostRecentFirst_distinct_skipsArchived() async throws {
+        let store = IngestionStore(modelContainer: try .goldengoInMemory())
+        let base = Date(timeIntervalSince1970: 1_700_000_000)
+        _ = try await store.logManual(amount: 5, currency: .all, merchant: "a", categoryName: "Coffee", date: base)
+        _ = try await store.logManual(amount: 5, currency: .all, merchant: "b", categoryName: "Books", date: base.addingTimeInterval(60))
+        _ = try await store.logManual(amount: 5, currency: .all, merchant: "c", categoryName: "Coffee", date: base.addingTimeInterval(120))
+        let gone = try await store.logManual(amount: 5, currency: .all, merchant: "d", categoryName: "Vice", date: base.addingTimeInterval(180))
+        try await store.deleteExpense(dedupeKey: gone)
+        let names = try await store.recentCategoryNames()
+        // WHY: the chip row is a habit surface — most-recently-USED first, one chip per
+        // category, and deleted history must not resurrect chips.
+        XCTAssertEqual(names, ["Coffee", "Books"])
+    }
+
     func test_recentExpenses_returnsAllNonArchived() async throws {
         let store = IngestionStore(modelContainer: try .goldengoInMemory())
         try await store.logManual(amount: 100, currency: .all, merchant: "A", categoryName: nil)

@@ -192,6 +192,24 @@ public actor IngestionStore {
         try modelContext.fetchCount(FetchDescriptor<ExpenseRecord>(predicate: #Predicate { $0.isArchived == false }))
     }
 
+    /// Distinct category names of the most recent expenses, most-recently-used first —
+    /// the QuickAdd chip row's habit surface. Derived from recent rows (one bounded fetch,
+    /// date desc), so it needs no usage counters and deleted history drops out naturally.
+    public func recentCategoryNames(limit: Int = 200) throws -> [String] {
+        var fd = FetchDescriptor<ExpenseRecord>(
+            predicate: #Predicate { $0.isArchived == false },
+            sortBy: [SortDescriptor(\.date, order: .reverse)])
+        fd.fetchLimit = limit
+        var seen = Set<String>()
+        var names: [String] = []
+        for r in try modelContext.fetch(fd) {
+            guard let name = r.category?.name, !name.isEmpty, seen.insert(name.lowercased()).inserted
+            else { continue }
+            names.append(name)
+        }
+        return names
+    }
+
     public func snapshot(dedupeKey key: String) throws -> ExpenseSnapshot? {
         var fd = FetchDescriptor<ExpenseRecord>(predicate: #Predicate { $0.dedupeKey == key && $0.isArchived == false })
         fd.fetchLimit = 1
