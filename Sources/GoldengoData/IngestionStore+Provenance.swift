@@ -217,6 +217,14 @@ extension IngestionStore {
                 outflows.append(.init(id: r.dedupeKey, amount: abs(r.amount),
                                       currency: CurrencyCode(r.currencyCode), date: r.date,
                                       pinnedSourceID: nil))
+            } else if r.kindRaw == TransactionKind.lent.rawValue,
+                      let pinned = r.fundedBySourceID, pinned != FundingPin.wallet {
+                // A bank-side lend drains its pool — the money left it as surely as a spend.
+                // (Wallet-funded lends drain the wallet ledger instead; repayments are
+                // wallet-only in v1 and never touch the pools.)
+                outflows.append(.init(id: r.dedupeKey, amount: abs(r.amount),
+                                      currency: CurrencyCode(r.currencyCode), date: r.date,
+                                      pinnedSourceID: pinned))
             }
         }
         return (inflows, outflows)

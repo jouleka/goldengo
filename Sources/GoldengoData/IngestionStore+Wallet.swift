@@ -144,16 +144,27 @@ extension IngestionStore {
             }))
         let manualRaw = ExpenseSource.manual.rawValue
         let driftPrefix = Self.driftKeyPrefix + ":"
+        let forgivePrefix = Self.forgiveKeyPrefix + ":"
         return rows.compactMap { r in
             switch r.kindRaw {
             case TransactionKind.transfer.rawValue:
                 return CashLedger.Flow(amount: abs(r.amount), isInflow: true)
             case TransactionKind.income.rawValue where r.fundedBySourceID == FundingPin.wallet:
                 return CashLedger.Flow(amount: abs(r.amount), isInflow: true)
+            // Forgive entries are wallet-neutral: the pocket already drained at LEND time —
+            // the forgiveness expense reclassifies that money, never re-drains it.
             case TransactionKind.expense.rawValue where !r.dedupeKey.hasPrefix(driftPrefix)
+                    && !r.dedupeKey.hasPrefix(forgivePrefix)
                     && (r.fundedBySourceID == FundingPin.wallet
                         || (r.fundedBySourceID == nil && r.sourceRaw == manualRaw)):
                 return CashLedger.Flow(amount: abs(r.amount), isInflow: false)
+            // Lending is cash leaving the pocket — drains exactly like a cash spend.
+            case TransactionKind.lent.rawValue where r.fundedBySourceID == FundingPin.wallet
+                    || (r.fundedBySourceID == nil && r.sourceRaw == manualRaw):
+                return CashLedger.Flow(amount: abs(r.amount), isInflow: false)
+            // A payback is cash coming home.
+            case TransactionKind.repayment.rawValue where r.fundedBySourceID == FundingPin.wallet:
+                return CashLedger.Flow(amount: abs(r.amount), isInflow: true)
             default:
                 return nil
             }

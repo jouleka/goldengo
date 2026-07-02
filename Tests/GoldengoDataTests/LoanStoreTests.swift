@@ -71,6 +71,54 @@ final class LoanStoreTests: XCTestCase {
         XCTAssertEqual(fresh.first?.remaining, 30)
     }
 
+    func test_lending_drainsWallet_repaymentRefills_forgiveNeverDoubleDrains() async throws {
+        let store = try makeStore()
+        _ = try await store.setWalletBalance(5000, currency: .all, tally: nil, at: day(2026, 6, 1))
+        // WHY: the cash really left the pocket — an untracked lend would make the next
+        // reconcile log a junk Unaccounted entry for money the user knowingly handed out.
+        try await store.lend(amount: 1000, currency: .all, personName: "Andi", date: day(2026, 6, 2))
+        var wallet = try await store.walletBalances(now: day(2026, 6, 3))
+        XCTAssertEqual(wallet.first?.expectedNow, 4000)
+        let pre = try await store.loanBalances()
+        let id = try XCTUnwrap(pre.first?.id)
+        try await store.logRepayment(amount: 400, loanID: id, date: day(2026, 6, 10))
+        wallet = try await store.walletBalances(now: day(2026, 6, 11))
+        XCTAssertEqual(wallet.first?.expectedNow, 4400, "Payback is cash coming home")
+        // WHY: the wallet drained at LEND time — forgiveness reclassifies that money as
+        // spending; a second drain would double-count it and wreck the next reconcile.
+        try await store.forgiveLoan(id: id, date: day(2026, 6, 20))
+        wallet = try await store.walletBalances(now: day(2026, 6, 21))
+        XCTAssertEqual(wallet.first?.expectedNow, 4400, "Forgive expense is wallet-neutral")
+    }
+
+    func test_pinnedLend_drainsSourcePool_notWallet() async throws {
+        let store = try makeStore()
+        _ = try await store.setWalletBalance(5000, currency: .all, tally: nil, at: day(2026, 6, 1))
+        try await store.logIncome(amount: 10000, currency: .all, sourceName: "Freelance", date: day(2026, 6, 1))
+        let snap = try await store.provenanceSnapshot(displayCurrency: .all)
+        let sourceID = try XCTUnwrap(snap.sources.first?.id)
+        try await store.lend(amount: 3000, currency: .all, personName: "Andi",
+                             fundedBySourceID: sourceID, date: day(2026, 6, 2))
+        let after = try await store.provenanceSnapshot(displayCurrency: .all)
+        XCTAssertEqual(after.sources.first?.remaining, 7000, "A bank-side lend drains its pool")
+        let wallet = try await store.walletBalances(now: day(2026, 6, 3))
+        XCTAssertEqual(wallet.first?.expectedNow, 5000, "…and never touches the pocket")
+    }
+
+    func test_lending_neverCountsAsSpending() async throws {
+        let store = try makeStore()
+        let rates = RateTable(base: CurrencyCode("USD"), rates: ["USD": 1, "ALL": 100],
+                              asOf: day(2026, 6, 1))
+        try await store.lend(amount: 1000, currency: .all, personName: "Andi")
+        let pre = try await store.loanBalances()
+        let id = try XCTUnwrap(pre.first?.id)
+        try await store.logRepayment(amount: 400, loanID: id)
+        // WHY: this is the whole point of the feature — a loan logged as an expense both
+        // inflates spending and forgets the claim.
+        let total = try await store.todayTotal(in: .all, rates: rates)
+        XCTAssertEqual(total, 0)
+    }
+
     func test_forgive_logsVisibleGiftExpense_archivesLoan() async throws {
         let store = try makeStore()
         try await store.lend(amount: 5000, currency: .all, personName: "Andi", date: day(2026, 6, 1))
