@@ -13,6 +13,10 @@ public struct SourcesView: View {
     @State private var adjustSource: SourceBalance?   // tapped source → edit name/amount sheet
     @State private var deleteCandidate: SourceBalance?   // swipe-Delete → confirm alert
     @State private var showDeleteConfirm = false
+    @State private var showLend = false               // "Lend" pill → LendView sheet
+    @State private var adjustLoan: LoanBalance?       // tapped claim → payback/forgive sheet
+    @State private var deleteLoanCandidate: LoanBalance?   // swipe-Delete on a claim
+    @State private var showDeleteLoanConfirm = false
     public init(model: SourcesModel) { _model = State(initialValue: model) }
 
     /// Consume the one-shot widget deep-link flag: open the wallet sheet straight at Adjust.
@@ -45,12 +49,41 @@ public struct SourcesView: View {
                     .foregroundStyle(GoldengoTheme.inkMuted)
                     .padding(.horizontal, GoldengoTheme.Spacing.m)
                     .padding(.top, 8)
-                GoldengoSerifSectionHeader("Sources")
+            }
+            .plainRow()
+
+            // ── Owed to you: money that left but is still yours ──────────────────
+            if !model.loans.isEmpty {
+                GoldengoSerifSectionHeader("Owed to you")
                     .padding(.horizontal, GoldengoTheme.Spacing.m)
                     .padding(.top, 26)
                     .padding(.bottom, 12)
+                    .plainRow()
+                ForEach(model.loans) { loan in
+                    loanCard(loan)
+                        .plainRow(top: 6, horizontal: GoldengoTheme.Spacing.m, bottom: 6)
+                        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                            Button(role: .destructive) {
+                                deleteLoanCandidate = loan
+                                showDeleteLoanConfirm = true
+                            } label: {
+                                Label("Delete", systemImage: "trash")
+                            }
+                        }
+                        .swipeActions(edge: .leading, allowsFullSwipe: true) {
+                            Button { adjustLoan = loan } label: {
+                                Label("Edit", systemImage: "pencil")
+                            }
+                            .tint(GoldengoTheme.accent)
+                        }
+                }
             }
-            .plainRow()
+
+            GoldengoSerifSectionHeader("Sources")
+                .padding(.horizontal, GoldengoTheme.Spacing.m)
+                .padding(.top, 26)
+                .padding(.bottom, 12)
+                .plainRow()
 
             if model.loadFailed {
                 VStack(spacing: 6) {
@@ -151,6 +184,22 @@ public struct SourcesView: View {
             AdjustSourceView(model: model, source: b)
                 .presentationDetents([.medium, .large])
         }
+        .sheet(isPresented: $showLend, onDismiss: { Task { await model.load() } }) {
+            LendView(model: model, onDone: { showLend = false })
+        }
+        .sheet(item: $adjustLoan) { loan in
+            AdjustLoanView(model: model, loan: loan)
+                .presentationDetents([.medium, .large])
+        }
+        .alert("Delete \(deleteLoanCandidate?.personName ?? "this claim")?",
+               isPresented: $showDeleteLoanConfirm, presenting: deleteLoanCandidate) { loan in
+            Button("Delete", role: .destructive) {
+                Task { await model.deleteLoan(loan) }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: { _ in
+            Text("The claim and its lend/payback history archive together.")
+        }
         .sheet(isPresented: $showCount, onDismiss: {
             walletAutoAdjust = false
             Task { await model.load() }
@@ -169,6 +218,21 @@ public struct SourcesView: View {
                 .font(.system(size: 32, design: .serif))
                 .foregroundStyle(GoldengoTheme.inkPrimary)
             Spacer()
+            Button { showLend = true } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: "arrow.up.right")
+                        .font(.system(size: 13, weight: .bold))
+                    Text("Lend")
+                        .font(.system(size: 14, weight: .semibold))
+                }
+                .foregroundStyle(GoldengoTheme.accent)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 8)
+                .background(GoldengoTheme.accentSoft)
+                .clipShape(Capsule())
+                .overlay(Capsule().strokeBorder(GoldengoTheme.accentLine, lineWidth: 1))
+            }
+            .buttonStyle(.plain)
             Button { showAddIncome = true } label: {
                 HStack(spacing: 6) {
                     Image(systemName: "plus")
@@ -184,6 +248,7 @@ public struct SourcesView: View {
                 .overlay(Capsule().strokeBorder(GoldengoTheme.accentLine, lineWidth: 1))
             }
             .buttonStyle(.plain)
+            .padding(.leading, 8)
         }
         .padding(.horizontal, GoldengoTheme.Spacing.m)
         .padding(.top, 18)
@@ -307,6 +372,43 @@ public struct SourcesView: View {
         .padding(18)
         .goldengoCard(padding: 0)
     }
+
+    // ── Loan card: color dot + person + amount owed + since date ─────────────
+    // Tappable → the payback/forgive sheet (swipe left deletes, swipe right edits).
+    @ViewBuilder
+    private func loanCard(_ loan: LoanBalance) -> some View {
+        Button { adjustLoan = loan } label: {
+            HStack {
+                HStack(spacing: 9) {
+                    Circle()
+                        .fill(GoldengoTheme.sourceColor(loan.colorIndex))
+                        .frame(width: 10, height: 10)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(loan.personName)
+                            .font(.system(size: 15.5, weight: .semibold))
+                            .foregroundStyle(GoldengoTheme.inkPrimary)
+                        Text("since " + Self.sinceFormatter.string(from: loan.sinceDate))
+                            .font(.system(size: 12))
+                            .foregroundStyle(GoldengoTheme.inkMuted)
+                    }
+                }
+                Spacer()
+                GoldengoAmountText(
+                    Money(amount: loan.remaining, currency: CurrencyCode(loan.currencyCode)).formatted(),
+                    role: .row
+                )
+            }
+            .padding(.horizontal, 18)
+            .padding(.vertical, 14)
+            .goldengoCard()
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    private static let sinceFormatter: DateFormatter = {
+        let f = DateFormatter(); f.dateStyle = .medium; f.timeStyle = .none; return f
+    }()
 
     private func walletLabel(_ code: String) -> String {
         if code == "ALL" { return "Lek (ALL)" }

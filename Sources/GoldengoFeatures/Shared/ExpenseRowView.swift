@@ -102,16 +102,32 @@ func expenseHomeRow(_ r: ExpenseSnapshot) -> some View {
     switch r.kind {
     case .income:
         amountView = AnyView(GoldengoAmountText("+" + amountStr, role: .row, color: GoldengoTheme.income))
-    case .transfer:
+    // Muted like transfers: money that MOVED, not money spent or earned.
+    case .transfer, .lent:
         amountView = AnyView(GoldengoAmountText(amountStr, role: .row, color: GoldengoTheme.inkMuted))
+    case .repayment:
+        amountView = AnyView(GoldengoAmountText("+" + amountStr, role: .row, color: GoldengoTheme.income))
     default:
         amountView = AnyView(GoldengoAmountText(amountStr, role: .row))
     }
 
-    let subText = r.kind == .transfer ? "→ wallet" : (r.categoryName ?? "Other")
+    let subText: String
+    switch r.kind {
+    case .transfer:  subText = "→ wallet"
+    case .lent:      subText = "lent · owed to you"
+    case .repayment: subText = "paid back"
+    default:         subText = r.categoryName ?? "Other"
+    }
+
+    let icon: String
+    switch r.kind {
+    case .lent:      icon = "person"
+    case .repayment: icon = "arrow.uturn.left"
+    default:         icon = GoldengoCategoryIcon.symbol(for: r.categoryName)
+    }
 
     return homeRow(
-        icon: GoldengoCategoryIcon.symbol(for: r.categoryName),
+        icon: icon,
         title: r.displayTitle,
         sub: subText,
         recurring: r.subscriptionName != nil,
