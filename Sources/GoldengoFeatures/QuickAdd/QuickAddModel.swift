@@ -20,8 +20,32 @@ public final class QuickAddModel {
     /// Named sources + remaining balances for the "Paid from" picker; empty hides the control.
     public private(set) var sourceBalances: [SourceBalance] = []
 
-    /// Most-used categories surfaced as one-tap chips (smart defaults come later).
-    public let quickCategories = ["Groceries", "Food", "Transport", "Coffee", "Bills", "Shopping", "Other"]
+    /// When the expense happened — defaults to now; the "When" row lets a forgotten spend
+    /// land on the day it happened. Reset to now after each save (a sticky yesterday would
+    /// silently mis-date every following log).
+    public var date: Date = .now
+
+    /// Default chips until real usage exists; merged with most-recently-used on load.
+    public static let defaultCategories = ["Groceries", "Food", "Transport", "Coffee", "Bills", "Shopping", "Other"]
+    /// Most-used categories surfaced as one-tap chips — the user's own (MRU) first,
+    /// topped up with the defaults, one chip per name, capped to stay scannable.
+    public private(set) var quickCategories = QuickAddModel.defaultCategories
+
+    public func loadCategories() async {
+        let recent = (try? await store.recentCategoryNames()) ?? []
+        quickCategories = Self.mergeCategories(recent: recent, defaults: Self.defaultCategories)
+    }
+
+    /// Pure merge: recent (MRU) first, defaults top up, case-insensitive dedupe, cap 10.
+    public nonisolated static func mergeCategories(recent: [String], defaults: [String]) -> [String] {
+        var seen = Set<String>()
+        var out: [String] = []
+        for name in recent + defaults where seen.insert(name.lowercased()).inserted {
+            out.append(name)
+            if out.count == 10 { break }
+        }
+        return out
+    }
 
     public init(store: IngestionStore, currency: CurrencyCode = .all) {
         self.store = store
@@ -84,10 +108,12 @@ public final class QuickAddModel {
                                       merchant: merchant.isEmpty ? nil : merchant,
                                       note: note.isEmpty ? nil : note,
                                       categoryName: selectedCategory,
+                                      date: date,
                                       fundedBySourceID: selectedSourceID)
             savedCount += 1
             reset()
-            await loadSources()   // refresh remaining balances after the spend drew from a source
+            await loadSources()      // refresh remaining balances after the spend drew from a source
+            await loadCategories()   // a just-created category becomes a chip immediately
 #if canImport(WidgetKit)
             WidgetCenter.shared.reloadAllTimelines()
 #endif
@@ -100,6 +126,7 @@ public final class QuickAddModel {
         amountString = ""
         merchant = ""
         note = ""
+        date = .now
         selectedCategory = nil
         selectedSourceID = nil   // back to Automatic, so one tagged expense never mis-attributes the next
     }

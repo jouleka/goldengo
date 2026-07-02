@@ -86,6 +86,28 @@ final class QuickAddModelTests: XCTestCase {
         XCTAssertTrue(m.allowsDecimal)
     }
 
+    func test_mergeCategories_userFirst_dedupedCaseInsensitive_capped10() {
+        let merged = QuickAddModel.mergeCategories(
+            recent: ["Vape", "coffee", "Books", "Gym", "Vet", "Gifts", "Tools", "Rent"],
+            defaults: ["Groceries", "Food", "Transport", "Coffee", "Bills", "Shopping", "Other"])
+        // WHY: the row must mirror the user's actual habits before our guesses, one chip
+        // per category regardless of case, and stay scannable (cap 10).
+        XCTAssertEqual(merged, ["Vape", "coffee", "Books", "Gym", "Vet", "Gifts", "Tools", "Rent",
+                                "Groceries", "Food"])
+    }
+
+    func test_save_forwardsPickedDate_thenResetsToToday() async throws {
+        let m = try makeModel()
+        let yesterday = Calendar.current.date(byAdding: .day, value: -1, to: .now)!
+        m.tap("5"); m.date = yesterday
+        await m.save()
+        let row = try await m.store.recentExpenses(limit: 1).first
+        // WHY: backdating exists so a forgotten spend lands on the day it happened…
+        XCTAssertEqual(row?.date, yesterday)
+        // …and a sticky yesterday would silently mis-date every FOLLOWING log.
+        XCTAssertTrue(Calendar.current.isDateInToday(m.date))
+    }
+
     func test_save_persistsTypedNote_andResetClearsIt() async throws {
         // A note typed on the Quick Add screen must reach the saved expense, and must clear after a
         // save so it never bleeds into the next entry.
