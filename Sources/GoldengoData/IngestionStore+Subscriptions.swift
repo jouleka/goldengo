@@ -194,6 +194,40 @@ extension IngestionStore {
         try modelContext.save()
     }
 
+    /// Track a subscription the user declares directly — no charge history needed. Creates the
+    /// same record detection creates, pre-confirmed, so the Tracked list, reminders, Upcoming
+    /// and due-date ghosts all work unchanged. The matchKey uses the detector's scheme, so a
+    /// later detected series for the same merchant converges on THIS record instead of duplicating.
+    public func addManualSubscription(name: String, amount: Decimal, currency: CurrencyCode,
+                                      cadence: SubscriptionCadence, nextChargeDate: Date,
+                                      now: Date = .now) throws {
+        let displayName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        let norm = MerchantNormalizer.normalize(displayName)
+        guard !norm.isEmpty, amount > 0 else { return }
+        let key = "\(norm)|\(cadence.rawValue)|\(currency.rawValue)"
+        if let rec = try fetchSubscription(matchKey: key) {
+            rec.displayName = displayName
+            rec.amount = amount
+            rec.nextChargeDate = nextChargeDate
+            rec.manualAnchorDate = nextChargeDate
+            rec.isConfirmed = true; rec.isDismissed = false; rec.isManual = true
+            rec.confidence = 1
+            rec.updatedAt = now
+        } else {
+            let rec = SubscriptionRecord(matchKey: key, displayName: displayName,
+                                         normalizedMerchant: norm, amount: amount,
+                                         currencyCode: currency.rawValue, cadence: cadence,
+                                         nextChargeDate: nextChargeDate,
+                                         occurrenceCount: 0, confidence: 1)
+            rec.isConfirmed = true
+            rec.isManual = true
+            rec.manualAnchorDate = nextChargeDate
+            rec.detectedAt = now; rec.updatedAt = now
+            modelContext.insert(rec)
+        }
+        try modelContext.save()
+    }
+
     public func subscriptionRecordCount() throws -> Int {
         try modelContext.fetchCount(FetchDescriptor<SubscriptionRecord>())
     }

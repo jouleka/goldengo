@@ -45,8 +45,10 @@ backdated expense. That silently drains the wallet ledger and pollutes past tota
      past `now` via `cadence.advance` so "Next: …" never shows a stale past date.
 
 4. **`pendingSubscriptionCharges`** — manual subs with **no billing evidence** anchor their
-   due-charge schedule on `nextChargeDate` (`anchor = notBefore = nextChargeDate`) instead
-   of the freshest evidence row. `dueCharges`'s existing `anchor <= now` guard means a
+   due-charge schedule on the immutable `manualAnchorDate` (`anchor = notBefore =
+   manualAnchorDate`) instead of the freshest evidence row. (`nextChargeDate` rolls forward
+   for display — see §3 — so it cannot serve as the schedule origin without silencing
+   already-due ghosts.) `dueCharges`'s existing `anchor <= now` guard means a
    future date produces no ghost until the day arrives. Once the user taps a ghost (or a
    statement import lands the charge), real evidence exists and the normal evidence-anchored
    path takes over. The coverage check (a nearby real row suppresses the due) applies

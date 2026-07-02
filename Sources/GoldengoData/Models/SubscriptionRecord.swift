@@ -18,6 +18,14 @@ public final class SubscriptionRecord {
     public var isConfirmed: Bool = false           // user said "yes, it's a subscription"
     public var isDismissed: Bool = false           // user said "not a subscription"
     public var isArchived: Bool = false            // tombstone (CloudKit-friendly)
+    /// User-declared via "Add subscription" (not a detector guess). Manual subs survive the
+    /// reconcile pass with zero charge history and anchor their ghost schedule on
+    /// `manualAnchorDate` until real charges exist.
+    public var isManual: Bool = false
+    /// The schedule origin the user declared (their "next charge" at add time). Immutable —
+    /// `nextChargeDate` rolls forward for display, but due-charge generation must keep the
+    /// original phase and never invent dues from before this date.
+    public var manualAnchorDate: Date = Date.now
     public var detectedAt: Date = Date.now
     public var updatedAt: Date = Date.now
 
