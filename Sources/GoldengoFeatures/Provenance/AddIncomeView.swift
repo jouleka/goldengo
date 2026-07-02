@@ -25,6 +25,9 @@ public struct AddIncomeView: View {
     @FocusState private var newSourceFocused: Bool
     /// Selectable currencies, decoded once on appear (the currency Menu reads it in body).
     @State private var selectableCurrencies: [CurrencyCode] = []
+    /// When the money arrived — defaults to now; bounded to today (future income would
+    /// distort the wallet ledger and the pools before it exists).
+    @State private var date = Date.now
 
     // gg-key height — matches QuickAddView (quickadd.jsx `keyH` at density "regular")
     private let keyHeight: CGFloat = 60
@@ -103,6 +106,9 @@ public struct AddIncomeView: View {
                 }
             }
 
+            whenRow
+                .padding(.top, 12)
+
             Spacer(minLength: 0)
 
             keypad
@@ -116,7 +122,8 @@ public struct AddIncomeView: View {
                         sourceName: cashInHand
                             ? (resolvedSourceName.isEmpty ? "Cash" : resolvedSourceName)
                             : resolvedSourceName,
-                        intoWallet: cashInHand
+                        intoWallet: cashInHand,
+                        date: date
                     )
                     onDone()
                 }
@@ -312,6 +319,18 @@ public struct AddIncomeView: View {
             .padding(.vertical, 10)
             .background(Color.goldengoField)
             .clipShape(Capsule())
+    }
+
+    // MARK: - When (backdating) — bounded to today.
+
+    private var whenRow: some View {
+        HStack {
+            GoldengoSectionLabel("When")
+            Spacer()
+            DatePicker("", selection: $date, in: ...Date.now, displayedComponents: .date)
+                .labelsHidden()
+                .tint(GoldengoTheme.accent)
+        }
     }
 
     // MARK: - Keypad

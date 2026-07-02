@@ -18,6 +18,14 @@ public struct QuickAddView: View {
 #endif
     public init(model: QuickAddModel) { _model = State(initialValue: model) }
 
+    /// Which text field owns the soft keyboard (nil = none). One enum so a keypad tap can
+    /// dismiss whichever is open (tap-outside rule — never a keyboard Done toolbar).
+    private enum Field { case newCategory, merchant, note }
+    @FocusState private var focusedField: Field?
+    @State private var showDetails = false        // "Add details" → Where? / Note fields
+    @State private var newCategoryMode = false    // ＋New chip → inline category name field
+    @State private var newCategoryText = ""
+
     // gg-key height: matches quickadd.jsx `keyH` at density "regular" = 60
     private let keyHeight: CGFloat = 60
 
@@ -34,10 +42,21 @@ public struct QuickAddView: View {
             categoryChips
                 .padding(.top, 22)              // marginTop: 22
 
+            if newCategoryMode {
+                newCategoryField
+                    .padding(.top, 10)
+            }
+
+            detailsSection
+                .padding(.top, 12)
+
             if !model.sourceBalances.isEmpty {
                 paidFromRow
                     .padding(.top, 16)          // marginTop: 16
             }
+
+            whenRow
+                .padding(.top, 12)
 
             Spacer(minLength: 0)                // flex: 1
 
@@ -99,7 +118,7 @@ public struct QuickAddView: View {
                     .transition(.move(edge: .top).combined(with: .opacity))
             }
         }
-        .task { await model.loadSources() }
+        .task { await model.loadSources(); await model.loadCategories() }
         .onAppear { selectableCurrencies = CurrencyCatalog.selectable(from: ExchangeRateCache().load() ?? SeedRates.table) }
         .onChange(of: model.savedCount) { _, newCount in
             guard newCount > 0 else { return }
@@ -228,13 +247,99 @@ public struct QuickAddView: View {
                     SelectableChip(
                         cat,
                         systemImage: GoldengoCategoryIcon.symbol(for: cat),
-                        isSelected: model.selectedCategory == cat
+                        isSelected: !newCategoryMode && model.selectedCategory == cat
                     ) {
-                        model.selectedCategory = model.selectedCategory == cat ? nil : cat
+                        withAnimation(.easeInOut(duration: 0.18)) {
+                            model.selectedCategory = model.selectedCategory == cat ? nil : cat
+                            newCategoryMode = false
+                            newCategoryText = ""
+                        }
+                    }
+                }
+                // Creating a category is a first-class action (store find-or-creates on save).
+                SelectableChip("New", systemImage: "plus", isSelected: newCategoryMode) {
+                    withAnimation(.easeInOut(duration: 0.18)) {
+                        newCategoryMode.toggle()
+                        model.selectedCategory = nil
+                        if newCategoryMode { focusedField = .newCategory } else { newCategoryText = "" }
                     }
                 }
             }
             .padding(.vertical, 2)              // padding: '2px 0'
+        }
+    }
+
+    private var newCategoryField: some View {
+        TextField("Name a category — e.g. Vape", text: $newCategoryText)
+            .focused($focusedField, equals: .newCategory)
+            .submitLabel(.done)
+            .onSubmit { focusedField = nil }
+            .font(.system(size: 14.5, weight: .semibold))
+            .foregroundStyle(GoldengoTheme.inkPrimary)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+            .background(Color.goldengoField)
+            .clipShape(Capsule())
+            // Live-bind the typed name as the selected category, so Save files under it.
+            .onChange(of: newCategoryText) { _, text in
+                guard newCategoryMode else { return }
+                let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+                model.selectedCategory = trimmed.isEmpty ? nil : trimmed
+            }
+    }
+
+    // MARK: - Details (Where? / Note) — collapsed by default so the 3-second log stays 3 seconds.
+
+    @ViewBuilder
+    private var detailsSection: some View {
+        if showDetails || !model.merchant.isEmpty || !model.note.isEmpty {
+            VStack(spacing: 8) {
+                TextField("Where?", text: $model.merchant)
+                    .focused($focusedField, equals: .merchant)
+                    .submitLabel(.done)
+                    .onSubmit { focusedField = nil }
+                    .font(.system(size: 14.5, weight: .semibold))
+                    .foregroundStyle(GoldengoTheme.inkPrimary)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 10)
+                    .background(Color.goldengoField)
+                    .clipShape(Capsule())
+                TextField("Note", text: $model.note)
+                    .focused($focusedField, equals: .note)
+                    .submitLabel(.done)
+                    .onSubmit { focusedField = nil }
+                    .font(.system(size: 14.5, weight: .semibold))
+                    .foregroundStyle(GoldengoTheme.inkPrimary)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 10)
+                    .background(Color.goldengoField)
+                    .clipShape(Capsule())
+            }
+        } else {
+            Button {
+                withAnimation(.easeInOut(duration: 0.18)) {
+                    showDetails = true
+                    focusedField = .merchant
+                }
+            } label: {
+                Label("Add details", systemImage: "plus.circle")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(GoldengoTheme.inkMuted)
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
+    // MARK: - When (backdating) — bounded to today: future entries would corrupt the
+    // wallet's expected balance and today's totals.
+
+    private var whenRow: some View {
+        HStack {
+            GoldengoSectionLabel("When")
+            Spacer()
+            DatePicker("", selection: $model.date, in: ...Date.now, displayedComponents: .date)
+                .labelsHidden()
+                .tint(GoldengoTheme.accent)
         }
     }
 
@@ -342,7 +447,10 @@ public struct QuickAddView: View {
         }
     }
 
-    private func tap(_ k: String) { k == "⌫" ? model.backspace() : model.tap(k) }
+    private func tap(_ k: String) {
+        focusedField = nil   // typing the amount ends text editing (tap-outside rule)
+        k == "⌫" ? model.backspace() : model.tap(k)
+    }
 
     // MARK: - Scan receipt
     // Matches ScanBtn in quickadd.jsx: accent color, "doc.viewfinder", 15px/600, minHeight: 40

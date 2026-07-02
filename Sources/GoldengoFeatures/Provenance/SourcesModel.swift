@@ -63,11 +63,11 @@ public final class SourcesModel {
     }
 
     public func addIncome(amount: Decimal, currency: CurrencyCode, sourceName: String,
-                          intoWallet: Bool = false) async {
+                          intoWallet: Bool = false, date: Date = .now) async {
         let name = sourceName.trimmingCharacters(in: .whitespacesAndNewlines)
         guard amount > 0, !name.isEmpty else { return }
         try? await store.logIncome(amount: amount, currency: currency, sourceName: name,
-                                   intoWallet: intoWallet)
+                                   date: date, intoWallet: intoWallet)
         await load()
     }
 
