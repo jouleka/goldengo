@@ -134,6 +134,9 @@ public struct AddIncomeView: View {
         .padding(.horizontal, GoldengoTheme.Spacing.m)
         .padding(.bottom, 34)
         .background(Color.goldengoBackground.ignoresSafeArea())
+        // The text keyboard (new-source field) overlays the numeric keypad instead of
+        // compressing the sheet — otherwise the layout gets shoved off the top while typing.
+        .ignoresSafeArea(.keyboard, edges: .bottom)
         // Switching to a zero-decimal currency (e.g. ALL) must re-fit an already-typed fractional
         // amount, or "12.50" would be logged as a fractional lek value the keypad can no longer edit.
         .onChange(of: currencyCode) { _, newCode in

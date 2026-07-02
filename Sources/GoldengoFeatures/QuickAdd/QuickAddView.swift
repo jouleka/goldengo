@@ -34,31 +34,39 @@ public struct QuickAddView: View {
     }
 
     public var body: some View {
-        // Stacked layout — padding mirrors quickadd.jsx StackedLayout: 14px top, 22px h, 34px bottom
+        // Stacked layout — padding mirrors quickadd.jsx StackedLayout: 14px top, 22px h, 34px bottom.
+        // The upper half scrolls if it must (scroll-off only when the rows outgrow the space —
+        // details + category field open at once on a small screen); keypad and Add stay anchored.
         VStack(spacing: 0) {
-            amountBlock
-                .padding(.top, 8)               // paddingTop: 8 on AmountBlock wrapper
+            ScrollView {
+                VStack(spacing: 0) {
+                    amountBlock
+                        .padding(.top, 8)               // paddingTop: 8 on AmountBlock wrapper
 
-            categoryChips
-                .padding(.top, 22)              // marginTop: 22
+                    categoryChips
+                        .padding(.top, 22)              // marginTop: 22
 
-            if newCategoryMode {
-                newCategoryField
-                    .padding(.top, 10)
+                    if newCategoryMode {
+                        newCategoryField
+                            .padding(.top, 10)
+                    }
+
+                    // Details toggle + date share one line (vertical budget is the whole game here).
+                    utilityRow
+                        .padding(.top, 14)
+
+                    if showDetails {
+                        detailsFields
+                            .padding(.top, 8)
+                    }
+
+                    if !model.sourceBalances.isEmpty {
+                        paidFromRow
+                            .padding(.top, 14)
+                    }
+                }
             }
-
-            detailsSection
-                .padding(.top, 12)
-
-            if !model.sourceBalances.isEmpty {
-                paidFromRow
-                    .padding(.top, 16)          // marginTop: 16
-            }
-
-            whenRow
-                .padding(.top, 12)
-
-            Spacer(minLength: 0)                // flex: 1
+            .scrollBounceBehavior(.basedOnSize)   // feels static whenever everything fits
 
             keypad
                 .padding(.top, 16)             // marginTop: 16
@@ -75,6 +83,9 @@ public struct QuickAddView: View {
         .padding(.horizontal, GoldengoTheme.Spacing.m)   // app-wide 16pt content edge (matches the tabs)
         .padding(.bottom, 34)                   // outer container bottom: 34px
         .background(Color.goldengoBackground.ignoresSafeArea())
+        // The text keyboard (details/category fields) overlays the numeric keypad instead of
+        // compressing the sheet — otherwise the whole layout gets shoved off the top while typing.
+        .ignoresSafeArea(.keyboard, edges: .bottom)
         .sheet(isPresented: $showCurrencyPicker) {
             NavigationStack {
                 CurrencyPickerView(
@@ -288,58 +299,69 @@ public struct QuickAddView: View {
             }
     }
 
-    // MARK: - Details (Where? / Note) — collapsed by default so the 3-second log stays 3 seconds.
+    // MARK: - Utility row: details toggle (left) + backdating date (right, bounded to today —
+    // future entries would corrupt the wallet's expected balance and today's totals).
 
-    @ViewBuilder
-    private var detailsSection: some View {
-        if showDetails || !model.merchant.isEmpty || !model.note.isEmpty {
-            VStack(spacing: 8) {
-                TextField("Where?", text: $model.merchant)
-                    .focused($focusedField, equals: .merchant)
-                    .submitLabel(.done)
-                    .onSubmit { focusedField = nil }
-                    .font(.system(size: 14.5, weight: .semibold))
-                    .foregroundStyle(GoldengoTheme.inkPrimary)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 10)
-                    .background(Color.goldengoField)
-                    .clipShape(Capsule())
-                TextField("Note", text: $model.note)
-                    .focused($focusedField, equals: .note)
-                    .submitLabel(.done)
-                    .onSubmit { focusedField = nil }
-                    .font(.system(size: 14.5, weight: .semibold))
-                    .foregroundStyle(GoldengoTheme.inkPrimary)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 10)
-                    .background(Color.goldengoField)
-                    .clipShape(Capsule())
-            }
-        } else {
-            Button {
-                withAnimation(.easeInOut(duration: 0.18)) {
-                    showDetails = true
-                    focusedField = .merchant
-                }
-            } label: {
-                Label("Add details", systemImage: "plus.circle")
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(GoldengoTheme.inkMuted)
-            }
-            .buttonStyle(.plain)
-        }
-    }
-
-    // MARK: - When (backdating) — bounded to today: future entries would corrupt the
-    // wallet's expected balance and today's totals.
-
-    private var whenRow: some View {
+    private var utilityRow: some View {
         HStack {
-            GoldengoSectionLabel("When")
+            if showDetails {
+                // Explicit removal: clears what was typed AND collapses — no invisible data rides along.
+                Button {
+                    withAnimation(.easeInOut(duration: 0.18)) {
+                        showDetails = false
+                        model.merchant = ""
+                        model.note = ""
+                        focusedField = nil
+                    }
+                } label: {
+                    Label("Remove details", systemImage: "xmark.circle")
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(GoldengoTheme.inkMuted)
+                }
+                .buttonStyle(.plain)
+            } else {
+                Button {
+                    withAnimation(.easeInOut(duration: 0.18)) {
+                        showDetails = true
+                        focusedField = .merchant
+                    }
+                } label: {
+                    Label("Add details", systemImage: "plus.circle")
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(GoldengoTheme.inkMuted)
+                }
+                .buttonStyle(.plain)
+            }
             Spacer()
             DatePicker("", selection: $model.date, in: ...Date.now, displayedComponents: .date)
                 .labelsHidden()
                 .tint(GoldengoTheme.accent)
+        }
+    }
+
+    // Where? / Note share one compact row — collapsed by default so the 3-second log stays 3 seconds.
+    private var detailsFields: some View {
+        HStack(spacing: 8) {
+            TextField("Where?", text: $model.merchant)
+                .focused($focusedField, equals: .merchant)
+                .submitLabel(.done)
+                .onSubmit { focusedField = nil }
+                .font(.system(size: 14.5, weight: .semibold))
+                .foregroundStyle(GoldengoTheme.inkPrimary)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 10)
+                .background(Color.goldengoField)
+                .clipShape(Capsule())
+            TextField("Note", text: $model.note)
+                .focused($focusedField, equals: .note)
+                .submitLabel(.done)
+                .onSubmit { focusedField = nil }
+                .font(.system(size: 14.5, weight: .semibold))
+                .foregroundStyle(GoldengoTheme.inkPrimary)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 10)
+                .background(Color.goldengoField)
+                .clipShape(Capsule())
         }
     }
 
