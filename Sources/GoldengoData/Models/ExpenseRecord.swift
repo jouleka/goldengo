@@ -23,6 +23,9 @@ public final class ExpenseRecord {
     // The named money source this INCOME record belongs to (nil for expenses + un-sourced income).
     // Set by logIncome, not in init. Inverse declared on SourceRecord.incomes.
     public var provenanceSource: SourceRecord?
+    // The per-person loan this LENT/REPAYMENT event belongs to (nil for every other kind).
+    // Set by lend/logRepayment, not in init. Inverse declared on LoanRecord.events.
+    public var loan: LoanRecord?
     // GOL-89: the user-chosen funding source for this EXPENSE (the "pin"); nil = automatic FIFO.
     // A plain SourceRecord.id string — NOT the provenanceSource relationship, whose inverse feeds
     // source inflow totals (income-only). Additive optional → lightweight CloudKit-safe migration.
