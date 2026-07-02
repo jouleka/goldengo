@@ -51,8 +51,11 @@ extension IngestionStore {
                                    displayCurrency: SharedSummary().readPreferredCurrency())
         let tags = fundingLabelMap(alloc: alloc, sources: sources)
 
-        // Recent 50 (both kinds, already date-desc); attach the funding tag to expense rows.
-        let rows: [ExpenseSnapshot] = all.prefix(50).map { r in
+        // Home shows the CURRENT MONTH only — a fresh page each month; older spend lives in History.
+        // Both kinds, already date-desc; attach the funding tag to expense rows.
+        let cal = Calendar.current
+        let monthStart = cal.date(from: cal.dateComponents([.year, .month], from: now)) ?? cal.startOfDay(for: now)
+        let rows: [ExpenseSnapshot] = all.filter { $0.date >= monthStart }.map { r in
             var snap = makeSnapshot(r)
             if r.kindRaw == expenseRaw {
                 // GOL-95 v2: cash-funded spends drain the wallet, not a source pool — chip
@@ -76,9 +79,8 @@ extension IngestionStore {
             .map { Money(amount: $0.amount, currency: CurrencyCode($0.currencyCode)) }
         let todayTotal = CurrencyConverter(table: rates).sum(todayMonies, to: displayCurrency)
 
-        // Month summary (displayCurrency) from a month-filtered slice of the same array.
-        let cal = Calendar.current
-        let monthStart = cal.date(from: cal.dateComponents([.year, .month], from: now)) ?? cal.startOfDay(for: now)
+        // Month summary (displayCurrency) from a month-filtered slice of the same array (reusing
+        // the `monthStart` computed above for the Recent rows).
         let monthRecords = all.filter { $0.kindRaw == expenseRaw && $0.date >= monthStart }
         let summary = try makeDashboardSummary(monthRecords: monthRecords, in: displayCurrency,
                                                rates: rates, topCategoryLimit: topCategoryLimit)

@@ -18,7 +18,7 @@ public struct ReEntryView: View {
             Text("It's been \(daysAway) days — that stretch is behind you. Nothing's assumed.")
                 .font(.body).foregroundStyle(GoldengoTheme.inkMuted)
                 .multilineTextAlignment(.center)
-                .padding(.horizontal, GoldengoTheme.Spacing.xl)
+                .padding(.horizontal, GoldengoTheme.Spacing.l)   // match the button's edge — one ceremonial margin
             Spacer()
             GoldButton("Here's today") { onContinue() }
                 .padding(.horizontal, GoldengoTheme.Spacing.l)

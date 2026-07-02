@@ -3,6 +3,13 @@ import Observation
 import GoldengoCore
 import GoldengoData
 
+/// A calendar-day bucket of recent rows, backing the Home "Recent" list's day sections.
+public struct DayGroup: Identifiable, Equatable {
+    public let id: Date          // start-of-day — stable bucket key (survives reloads, drives collapse state)
+    public let title: String     // "Today" / "Yesterday" / a concrete date like "Mon 23 Jun"
+    public let rows: [ExpenseSnapshot]
+}
+
 @MainActor
 @Observable
 public final class RecentExpensesModel {
@@ -60,6 +67,66 @@ public final class RecentExpensesModel {
         case .even:   return "ready to spend"
         case .fogged: return "losing track — reconcile when your wallet's out"
         case .lost:   return "lost track — reconcile when your wallet's out"
+        }
+    }
+
+    /// Bucket already-newest-first rows into calendar days, preserving order so groups come out
+    /// newest-day-first (rows within a day stay newest-first). `now` — not the system clock — drives
+    /// the relative "Today"/"Yesterday" labels, so the result is deterministic and unit-testable.
+    public nonisolated static func dayGroups(from rows: [ExpenseSnapshot], now: Date,
+                                             calendar: Calendar = .current) -> [DayGroup] {
+        let today = calendar.startOfDay(for: now)
+        let yesterday = calendar.date(byAdding: .day, value: -1, to: today)
+        var order: [Date] = []
+        var buckets: [Date: [ExpenseSnapshot]] = [:]
+        for row in rows {
+            let day = calendar.startOfDay(for: row.date)
+            if buckets[day] == nil { order.append(day) }
+            buckets[day, default: []].append(row)
+        }
+        return order.map { day in
+            let title: String
+            if day == today {
+                title = "Today"
+            } else if let yesterday, day == yesterday {
+                title = "Yesterday"
+            } else {
+                title = day.formatted(.dateTime.weekday(.abbreviated).day().month(.abbreviated))
+            }
+            return DayGroup(id: day, title: title, rows: buckets[day] ?? [])
+        }
+    }
+
+    /// Like `dayGroups`, but buckets by calendar month — the Year view's grouping. Newest month first.
+    /// Labels: "This month" for the month containing `now`, "June" for other months this year, and
+    /// "June 2025" for months in a prior year (so a year is never ambiguous).
+    public nonisolated static func monthGroups(from rows: [ExpenseSnapshot], now: Date,
+                                               calendar: Calendar = .current) -> [DayGroup] {
+        let thisMonth = calendar.dateInterval(of: .month, for: now)?.start
+        let nowYear = calendar.component(.year, from: now)
+        var order: [Date] = []
+        var buckets: [Date: [ExpenseSnapshot]] = [:]
+        for row in rows {
+            let monthStart = calendar.dateInterval(of: .month, for: row.date)?.start
+                ?? calendar.startOfDay(for: row.date)
+            if buckets[monthStart] == nil { order.append(monthStart) }
+            buckets[monthStart, default: []].append(row)
+        }
+        let fmt = DateFormatter()
+        fmt.calendar = calendar
+        fmt.timeZone = calendar.timeZone
+        return order.map { month in
+            let title: String
+            if let thisMonth, month == thisMonth {
+                title = "This month"
+            } else if calendar.component(.year, from: month) == nowYear {
+                fmt.setLocalizedDateFormatFromTemplate("MMMM")
+                title = fmt.string(from: month)
+            } else {
+                fmt.setLocalizedDateFormatFromTemplate("MMMM yyyy")
+                title = fmt.string(from: month)
+            }
+            return DayGroup(id: month, title: title, rows: buckets[month] ?? [])
         }
     }
 

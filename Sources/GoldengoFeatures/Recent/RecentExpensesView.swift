@@ -18,19 +18,37 @@ public struct RecentExpensesView: View {
     private let onOpenSettings: () -> Void
     private let onOpenSubscriptions: () -> Void
     private let onChangeCurrency: (CurrencyCode) -> Void
+    /// The History browser pushed from the "See all" affordance. Owned by `RootView` so it survives
+    /// tab switches and shares the store.
+    private let historyModel: HistoryModel
+    /// Bound to `RootView` so the custom tab bar can hide while History is pushed (it's a ZStack
+    /// sibling of the content, not a real tab bar that a push would cover).
+    @Binding private var showHistory: Bool
+    /// Bound to `RootView` — set true while scrolling down so the floating pill slides away.
+    @Binding private var barHidden: Bool
     @State private var showCurrencyPicker = false
     @State private var adjusting: RhythmGhost?
     @State private var adjustAmount = ""
     /// Selectable currencies, decoded once on appear — not re-read from UserDefaults + re-decoded on
     /// every body pass (the currency Menu/picker read it directly in body).
     @State private var selectableCurrencies: [CurrencyCode] = []
+    /// Folded day sections in the Recent list, keyed by start-of-day. Expanded by default (absent =
+    /// expanded). Keyed by date — not list index — so a fold survives the frequent `model.load()`
+    /// reloads (tab return, foreground, after an add/edit/delete). Session-only; not persisted.
+    @State private var collapsedDays: Set<Date> = []
 
     public init(model: RecentExpensesModel,
+                historyModel: HistoryModel,
+                showHistory: Binding<Bool> = .constant(false),
+                barHidden: Binding<Bool> = .constant(false),
                 onOpenImport: @escaping () -> Void = {},
                 onOpenSettings: @escaping () -> Void = {},
                 onOpenSubscriptions: @escaping () -> Void = {},
                 onChangeCurrency: @escaping (CurrencyCode) -> Void = { _ in }) {
         self.model = model
+        self.historyModel = historyModel
+        self._showHistory = showHistory
+        self._barHidden = barHidden
         self.onOpenImport = onOpenImport
         self.onOpenSettings = onOpenSettings
         self.onOpenSubscriptions = onOpenSubscriptions
@@ -66,13 +84,35 @@ public struct RecentExpensesView: View {
                     ForEach(model.ghosts) { g in ghostRow(g) }
                 }
 
-                // 5. Recent.
-                GoldengoSerifSectionHeader("Recent")
-                    .goldengoCardRow(top: 22, bottom: GoldengoTheme.Spacing.xs)
+                // 5. Recent — this month, grouped by day; "See all" opens the full History browser.
+                HStack(alignment: .firstTextBaseline) {
+                    GoldengoSerifSectionHeader("Recent")
+                    Spacer()
+                    Button { showHistory = true } label: {
+                        HStack(spacing: 2) {
+                            Text("See all").font(.system(size: 13, weight: .medium))
+                            Image(systemName: "chevron.right").font(.system(size: 11, weight: .semibold))
+                        }
+                        .foregroundStyle(GoldengoTheme.accent)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("See all expenses")
+                }
+                .goldengoCardRow(top: 22, bottom: GoldengoTheme.Spacing.xs)
                 if model.rows.isEmpty {
                     emptyRecentCard.goldengoCardRow()
                 } else {
-                    ForEach(model.rows, id: \.dedupeKey) { r in recentRow(r) }
+                    ForEach(RecentExpensesModel.dayGroups(from: model.rows, now: .now)) { group in
+                        Section {
+                            if !collapsedDays.contains(group.id) {
+                                ForEach(group.rows, id: \.dedupeKey) { r in recentRow(r) }
+                            }
+                        } header: {
+                            dayHeader(group)
+                        }
+                        .textCase(nil)   // SwiftUI uppercases plain-list headers by default; our labels are cased.
+                    }
                 }
             }
             .listStyle(.plain)
@@ -83,6 +123,17 @@ public struct RecentExpensesView: View {
             .toolbar(.hidden, for: .navigationBar)
 #endif
             .refreshable { await model.load() }
+            // Clear the floating tab bar + raised Add button so the last rows aren't tucked behind it.
+            // Lives on the list (not the RootView wrapper) so pushed History — which hides the bar —
+            // doesn't inherit a big empty bottom gap.
+            .safeAreaInset(edge: .bottom) { Color.clear.frame(height: 84) }
+            .modifier(HideBarOnScroll(hidden: $barHidden))   // slide the pill away while scrolling down
+            .navigationDestination(isPresented: $showHistory) { HistoryView(model: historyModel) }
+            // Popping back from History fires no tab/sheet transition, so reload Home here — an edit or
+            // delete made in History to a current-month row must show on Home without a manual refresh.
+            .onChange(of: showHistory) { _, shown in
+                if !shown { barHidden = false; Task { await model.load() } }
+            }
             .onAppear { selectableCurrencies = CurrencyCatalog.selectable(from: ExchangeRateCache().load() ?? SeedRates.table) }
             .alert("Adjust amount", isPresented: Binding(get: { adjusting != nil },
                                                          set: { if !$0 { adjusting = nil } }),
@@ -374,99 +425,33 @@ public struct RecentExpensesView: View {
         }
     }
 
-    // MARK: - Shared row layout (home.jsx Row component)
+    // MARK: - Day header (collapsible, sticky)
 
-    /// Reusable row layout matching home.jsx's Row: tile + title/sub column + right content.
-    /// gap=14, padding 9×4, title 15.5/medium ink, sub 12.5 ink-muted.
-    private func homeRow(
-        icon: String,
-        title: String,
-        sub: String,
-        recurring: Bool = false,
-        fundedBy: String? = nil,
-        fundedByColorIndex: Int? = nil,
-        isDraft: Bool = false,
-        accentRight: Bool = false,
-        rightContent: AnyView? = nil
-    ) -> some View {
-        HStack(alignment: .center, spacing: 14) {
-            GoldengoIconTile(icon)
-            VStack(alignment: .leading, spacing: 2) {
-                HStack(alignment: .center, spacing: 6) {
-                    Text(title)
-                        .font(.system(size: 15.5, weight: .medium))
-                        .foregroundStyle(GoldengoTheme.inkPrimary)
-                        .lineLimit(1)
-                    if recurring {
-                        Image(systemName: "repeat")
-                            .font(.system(size: 13))
-                            .foregroundStyle(GoldengoTheme.inkMuted)
-                            .accessibilityLabel("Recurring")
-                    }
-                }
-                HStack(alignment: .center, spacing: 8) {
-                    Text(sub)
-                        .font(.system(size: 12.5))
-                        .foregroundStyle(GoldengoTheme.inkMuted)
-                    if let fb = fundedBy, let idx = fundedByColorIndex {
-                        // funded-by pill: field capsule, colored dot, name — matches home.jsx
-                        HStack(spacing: 5) {
-                            Circle()
-                                .fill(GoldengoTheme.sourceColor(idx))
-                                .frame(width: 6, height: 6)
-                            Text(fb)
-                                .font(.system(size: 11, weight: .semibold))
-                                .foregroundStyle(GoldengoTheme.inkMuted)
-                        }
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 2)
-                        .background(Color.goldengoField)
-                        .clipShape(Capsule())
-                    }
-                }
+    /// A quiet, sub-level header for one calendar day in Recent. The whole row toggles the day's fold
+    /// state; the chevron rotates to signal it. A row count rides along so a folded day still says
+    /// what's inside. Sits on an opaque canvas row so the pinned (sticky) header stays legible as
+    /// rows scroll beneath it.
+    private func dayHeader(_ group: DayGroup) -> some View {
+        let collapsed = collapsedDays.contains(group.id)
+        return Button {
+            withAnimation(.snappy) {
+                if collapsed { collapsedDays.remove(group.id) } else { collapsedDays.insert(group.id) }
             }
-            Spacer(minLength: 0)
-            if accentRight {
-                Image(systemName: "plus.circle")
-                    .font(.system(size: 24))
-                    .foregroundStyle(GoldengoTheme.accent)
-            } else if let rv = rightContent {
-                rv
-            }
+        } label: {
+            collapsibleGroupHeaderLabel(title: group.title, count: group.rows.count, collapsed: collapsed)
         }
-        .padding(.vertical, 9)
-        .padding(.horizontal, 4)
-        .opacity(isDraft ? 0.72 : 1)
+        .buttonStyle(.plain)
+        .listRowBackground(Color.goldengoBackground)   // opaque so the pinned header occludes rows beneath it
+        .listRowSeparator(.hidden)
+        .listRowInsets(EdgeInsets(top: 0, leading: GoldengoTheme.Spacing.m,
+                                  bottom: 0, trailing: GoldengoTheme.Spacing.m))
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(group.title), \(group.rows.count) \(group.rows.count == 1 ? "expense" : "expenses"), \(collapsed ? "collapsed" : "expanded")")
+        .accessibilityHint("Double tap to \(collapsed ? "expand" : "collapse")")
     }
 
-    // MARK: - Expense row (recent list)
-
-    private func expenseHomeRow(_ r: ExpenseSnapshot) -> some View {
-        let amountStr = Money(amount: r.amount, currency: CurrencyCode(r.currencyCode)).formatted()
-        let amountView: AnyView
-        switch r.kind {
-        case .income:
-            amountView = AnyView(GoldengoAmountText("+" + amountStr, role: .row, color: GoldengoTheme.income))
-        case .transfer:
-            amountView = AnyView(GoldengoAmountText(amountStr, role: .row, color: GoldengoTheme.inkMuted))
-        default:
-            amountView = AnyView(GoldengoAmountText(amountStr, role: .row))
-        }
-
-        let subText = r.kind == .transfer ? "→ wallet" : (r.categoryName ?? "Other")
-
-        return homeRow(
-            icon: GoldengoCategoryIcon.symbol(for: r.categoryName),
-            title: r.displayTitle,
-            sub: subText,
-            recurring: r.subscriptionName != nil,
-            fundedBy: r.fundedBy,
-            fundedByColorIndex: r.fundedByColorIndex,
-            isDraft: false,
-            accentRight: false,
-            rightContent: amountView
-        )
-    }
+    // Shared row layout (`homeRow` / `expenseHomeRow`) lives in Shared/ExpenseRowView.swift so the
+    // History browser renders identical rows.
 
     // MARK: - Delete + Undo
 
@@ -507,6 +492,27 @@ public struct RecentExpensesView: View {
             .font(.subheadline)
             .foregroundStyle(.orange)
             .goldengoCard()
+    }
+}
+
+/// Drives the floating pill's hide-on-scroll: hidden while scrolling DOWN, revealed when scrolling UP
+/// or near the top. Uses the iOS 18 scroll-geometry API; on iOS 17 the pill simply stays put.
+private struct HideBarOnScroll: ViewModifier {
+    @Binding var hidden: Bool
+    func body(content: Content) -> some View {
+        if #available(iOS 18.0, macOS 15.0, *) {
+            content.onScrollGeometryChange(for: CGFloat.self) { $0.contentOffset.y } action: { oldY, newY in
+                if newY < 40 {                                  // near the top — always show
+                    if hidden { hidden = false }
+                } else if newY > oldY + 6 {                     // a deliberate downward scroll — hide
+                    if !hidden { hidden = true }
+                } else if newY < oldY - 4 {                     // any upward scroll — reveal eagerly
+                    if hidden { hidden = false }
+                }
+            }
+        } else {
+            content
+        }
     }
 }
 

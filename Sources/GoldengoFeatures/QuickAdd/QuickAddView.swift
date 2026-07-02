@@ -53,7 +53,7 @@ public struct QuickAddView: View {
                 .padding(.top, 8)              // marginTop: 8
         }
         .padding(.top, 14)                      // outer container top: 14px
-        .padding(.horizontal, 22)               // outer container h: 22px
+        .padding(.horizontal, GoldengoTheme.Spacing.m)   // app-wide 16pt content edge (matches the tabs)
         .padding(.bottom, 34)                   // outer container bottom: 34px
         .background(Color.goldengoBackground.ignoresSafeArea())
         .sheet(isPresented: $showCurrencyPicker) {

@@ -9,6 +9,7 @@ public struct GoldengoAmountText: View {
     private let text: String
     private let role: Role
     private let color: Color?
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     public init(_ text: String, role: Role = .row, color: Color? = nil) {
         self.text = text
@@ -41,5 +42,8 @@ public struct GoldengoAmountText: View {
             .tracking(Self.tracking(for: role))
             .foregroundStyle(color ?? GoldengoTheme.inkPrimary)
             .contentTransition(.numericText())
+            // Roll the digits when the value actually changes (currency switch, new total, period
+            // change). Stable amounts (every list row) never trigger it, so this is free at rest.
+            .animation(reduceMotion ? nil : GoldengoMotion.standard, value: text)
     }
 }

@@ -55,7 +55,7 @@ public struct SourcesView: View {
                     }
                     .buttonStyle(.plain)
                 }
-                .padding(.horizontal, 20)
+                .padding(.horizontal, GoldengoTheme.Spacing.m)
                 .padding(.top, 18)
                 .padding(.bottom, 14)
 
@@ -132,17 +132,17 @@ public struct SourcesView: View {
                     }
                 }
                 .goldengoCard(padding: 0)
-                .padding(.horizontal, 20)
+                .padding(.horizontal, GoldengoTheme.Spacing.m)
 
                 Text("Cash spends drain this — not your sources. Reconcile by feel.")
                     .font(.system(size: 12))
                     .foregroundStyle(GoldengoTheme.inkMuted)
-                    .padding(.horizontal, 26)
+                    .padding(.horizontal, GoldengoTheme.Spacing.m)
                     .padding(.top, 8)
 
                 // ── Sources draining pools (wallet.jsx lines 65-93) ──────────────────
                 GoldengoSerifSectionHeader("Sources")
-                    .padding(.horizontal, 24)
+                    .padding(.horizontal, GoldengoTheme.Spacing.m)
                     .padding(.top, 26)
                     .padding(.bottom, 12)
 
@@ -161,7 +161,7 @@ public struct SourcesView: View {
                     .frame(maxWidth: .infinity)
                     .padding(26)
                     .goldengoCard()
-                    .padding(.horizontal, 20)
+                    .padding(.horizontal, GoldengoTheme.Spacing.m)
                 } else if (model.snapshot?.sources.isEmpty ?? true) && model.unaccountedText() == nil {
                     VStack(spacing: 10) {
                         Image(systemName: "banknote")
@@ -176,10 +176,10 @@ public struct SourcesView: View {
                             .multilineTextAlignment(.center)
                             .lineSpacing(2)
                     }
-                    .padding(.horizontal, 20)
+                    .padding(.horizontal, GoldengoTheme.Spacing.m)
                     .padding(.vertical, 26)
                     .goldengoCard()
-                    .padding(.horizontal, 20)
+                    .padding(.horizontal, GoldengoTheme.Spacing.m)
                 } else {
                     VStack(spacing: 12) {
                         ForEach(model.snapshot?.sources ?? []) { b in
@@ -204,7 +204,7 @@ public struct SourcesView: View {
                             .goldengoCard()
                         }
                     }
-                    .padding(.horizontal, 20)
+                    .padding(.horizontal, GoldengoTheme.Spacing.m)
                 }
 
                 Spacer(minLength: GoldengoTheme.Spacing.xl)

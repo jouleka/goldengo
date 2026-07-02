@@ -36,16 +36,20 @@ public struct RootView: View {
     @State private var showImport = false
     @State private var showAdd = false            // center FAB → Add sheet (QuickAdd)
     @State private var showSubscriptions = false  // Home "Upcoming" → Subscriptions management sheet
+    @State private var showHistory = false        // History pushed within the Home tab — hides the tab bar
+    @State private var barHidden = false          // hide-on-scroll: the pill slides away while scrolling down Home
     @State private var importFile: ImportFile?            // a statement shared into the app (Share / Open in)
     @State private var reEntryPrompt: ReEntryPrompt?      // welcome-back soft-landing after a gap
     @State private var ritualSheet: RitualSheet?          // daily check-in (GOL-85), opt-in
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     // Owned here (not inline in the tab) so Home can be refreshed when the user returns to it or
     // finishes an import — otherwise newly added/imported expenses don't appear until a manual reload.
     @State private var recentModel: RecentExpensesModel
     @State private var subsModel: SubscriptionsModel
     @State private var quickAddModel: QuickAddModel
     @State private var sourcesModel: SourcesModel
+    @State private var historyModel: HistoryModel   // the "See all" period browser, pushed from Home
     public init(store: IngestionStore) {
         self.store = store
         let preferred = SharedSummary().readPreferredCurrency()
@@ -53,6 +57,7 @@ public struct RootView: View {
         _subsModel = State(initialValue: SubscriptionsModel(store: store))
         _quickAddModel = State(initialValue: QuickAddModel(store: store, currency: preferred))
         _sourcesModel = State(initialValue: SourcesModel(store: store, currency: preferred))
+        _historyModel = State(initialValue: HistoryModel(reader: store, currency: preferred))
     }
 
     /// Applies a legacy tab index (from deep links / widget / Siri `pendingTab`) under the
@@ -115,10 +120,13 @@ public struct RootView: View {
         switch selectedTab {
         case 5:
             SourcesView(model: sourcesModel)
-                .safeAreaInset(edge: .bottom) { Color.clear.frame(height: 86) }
+                .safeAreaInset(edge: .bottom) { Color.clear.frame(height: 96) }   // clear the tab bar + FAB
         default:
             RecentExpensesView(
                 model: recentModel,
+                historyModel: historyModel,
+                showHistory: $showHistory,
+                barHidden: $barHidden,
                 onOpenImport: { showImport = true },
                 onOpenSettings: { showSettings = true },
                 onOpenSubscriptions: { showSubscriptions = true },
@@ -127,74 +135,73 @@ public struct RootView: View {
                     quickAddModel.currency = code
                     recentModel.currency = code
                     sourcesModel.currency = code   // keep the Wallet tab on the just-chosen display currency
+                    historyModel.currency = code   // and the History browser on next open
                     Task { await recentModel.load() }
                     // Re-render the widget's cached today-total string in the new currency (it stores a
                     // pre-formatted, currency-bearing string), else the lock screen keeps the old one.
                     Task { try? await store.refreshSharedSummaries() }
                 }
             )
-            .safeAreaInset(edge: .bottom) { Color.clear.frame(height: 64) }
+            // Bottom clearance now lives on the Recent list itself (so pushed History doesn't inherit it).
         }
     }
 
+    private func tabButton(_ icon: String, label: String, tab: Int) -> some View {
+        Button { selectedTab = tab } label: {
+            VStack(spacing: 3) {
+                Image(systemName: icon)
+                    .font(.system(size: 22, weight: selectedTab == tab ? .semibold : .regular))
+                Text(label)
+                    .font(.system(size: 10, weight: .semibold))
+            }
+            .foregroundStyle(selectedTab == tab ? GoldengoTheme.accent : GoldengoTheme.inkMuted)
+            .frame(maxWidth: .infinity)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    /// A detached, floating glass "pill": margins on the sides, a gap above the home indicator, and a
+    /// soft shadow so it reads as a light control hovering over the content rather than a wall welded
+    /// to the bottom. Home / + / Wallet split the pill into even thirds.
     private var goldengoTabBar: some View {
-        HStack(alignment: .bottom, spacing: 0) {
-            // Home tab button
-            Button {
-                selectedTab = 1
-            } label: {
-                VStack(spacing: 3) {
-                    Image(systemName: "house")
-                        .font(.system(size: 25, weight: selectedTab == 1 ? .semibold : .regular))
-                    Text("Home")
-                        .font(.system(size: 10, weight: .semibold))
-                }
-                .foregroundStyle(selectedTab == 1 ? GoldengoTheme.accent : GoldengoTheme.inkMuted)
-                .frame(width: 84)
-            }
-            .buttonStyle(.plain)
-
-            Spacer()
-
-            // Center Add FAB — raised above the bar (marginTop: -22 → offset y: -18)
+        HStack(spacing: 0) {
+            tabButton("house", label: "Home", tab: 1)
             AddFAB { showAdd = true }
-                .offset(y: -18)
-
-            Spacer()
-
-            // Wallet tab button
-            Button {
-                selectedTab = 5
-            } label: {
-                VStack(spacing: 3) {
-                    Image(systemName: "wallet.bifold")
-                        .font(.system(size: 25, weight: selectedTab == 5 ? .semibold : .regular))
-                    Text("Wallet")
-                        .font(.system(size: 10, weight: .semibold))
-                }
-                .foregroundStyle(selectedTab == 5 ? GoldengoTheme.accent : GoldengoTheme.inkMuted)
-                .frame(width: 84)
-            }
-            .buttonStyle(.plain)
+                .padding(.horizontal, 4)
+            tabButton("wallet.bifold", label: "Wallet", tab: 5)
         }
-        .padding(.horizontal, 34)
-        .padding(.top, 12)
-        .padding(.bottom, 24)
-        // A bit translucent: a frosted blur (content softly blurs behind it) warmed with the canvas tint,
-        // so the bar reads light/airy like the design yet the Home/Wallet labels stay legible.
+        .padding(.horizontal, 18)
+        .padding(.vertical, 7)
         .background {
-            Rectangle()
-                .fill(.regularMaterial)
-                .overlay(Color.goldengoBackground.opacity(0.32))
-                .ignoresSafeArea(edges: .bottom)
+            let shape = RoundedRectangle(cornerRadius: 32, style: .continuous)
+            shape
+                .fill(.ultraThinMaterial)
+                .overlay(shape.fill(Color.goldengoBackground.opacity(0.10)))   // warm the glass to the canvas
+                .overlay(shape.strokeBorder(GoldengoTheme.hairline.opacity(0.5), lineWidth: 0.5))
+                .shadow(color: Color(red: 0, green: 0, blue: 0).opacity(0.28), radius: 16, y: 7)
         }
+        .padding(.horizontal, GoldengoTheme.Spacing.m)   // detach from the screen edges
+        .padding(.bottom, 4)                              // float just above the home indicator
+        .animation(GoldengoMotion.quick, value: selectedTab)   // ease the gold tint between Home/Wallet
     }
 
     public var body: some View {
         ZStack(alignment: .bottom) {
             contentView
-            goldengoTabBar
+            // Hidden while History is pushed inside the Home tab — the custom bar is a ZStack sibling
+            // (not a real tab bar), so it would otherwise float over the pushed screen with live,
+            // misleading Home/Wallet/Add controls.
+            if !showHistory {
+                goldengoTabBar
+                    .offset(y: barHidden ? 120 : 0)                       // hide-on-scroll: slide the pill off the bottom
+                    .scaleEffect(barHidden ? 0.94 : 1, anchor: .bottom)   // a gentle shrink (GPU-cheap; not blur)
+                    .opacity(barHidden ? 0 : 1)
+                    .animation(reduceMotion ? nil : GoldengoMotion.standard, value: barHidden)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
         }
+        .animation(.snappy, value: showHistory)
         .sheet(isPresented: $showAdd, onDismiss: {
             // A logged expense should appear on Home without a manual refresh.
             Task { await recentModel.load() }
@@ -216,6 +223,7 @@ public struct RootView: View {
             quickAddModel.currency = preferred
             recentModel.currency = preferred
             sourcesModel.currency = preferred
+            historyModel.currency = preferred
             if changed {
                 Task { await recentModel.load() }
                 Task { await sourcesModel.load() }
@@ -263,6 +271,7 @@ public struct RootView: View {
             try? await store.refreshSharedSummaries()
         }
         .onChange(of: selectedTab) { _, newTab in
+            barHidden = false   // always reveal the pill when changing tabs
             // Reload the destination tab's data on entry so adds/imports show without a manual refresh.
             if newTab == 1 { Task { await recentModel.load() } }
             if newTab == 5 { Task { await sourcesModel.load() } }

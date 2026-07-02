@@ -84,8 +84,8 @@ public enum GoldengoTheme {
     }
 
     public enum Radius {
-        public static let chip: CGFloat = 12
-        public static let control: CGFloat = 16
+        public static let chip: CGFloat = 14
+        public static let control: CGFloat = 20   // softer than the old 16 — harmonises with the 22pt cards
         public static let card: CGFloat = 22
     }
 

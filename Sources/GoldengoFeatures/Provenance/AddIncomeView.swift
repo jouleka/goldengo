@@ -62,10 +62,10 @@ public struct AddIncomeView: View {
         CurrencyCatalog.selectable(from: ExchangeRateCache().load() ?? SeedRates.table)
     }
 
-    /// The formatted amount string for display (income.jsx line 28).
+    /// The amount body for display — NUMBER ONLY. The currency symbol is shown by the separate
+    /// tappable selector next to it, so prepending it here would render the symbol twice.
     private var displayAmount: String {
-        let sym = CurrencyCode(currencyCode).symbol
-        return sym + (amountString.isEmpty ? "0" : amountString)
+        amountString.isEmpty ? "0" : amountString
     }
 
     /// All suggestion chips: existing source names + the static list, deduped (existing-names first).
@@ -119,7 +119,7 @@ public struct AddIncomeView: View {
                     }
                 }
                 .frame(maxWidth: .infinity)
-                .padding(.horizontal, 22)
+                .padding(.horizontal, GoldengoTheme.Spacing.m)
 
                 // ── Cash in hand / Into a source toggle (income.jsx lines 57-67) ───
                 HStack(spacing: 0) {
@@ -138,7 +138,7 @@ public struct AddIncomeView: View {
                                 .padding(.vertical, 9)
                                 .foregroundStyle(cashInHand == isCash ? GoldengoTheme.inkPrimary : GoldengoTheme.inkMuted)
                                 .background(cashInHand == isCash ? Color.goldengoSurface : Color.clear)
-                                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                                .clipShape(RoundedRectangle(cornerRadius: GoldengoTheme.Radius.control - 4, style: .continuous))
                         }
                         .buttonStyle(.plain)
                     }
@@ -146,7 +146,7 @@ public struct AddIncomeView: View {
                 .padding(4)
                 .background(Color.goldengoField)
                 .clipShape(RoundedRectangle(cornerRadius: GoldengoTheme.Radius.control, style: .continuous))
-                .padding(.horizontal, 22)
+                .padding(.horizontal, GoldengoTheme.Spacing.m)
                 .padding(.top, 22)
 
                 // ── Suggestion chips for source name (income.jsx lines 68-74) ──────
@@ -160,7 +160,7 @@ public struct AddIncomeView: View {
                                 }
                             }
                         }
-                        .padding(.horizontal, 22)
+                        .padding(.horizontal, GoldengoTheme.Spacing.m)
                         .padding(.vertical, 2)
                     }
                     .padding(.top, 12)
@@ -172,7 +172,7 @@ public struct AddIncomeView: View {
                 LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 9), count: 3), spacing: 9) {
                     ForEach(keys, id: \.self) { k in
                         if k.isEmpty {
-                            Color.clear.frame(maxWidth: .infinity, minHeight: 54)
+                            Color.clear.frame(maxWidth: .infinity, minHeight: 62)
                         } else {
                             Button { tapKey(k) } label: {
                                 Group {
@@ -180,7 +180,7 @@ public struct AddIncomeView: View {
                                 }
                                 .font(.system(size: 26, weight: .medium))
                                 .foregroundStyle(GoldengoTheme.inkPrimary)
-                                .frame(maxWidth: .infinity, minHeight: 54)
+                                .frame(maxWidth: .infinity, minHeight: 62)
                                 .background(Color.goldengoField)
                                 .clipShape(RoundedRectangle(cornerRadius: GoldengoTheme.Radius.control, style: .continuous))
                             }
@@ -188,7 +188,7 @@ public struct AddIncomeView: View {
                         }
                     }
                 }
-                .padding(.horizontal, 22)
+                .padding(.horizontal, GoldengoTheme.Spacing.m)
                 .padding(.top, 10)
 
                 // ── GoldButton Add income (income.jsx line 85) ───────────────────
@@ -205,7 +205,8 @@ public struct AddIncomeView: View {
                         onDone()
                     }
                 }
-                .padding(.horizontal, 22)
+                .padding(.horizontal, GoldengoTheme.Spacing.m)
+                .padding(.top, GoldengoTheme.Spacing.l)                  // clear gap so it never touches the keypad
                 .padding(.bottom, max(GoldengoTheme.Spacing.l, 34))
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)

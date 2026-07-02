@@ -31,11 +31,12 @@ public struct GoldButton: View {
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, GoldengoTheme.Spacing.m)
+            // Fill lives INSIDE the label so the press-scale presses the whole pill, not just the text.
+            .background(fillColor)
+            .foregroundStyle(labelColor)
+            .clipShape(RoundedRectangle(cornerRadius: GoldengoTheme.Radius.control, style: .continuous))
         }
-        .buttonStyle(.plain)
-        .background(fillColor)
-        .foregroundStyle(labelColor)
-        .clipShape(RoundedRectangle(cornerRadius: GoldengoTheme.Radius.control, style: .continuous))
+        .buttonStyle(GoldengoPressStyle())
         .disabled(!isEnabled)
     }
 
