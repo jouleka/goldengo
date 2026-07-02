@@ -32,6 +32,15 @@ final class LoanReminderPlannerTests: XCTestCase {
         XCTAssertEqual(reqs.map(\.id), ["l1#2", "l1#3", "l1#4"])
     }
 
+    func test_nextNudge_matchesTheFirstScheduledFireDate() {
+        // WHY: the date shown on the claim card must be exactly the date the notification
+        // actually fires — a displayed promise that differs from the schedule is a lie.
+        XCTAssertEqual(LoanReminderPlanner.nextNudge(after: day(2026, 6, 27), now: day(2026, 7, 2), calendar: cal),
+                       day(2026, 7, 27))
+        XCTAssertEqual(LoanReminderPlanner.nextNudge(after: day(2026, 6, 1), now: day(2026, 7, 2), calendar: cal),
+                       day(2026, 7, 31))
+    }
+
     func test_plan_disabled_returnsEmpty_soSyncClearsStaleNudges() {
         let loan = LoanReminderPlanner.LoanInput(id: "l1", personName: "Andi",
                                                  remainingText: "ALL 5,000",

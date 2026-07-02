@@ -16,6 +16,9 @@ public final class SourcesModel {
     public private(set) var wallet: [WalletBalance] = []
     /// Open "owed to you" claims (balance > 0), oldest debt first.
     public private(set) var loans: [LoanBalance] = []
+    /// Notification permission was explicitly denied — the claim cards must say so instead
+    /// of promising a nudge that can never arrive.
+    public private(set) var loanNudgesDenied = false
     /// One-shot: a pocket-widget tap should land ON the Adjust screen (GOL-98). In-memory on
     /// purpose — a persisted flag outlives a killed launch and replays the navigation days
     /// later as an unprompted sheet (review); losing one tap to a process death is the
@@ -31,8 +34,24 @@ public final class SourcesModel {
         catch { loadFailed = true }
         wallet = (try? await store.walletBalances()) ?? []
         loans = (try? await store.loanBalances()) ?? []
+        loanNudgesDenied = await LocalNotificationScheduler.authorizationDenied()
         await syncLoanReminders()
     }
+
+    /// The visible promise: the exact date the next nudge fires ("Aug 1"). nil when nudges
+    /// can't/won't arrive (toggle off, or permission denied) so the UI never promises what
+    /// the system won't deliver.
+    public func nextNudgeDateText(_ loan: LoanBalance) -> String? {
+        guard SharedSummary().loanRemindersEnabled(), !loanNudgesDenied,
+              let date = LoanReminderPlanner.nextNudge(after: loan.lastEventDate,
+                                                       now: .now, calendar: .current)
+        else { return nil }
+        return Self.nudgeFormatter.string(from: date)
+    }
+
+    private static let nudgeFormatter: DateFormatter = {
+        let f = DateFormatter(); f.dateStyle = .medium; f.timeStyle = .none; return f
+    }()
 
     /// Keep the owed-to-you nudges in sync with the open claims. One nudge per loan, 30 days
     /// after its newest event (any lend/payback re-arms it — load() runs after every mutation).

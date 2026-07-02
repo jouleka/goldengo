@@ -387,9 +387,20 @@ public struct SourcesView: View {
                         Text(loan.personName)
                             .font(.system(size: 15.5, weight: .semibold))
                             .foregroundStyle(GoldengoTheme.inkPrimary)
-                        Text("since " + Self.sinceFormatter.string(from: loan.sinceDate))
-                            .font(.system(size: 12))
-                            .foregroundStyle(GoldengoTheme.inkMuted)
+                        // The promise, visible: the exact date the next nudge fires — or the
+                        // honest absence of one when notifications are off/denied.
+                        HStack(spacing: 4) {
+                            Text("since " + Self.sinceFormatter.string(from: loan.sinceDate))
+                            if let nudge = model.nextNudgeDateText(loan) {
+                                Image(systemName: "bell")
+                                    .font(.system(size: 10))
+                                Text("nudge " + nudge)
+                            } else {
+                                Text("· no nudge coming")
+                            }
+                        }
+                        .font(.system(size: 12))
+                        .foregroundStyle(GoldengoTheme.inkMuted)
                     }
                 }
                 Spacer()

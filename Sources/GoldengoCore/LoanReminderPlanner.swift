@@ -33,6 +33,20 @@ public enum LoanReminderPlanner {
     /// nudging — the next ones are already scheduled even if the app isn't opened for months.
     public static let scheduledOccurrences = 3
 
+    /// The next nudge on the grid (first lastEvent + 30·k strictly after `now`) — what the
+    /// UI shows on the claim card, so the promise is VISIBLE, not a black box to trust.
+    public static func nextNudge(after lastEventDate: Date, now: Date, calendar: Calendar) -> Date? {
+        var k = 1
+        while k < 1000 {
+            if let fire = calendar.date(byAdding: .day, value: nudgeAfterDays * k, to: lastEventDate),
+               fire > now {
+                return fire
+            }
+            k += 1
+        }
+        return nil
+    }
+
     /// The next `scheduledOccurrences` monthly nudges per loan, on the grid
     /// lastEvent + 30·k days, future dates only (a fired nudge is gone; re-syncing queues
     /// the NEXT dates). Disabled → [] (the caller's replace-sync clears stale nudges).

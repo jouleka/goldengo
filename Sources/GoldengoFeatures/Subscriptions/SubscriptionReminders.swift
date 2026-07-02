@@ -136,6 +136,7 @@ public enum LocalNotificationScheduler {
     /// "notifications are off" hint in Settings (GOL-93). False where the framework is absent.
     public static func authorizationDenied() async -> Bool {
         #if canImport(UserNotifications)
+        guard !isRunningTests else { return false }
         return await UNUserNotificationCenter.current().notificationSettings().authorizationStatus == .denied
         #else
         return false

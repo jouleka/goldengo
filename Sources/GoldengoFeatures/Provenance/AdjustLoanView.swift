@@ -48,6 +48,13 @@ struct AdjustLoanView: View {
                         .font(.caption)
                         .foregroundStyle(GoldengoTheme.inkMuted)
                         .fixedSize(horizontal: false, vertical: true)
+                    // Say the promise out loud — or its honest absence.
+                    Text(model.nextNudgeDateText(loan)
+                         .map { "Goldengo nudges you on \($0) — every payback restarts the clock." }
+                         ?? "No nudge is coming — reminders are off (Settings → Money owed, and iOS notification permission).")
+                        .font(.caption)
+                        .foregroundStyle(GoldengoTheme.inkMuted)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
 
                 TextField("0", text: $amountText)
