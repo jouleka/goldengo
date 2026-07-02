@@ -5,6 +5,17 @@ import GoldengoCore
 final class SharedSummaryTests: XCTestCase {
     private func freshSuite() -> String { "test.goldengo.\(UUID().uuidString)" }
 
+    func test_loanReminders_defaultOn_roundTrips() {
+        let s = SharedSummary(suiteName: freshSuite())
+        // WHY opt-out: a lent debt silently forgotten is the exact failure mode the
+        // lending feature exists to prevent — the nudge must work before Settings is ever opened.
+        XCTAssertTrue(s.loanRemindersEnabled(), "Unset means ON")
+        s.setLoanRemindersEnabled(false)
+        XCTAssertFalse(s.loanRemindersEnabled())
+        s.setLoanRemindersEnabled(true)
+        XCTAssertTrue(s.loanRemindersEnabled())
+    }
+
     func test_total_roundTrips() {
         let s = SharedSummary(suiteName: freshSuite())
         s.writeTodayTotal("L 1,234")

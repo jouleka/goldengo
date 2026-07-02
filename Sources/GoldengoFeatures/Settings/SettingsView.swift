@@ -17,6 +17,10 @@ public struct SettingsView: View {
     private var preferredCode: String = "ALL"
     @AppStorage(SharedSummary.ritualEnabledKey, store: UserDefaults(suiteName: SharedSummary.appGroupID))
     private var ritualEnabled: Bool = false
+    // Opt-OUT (default true): a lent debt silently forgotten is the failure mode the
+    // lending feature exists to prevent. Must match SharedSummary.loanRemindersEnabled().
+    @AppStorage(SharedSummary.loanRemindersKey, store: UserDefaults(suiteName: SharedSummary.appGroupID))
+    private var loanReminders: Bool = true
     @Environment(\.dismiss) private var dismiss
     @Environment(\.openURL) private var openURL
     // GOL-93: nudge-time pickers (minutes-from-midnight in SharedSummary; Dates only for the UI)
@@ -100,6 +104,11 @@ public struct SettingsView: View {
                     Text("Get a local notification before a confirmed subscription's next charge.")
                         .font(.caption).foregroundStyle(GoldengoTheme.inkMuted)
                 } header: { GoldengoSerifSectionHeader("Subscriptions") }
+                Section {
+                    Toggle("Remind me about money owed", isOn: $loanReminders)
+                    Text("A quiet nudge when someone has owed you money for a month.")
+                        .font(.caption).foregroundStyle(GoldengoTheme.inkMuted)
+                } header: { GoldengoSerifSectionHeader("Money owed") }
                 Section {
                     Toggle("Morning + evening check-in", isOn: $ritualEnabled)
                     if ritualEnabled {

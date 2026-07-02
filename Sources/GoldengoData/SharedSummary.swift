@@ -11,6 +11,7 @@ public struct SharedSummary {
     public static let revealKey = "revealOnLockScreen"
     public static let remindBeforeChargesKey = "remindBeforeCharges"
     public static let reminderLeadDaysKey = "reminderLeadDays"
+    public static let loanRemindersKey = "loanRemindersEnabled"
     public static let preferredCurrencyKey = "preferredCurrency"
     private static let totalKey = "todayTotalText"
     private static let totalDateKey = "todayTotalDate"
@@ -49,6 +50,15 @@ public struct SharedSummary {
 
     public func setRitualEnabled(_ on: Bool) { defaults.set(on, forKey: Self.ritualEnabledKey) }
     public func ritualEnabled() -> Bool { defaults.bool(forKey: Self.ritualEnabledKey) }
+
+    /// Owed-to-you nudges are OPT-OUT (true when unset): a lent debt silently forgotten
+    /// is the exact failure mode the lending feature exists to prevent.
+    public func loanRemindersEnabled() -> Bool {
+        defaults.object(forKey: Self.loanRemindersKey) == nil
+            ? true
+            : defaults.bool(forKey: Self.loanRemindersKey)
+    }
+    public func setLoanRemindersEnabled(_ on: Bool) { defaults.set(on, forKey: Self.loanRemindersKey) }
 
     /// Store today's morning intention text + the moment it was captured, and journal it
     /// (same-day re-saves replace their journal entry — IntentionJournal rules).

@@ -14,6 +14,8 @@ public final class SourcesModel {
     public private(set) var loadFailed = false
     /// The wallet's per-currency lines (GOL-95 v2); empty before the first balance is set.
     public private(set) var wallet: [WalletBalance] = []
+    /// Open "owed to you" claims (balance > 0), oldest debt first.
+    public private(set) var loans: [LoanBalance] = []
     /// One-shot: a pocket-widget tap should land ON the Adjust screen (GOL-98). In-memory on
     /// purpose — a persisted flag outlives a killed launch and replays the navigation days
     /// later as an unprompted sheet (review); losing one tap to a process death is the
@@ -28,6 +30,55 @@ public final class SourcesModel {
         do { snapshot = try await store.provenanceSnapshot(displayCurrency: currency); loadFailed = false }
         catch { loadFailed = true }
         wallet = (try? await store.walletBalances()) ?? []
+        loans = (try? await store.loanBalances()) ?? []
+        await syncLoanReminders()
+    }
+
+    /// Keep the owed-to-you nudges in sync with the open claims. One nudge per loan, 30 days
+    /// after its newest event (any lend/payback re-arms it — load() runs after every mutation).
+    /// Toggle off → plan() returns [] and the replace-sync clears stale nudges (self-healing).
+    private func syncLoanReminders() async {
+        let inputs = loans.map {
+            LoanReminderPlanner.LoanInput(
+                id: $0.id, personName: $0.personName,
+                remainingText: Money(amount: $0.remaining, currency: CurrencyCode($0.currencyCode)).formatted(),
+                lastEventDate: $0.lastEventDate)
+        }
+        let requests = LoanReminderPlanner.plan(inputs, enabled: SharedSummary().loanRemindersEnabled(),
+                                                now: .now, calendar: .current)
+            .map { SubscriptionReminderPlanner.ReminderRequest(id: $0.id, title: $0.title,
+                                                               body: $0.body, fireDate: $0.fireDate) }
+        await LocalNotificationScheduler.sync(requests, prefix: "loan-reminder:")
+    }
+
+    /// Lend money to a person (wallet-cash by default, or pinned to a source). The first lend
+    /// also asks for notification permission — the 30-day nudge is the feature's safety net.
+    public func lend(amount: Decimal, currency: CurrencyCode, personName: String,
+                     fundedBySourceID: String? = nil, date: Date = .now) async {
+        try? await store.lend(amount: amount, currency: currency, personName: personName,
+                              fundedBySourceID: fundedBySourceID, date: date)
+        _ = await LocalNotificationScheduler.requestAuthorization()
+        await load()
+    }
+
+    public func repayLoan(_ loan: LoanBalance, amount: Decimal) async {
+        try? await store.logRepayment(amount: amount, loanID: loan.id)
+        await load()
+    }
+
+    public func renameLoan(_ loan: LoanBalance, to name: String) async {
+        try? await store.renameLoan(id: loan.id, to: name)
+        await load()
+    }
+
+    public func forgiveLoan(_ loan: LoanBalance) async {
+        try? await store.forgiveLoan(id: loan.id)
+        await load()
+    }
+
+    public func deleteLoan(_ loan: LoanBalance) async {
+        try? await store.deleteLoan(id: loan.id)
+        await load()
     }
 
     /// Set what's actually in the wallet for one currency (typed, or via the optional tally).

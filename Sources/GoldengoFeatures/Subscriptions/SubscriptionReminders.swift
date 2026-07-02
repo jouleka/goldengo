@@ -35,21 +35,35 @@ public enum SubscriptionReminders {
 /// Thin glue over `UNUserNotificationCenter`. All decision logic is in `SubscriptionReminderPlanner`
 /// / `SubscriptionReminders` (pure, tested); this only requests authorization and registers requests.
 public enum LocalNotificationScheduler {
-    private static let prefix = "sub-reminder:"
+    static let prefix = "sub-reminder:"   // internal: also the `sync(prefix:)` default argument
+
+    /// `UNUserNotificationCenter.current()` ABORTS (NSInternalInconsistencyException,
+    /// "bundleProxyForCurrentProcess is nil") in a bundle-less xctest process — and model
+    /// `load()`s call sync as a side effect, so tests hit this path constantly. Skip the
+    /// real center under XCTest; the planners (the actual logic) stay fully tested.
+    private static var isRunningTests: Bool {
+        ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
+            || NSClassFromString("XCTestCase") != nil
+    }
 
     /// Requests authorization (alert + sound). Returns whether granted. No-op off-device.
     @discardableResult
     public static func requestAuthorization() async -> Bool {
         #if canImport(UserNotifications)
+        guard !isRunningTests else { return false }
         return (try? await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound])) ?? false
         #else
         return false
         #endif
     }
 
-    /// Replace our pending subscription reminders with exactly `requests` (idempotent re-sync).
-    public static func sync(_ requests: [SubscriptionReminderPlanner.ReminderRequest]) async {
+    /// Replace our pending reminders under `prefix` with exactly `requests` (idempotent re-sync).
+    /// Distinct features use distinct prefixes ("sub-reminder:", "loan-reminder:") so one
+    /// feature's re-sync can never clobber another's.
+    public static func sync(_ requests: [SubscriptionReminderPlanner.ReminderRequest],
+                            prefix: String = "sub-reminder:") async {   // = Self.prefix (public default args can't cite internals)
         #if canImport(UserNotifications)
+        guard !isRunningTests else { return }
         let center = UNUserNotificationCenter.current()
         let pending = await center.pendingNotificationRequests()
         center.removePendingNotificationRequests(
@@ -70,6 +84,7 @@ public enum LocalNotificationScheduler {
     /// Cancel all of our pending subscription reminders.
     public static func cancelAll() async {
         #if canImport(UserNotifications)
+        guard !isRunningTests else { return }
         let center = UNUserNotificationCenter.current()
         let pending = await center.pendingNotificationRequests()
         center.removePendingNotificationRequests(
