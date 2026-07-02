@@ -60,6 +60,13 @@ public struct WalletView: View {
                         }
                     }
                     .listRowBackground(Color.clear)
+                    // Money records stay — only the tracking line goes, so this is reversible
+                    // by simply tracking the currency again (no confirmation ceremony needed).
+                    .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                        Button("Remove", role: .destructive) {
+                            Task { await model.removeWalletCurrency(CurrencyCode(line.currencyCode)) }
+                        }
+                    }
                 }
 
                 // Track another currency
@@ -230,7 +237,11 @@ struct AdjustWalletView: View {
         .background(Color.goldengoBackground.ignoresSafeArea())
         .goldengoDismissKeyboard()
         .onAppear {
-            if amountText.isEmpty, let expected, expected > 0 { amountText = "\(expected)" }
+            // Prefill what the user can SEE (display-rounded) — a raw FX/flow residue like
+            // "117623.632489346" is unreadable and re-saves as a junk correction.
+            if amountText.isEmpty, let expected, expected > 0 {
+                amountText = "\(Money(amount: expected, currency: currency).roundedAmount())"
+            }
         }
     }
 

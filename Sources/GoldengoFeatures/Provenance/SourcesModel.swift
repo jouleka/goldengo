@@ -38,6 +38,30 @@ public final class SourcesModel {
         return outcome
     }
 
+    /// Stop tracking a currency's wallet line (money records stay; the line just goes).
+    public func removeWalletCurrency(_ currency: CurrencyCode) async {
+        try? await store.removeWalletCurrency(currency)
+        await load()
+    }
+
+    /// Set what's actually left in a source (higher → income; lower → visible Unaccounted).
+    public func setSourceRemaining(_ amount: Decimal, source: SourceBalance) async {
+        try? await store.setSourceRemaining(amount, sourceID: source.id)
+        await load()
+    }
+
+    /// Rename a source (refused when another live source already uses the name).
+    public func renameSource(_ source: SourceBalance, to name: String) async {
+        try? await store.renameSource(id: source.id, to: name)
+        await load()
+    }
+
+    /// Delete a source — its pool and income records archive together.
+    public func deleteSource(_ source: SourceBalance) async {
+        try? await store.deleteSource(id: source.id)
+        await load()
+    }
+
     public func addIncome(amount: Decimal, currency: CurrencyCode, sourceName: String,
                           intoWallet: Bool = false) async {
         let name = sourceName.trimmingCharacters(in: .whitespacesAndNewlines)

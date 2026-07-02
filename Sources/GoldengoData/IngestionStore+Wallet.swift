@@ -38,8 +38,11 @@ extension IngestionStore {
                 baselineTotal: baseline.total,
                 flows: try cashFlows(after: baseline.date, until: date, currencyCode: currency.rawValue))
             outcome.expected = expected
-            if newTotal < expected {
-                let gap = expected - newTotal
+            // Diff at display precision: a flow residue below what the user can SEE must not
+            // turn "set it to exactly what the screen shows" into a junk Unaccounted entry.
+            let displayedExpected = Money(amount: expected, currency: currency).roundedAmount()
+            if newTotal < displayedExpected {
+                let gap = displayedExpected - newTotal
                 try logDrift(amount: gap, currency: currency, at: date)
                 outcome.unaccountedLogged = gap
             }
@@ -84,6 +87,23 @@ extension IngestionStore {
             if $1.currencyCode == "ALL" { return false }
             return $0.currencyCode < $1.currencyCode
         }
+    }
+
+    /// Stop tracking a currency: archive its baselines so the line disappears from
+    /// `walletBalances`. Money records are never touched — only the tracking line goes. A later
+    /// set (or cash-in-hand income) starts a fresh baseline with no drift against the old one.
+    public func removeWalletCurrency(_ currency: CurrencyCode) throws {
+        let code = currency.rawValue
+        let counts = try modelContext.fetch(FetchDescriptor<WalletCount>(
+            predicate: #Predicate { $0.isArchived == false && $0.currencyCode == code }))
+        guard !counts.isEmpty else { return }
+        for c in counts { c.isArchived = true }
+        try modelContext.save()
+        // The pocket claim may have been computed from this line — republish it.
+        try? refreshSharedPocket()
+        #if canImport(WidgetKit)
+        WidgetCenter.shared.reloadAllTimelines()
+        #endif
     }
 
     /// Record an auto-logged gap as an ordinary, visible "Unaccounted" expense.

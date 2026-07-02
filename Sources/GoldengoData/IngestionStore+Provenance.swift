@@ -88,6 +88,65 @@ extension IngestionStore {
         return s
     }
 
+    /// Delete (archive) a source AND its income records — the pool and its money leave the books
+    /// together. Leaving the inflows live would let them keep funding future spends from a source
+    /// that no longer exists, and a re-created same-name source would resurrect the old balance.
+    /// Spends pinned to the deleted source keep their pin and surface as Unaccounted — honest:
+    /// we no longer know what funded them.
+    public func deleteSource(id: String) throws {
+        let sources = try modelContext.fetch(FetchDescriptor<SourceRecord>(
+            predicate: #Predicate { $0.isArchived == false && $0.id == id }))
+        guard let source = sources.first else { return }
+        source.isArchived = true
+        for income in (source.incomes ?? []) { income.isArchived = true }
+        try modelContext.save()
+    }
+
+    /// Rename a source. The allocator keys on the stable `id`, so a rename never moves money.
+    /// Refused (no-op) when another live source already uses the name case-insensitively —
+    /// income routes to sources BY NAME (`findOrCreateSource`), and a duplicate would make
+    /// every future top-up ambiguous.
+    public func renameSource(id: String, to newName: String) throws {
+        let name = newName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !name.isEmpty else { return }
+        let all = try modelContext.fetch(FetchDescriptor<SourceRecord>(
+            predicate: #Predicate { $0.isArchived == false }))
+        guard let source = all.first(where: { $0.id == id }) else { return }
+        guard !all.contains(where: { $0.id != id && $0.name.caseInsensitiveCompare(name) == .orderedSame })
+        else { return }
+        source.name = name
+        try modelContext.save()
+    }
+
+    /// Set what's actually left in one source — mirrors `setWalletBalance`'s honesty rules.
+    /// Higher than the books → the gap arrives as ordinary income into the pool (nothing
+    /// fabricated). Lower → the gap is one visible "Unaccounted" expense pinned to the pool,
+    /// so spend totals stay truthful and the entry is deletable if the correction was wrong.
+    public func setSourceRemaining(_ newRemaining: Decimal, sourceID: String, at date: Date = .now) throws {
+        let sources = try modelContext.fetch(FetchDescriptor<SourceRecord>(
+            predicate: #Predicate { $0.isArchived == false && $0.id == sourceID }))
+        guard let source = sources.first, newRemaining >= 0 else { return }
+        let currency = CurrencyCode(source.currencyCode)
+        let table = ExchangeRateCache().load() ?? SeedRates.table
+        let (alloc, _) = try compute(rates: table, displayCurrency: currency)
+        let current = max(0, alloc.remainingBySource[sourceID] ?? 0)
+        // Diff at display precision: FIFO/FX residue below what the user can SEE must not turn
+        // "set it to exactly what the screen shows" into a junk correction entry.
+        let gap = newRemaining - Money(amount: current, currency: currency).roundedAmount()
+        if gap > 0 {
+            let rec = ExpenseRecord(amount: gap, currencyCode: source.currencyCode, date: date,
+                                    merchantName: source.name, kind: .income, source: .manual,
+                                    dedupeKey: "income:\(UUID().uuidString)")
+            rec.provenanceSource = source
+            modelContext.insert(rec)
+            try modelContext.save()
+        } else if gap < 0 {
+            _ = try logEntry(amount: -gap, currency: currency, merchant: nil, note: nil,
+                             categoryName: "Unaccounted", source: .manual,
+                             keyPrefix: Self.driftKeyPrefix, date: date, fundedBySourceID: sourceID)
+        }
+    }
+
     /// Per-source balances + Unaccounted, computed via the pure FIFO allocator.
     public func provenanceSnapshot(displayCurrency: CurrencyCode,
                                    rates: RateTable? = nil) throws -> ProvenanceSnapshot {

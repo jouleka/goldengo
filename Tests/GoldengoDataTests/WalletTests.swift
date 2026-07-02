@@ -80,6 +80,38 @@ final class WalletTests: XCTestCase {
         XCTAssertEqual(b, 8000)
     }
 
+    func test_setToDisplayedValue_logsNoSubUnitDrift() async throws {
+        // ALL displays with 0 fraction digits. A flow residue below display precision (statement
+        // amounts can carry decimals) must not turn "set it to exactly what the screen shows"
+        // into a junk Unaccounted entry.
+        let store = try makeStore()
+        _ = try await store.setWalletBalance(5000, currency: .all, tally: nil, at: day(2026, 6, 1))
+        _ = try await store.logManual(amount: Decimal(string: "0.4")!, currency: .all,
+                                      merchant: "Residue", categoryName: nil, date: day(2026, 6, 2))
+        // Books now expect 4999.6 — shown as "ALL 5,000". The user types 5000.
+        let outcome = try await store.setWalletBalance(5000, currency: .all, tally: nil, at: day(2026, 6, 3))
+        XCTAssertNil(outcome.unaccountedLogged, "No drift below what the user can see")
+        let rows = try await store.recentExpenses(limit: 10)
+        XCTAssertFalse(rows.contains { $0.dedupeKey.hasPrefix("drift:") })
+    }
+
+    func test_removeWalletCurrency_lineDisappears_reSetStartsFresh() async throws {
+        let store = try makeStore()
+        _ = try await store.setWalletBalance(5000, currency: .all, tally: nil, at: day(2026, 6, 1))
+        _ = try await store.setWalletBalance(80, currency: .eur, tally: nil, at: day(2026, 6, 1))
+        try await store.removeWalletCurrency(.eur)
+        let codes = try await store.walletBalances(now: day(2026, 6, 2)).map(\.currencyCode)
+        XCTAssertEqual(codes, ["ALL"], "The removed line is gone; other currencies untouched")
+        let count = try await store.expenseCount()
+        XCTAssertEqual(count, 0, "Removing a tracked currency deletes the LINE, never money records")
+        // WHY: re-tracking must start fresh — if the old baseline bled through, the first new set
+        // would auto-log a bogus Unaccounted gap against balances the user stopped tracking.
+        let outcome = try await store.setWalletBalance(50, currency: .eur, tally: nil, at: day(2026, 6, 3))
+        XCTAssertNil(outcome.expected, "No prior baseline after removal — no drift comparison")
+        let b = try await balance(store, "EUR", now: day(2026, 6, 4))
+        XCTAssertEqual(b, 50)
+    }
+
     func test_perCurrency_walletsAreIndependent() async throws {
         let store = try makeStore()
         _ = try await store.setWalletBalance(5000, currency: .all, tally: nil, at: day(2026, 6, 1))

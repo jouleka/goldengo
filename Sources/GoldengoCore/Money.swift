@@ -24,6 +24,15 @@ public struct Money: Hashable, Sendable {
         return "\(sign)\(body)"
     }
 
+    /// The amount rounded to this currency's display precision (`.plain`, matching `formatted()`).
+    /// For prefills and comparisons against what the user can SEE — lossy, never for ledger math.
+    public func roundedAmount() -> Decimal {
+        var value = amount
+        var rounded = Decimal()
+        NSDecimalRound(&rounded, &value, currency.fractionDigits, .plain)
+        return rounded
+    }
+
     private func signAndBody() -> (sign: String, body: String) {
         let digits = currency.fractionDigits
         let magnitude = abs(amount)
