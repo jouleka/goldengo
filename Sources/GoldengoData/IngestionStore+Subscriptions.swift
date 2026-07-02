@@ -103,16 +103,23 @@ extension IngestionStore {
         // Reconcile records that are no longer detected (e.g. the user deleted charges so the series
         // fell below the cadence bar) so they don't linger with a stale count: drop unconfirmed
         // guesses; keep confirmed ones but correct their charge count to reality. Dismissed records
-        // are left untouched.
+        // are left untouched. Manual subs are user statements, not guesses — they survive with zero
+        // charges, and their display date rolls forward (no detected series will do it for them).
+        var rollCal = Calendar(identifier: .gregorian); rollCal.timeZone = TimeZone(identifier: "UTC")!
         let detectedIDs = Set(detected.map(\.id))
         for rec in byKey.values where !rec.isArchived && !rec.isDismissed && !detectedIDs.contains(rec.matchKey) {
             if rec.isConfirmed {
                 let count = try currentChargeCount(normalizedMerchant: rec.normalizedMerchant,
                                                    currencyCode: rec.currencyCode)
-                if count == 0 {
+                if count == 0 && !rec.isManual {
                     rec.isArchived = true          // confirmed but no charges left → nothing to track
                 } else {
                     rec.occurrenceCount = count     // keep, count corrected to reality
+                    if rec.isManual {
+                        var next = rec.nextChargeDate
+                        while next < now { next = rec.cadence.advance(next, calendar: rollCal) }
+                        rec.nextChargeDate = next
+                    }
                 }
             } else {
                 rec.isArchived = true               // drop an unconfirmed guess that no longer repeats

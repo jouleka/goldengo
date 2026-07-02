@@ -26,6 +26,19 @@ final class ManualSubscriptionTests: XCTestCase {
         XCTAssertEqual(rows.first?.amount, 22)
     }
 
+    func test_refresh_keepsChargelessManualSub_andRollsNextChargeForward() async throws {
+        let store = try makeStore()
+        try await store.addManualSubscription(name: "iCloud", amount: 3, currency: .eur,
+                                              cadence: .monthly, nextChargeDate: day(2026, 6, 20))
+        // WHY: reconcile-archive exists to drop stale detector GUESSES; a manual sub is a user
+        // statement and must survive refresh with zero charges.
+        _ = try await store.refreshSubscriptions(now: day(2026, 8, 1))
+        let rows = try await store.subscriptionCandidates()
+        XCTAssertEqual(rows.count, 1, "Chargeless manual sub survives refresh")
+        // WHY roll: with no detected series to refresh it, "Next:" would assert a past date forever.
+        XCTAssertEqual(rows.first?.nextChargeDate, day(2026, 8, 20))
+    }
+
     func test_detectedSeries_convergesOntoManualRecord_keepsConfirmed() async throws {
         let store = try makeStore()
         try await store.addManualSubscription(name: "Claude", amount: 20, currency: .eur,
