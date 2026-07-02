@@ -11,6 +11,8 @@ public struct SubscriptionsView: View {
     @State private var recentlyDismissed: SubscriptionSnapshot?
     @State private var undoDeadline: Date?
     private let undoWindow: TimeInterval = 4
+    @State private var showAdd = false   // ＋ / empty-state CTA → Add-subscription sheet
+    @Environment(\.dismiss) private var dismiss
     public init(model: SubscriptionsModel) { self.model = model }
 
     /// Detected-but-unverified candidates (the user is asked to confirm or dismiss these).
@@ -22,12 +24,17 @@ public struct SubscriptionsView: View {
         NavigationStack {
             List {
                 if needsReview.isEmpty && tracked.isEmpty && model.dismissedRows.isEmpty {
-                    ContentUnavailableView(
-                        "No subscriptions yet",
-                        systemImage: "arrow.triangle.2.circlepath",
-                        description: Text("When the same charge shows up a few times, Goldengo lists it here so you can track it."))
-                        .listRowBackground(Color.clear)
-                        .listRowSeparator(.hidden)
+                    ContentUnavailableView {
+                        Label("No subscriptions yet", systemImage: "arrow.triangle.2.circlepath")
+                    } description: {
+                        Text("Add one yourself, or import statements — when the same charge repeats, Goldengo lists it here.")
+                    } actions: {
+                        Button("Add a subscription") { showAdd = true }
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(GoldengoTheme.accent)
+                    }
+                    .listRowBackground(Color.clear)
+                    .listRowSeparator(.hidden)
                 } else {
                     if !needsReview.isEmpty {
                         Section {
@@ -80,6 +87,21 @@ public struct SubscriptionsView: View {
             .scrollContentBackground(.hidden)
             .background(Color.goldengoBackground.ignoresSafeArea())
             .navigationTitle("Subscriptions")
+            // An explicit close is required here: the list's pull-to-refresh captures the
+            // downward drag that would otherwise swipe-dismiss the sheet.
+            .toolbar {
+                ToolbarItem(placement: .navigation) {
+                    Button { showAdd = true } label: { Image(systemName: "plus") }
+                        .accessibilityLabel("Add subscription")
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") { dismiss() }
+                }
+            }
+            .sheet(isPresented: $showAdd) {
+                AddSubscriptionView(model: model)
+                    .presentationDetents([.medium, .large])
+            }
             .refreshable { await model.load() }
             // First-load net (covers cold-launch straight to this tab via a deep link, which a
             // selectedTab onChange can miss). Re-entry refresh is driven by RootView's onChange;

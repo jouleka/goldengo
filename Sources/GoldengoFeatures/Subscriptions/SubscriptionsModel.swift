@@ -55,6 +55,14 @@ public final class SubscriptionsModel {
         await load()
     }
 
+    /// Track a subscription the user declares directly (Add subscription sheet).
+    public func addManual(name: String, amount: Decimal, currency: CurrencyCode,
+                          cadence: SubscriptionCadence, nextChargeDate: Date) async {
+        try? await store.addManualSubscription(name: name, amount: amount, currency: currency,
+                                               cadence: cadence, nextChargeDate: nextChargeDate)
+        await load()
+    }
+
     /// "L 9.99 / month" style label.
     public func amountCadenceText(_ s: SubscriptionSnapshot) -> String {
         let money = Money(amount: s.amount, currency: CurrencyCode(s.currencyCode)).formatted()
