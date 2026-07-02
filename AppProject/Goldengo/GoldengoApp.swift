@@ -10,7 +10,8 @@ import UserNotifications
 /// nudge straight from the notification (no app open needed); "Log the payback…" and a plain
 /// tap land on the Wallet tab so the payback is logged honestly (the amount is the user's
 /// call — a repayment is never fabricated from a button).
-final class GoldengoNotificationDelegate: NSObject, UNUserNotificationCenterDelegate {
+final class GoldengoNotificationDelegate: NSObject, UNUserNotificationCenterDelegate, @unchecked Sendable {
+    // @unchecked: the class is stateless (methods only); Sendable can't be checked through NSObject.
     static let shared = GoldengoNotificationDelegate()
 
     // Reminders should surface even while the app is frontmost (a quiet banner).
