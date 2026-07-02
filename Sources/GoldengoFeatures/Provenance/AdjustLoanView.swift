@@ -30,10 +30,7 @@ struct AdjustLoanView: View {
         return value
     }
 
-    private var sinceText: String {
-        let df = DateFormatter(); df.dateStyle = .medium; df.timeStyle = .none
-        return df.string(from: loan.sinceDate)
-    }
+    private var sinceText: String { SourcesModel.compactDay(loan.sinceDate) }
 
     var body: some View {
         ScrollView {

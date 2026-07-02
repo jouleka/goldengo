@@ -38,7 +38,7 @@ public final class SourcesModel {
         await syncLoanReminders()
     }
 
-    /// The visible promise: the exact date the next nudge fires ("Aug 1"). nil when nudges
+    /// The visible promise: the exact date the next nudge fires ("25 Jul"). nil when nudges
     /// can't/won't arrive (toggle off, or permission denied) so the UI never promises what
     /// the system won't deliver.
     public func nextNudgeDateText(_ loan: LoanBalance) -> String? {
@@ -46,11 +46,20 @@ public final class SourcesModel {
               let date = LoanReminderPlanner.nextNudge(after: loan.lastEventDate,
                                                        now: .now, calendar: .current)
         else { return nil }
-        return Self.nudgeFormatter.string(from: date)
+        return Self.compactDay(date)
     }
 
-    private static let nudgeFormatter: DateFormatter = {
-        let f = DateFormatter(); f.dateStyle = .medium; f.timeStyle = .none; return f
+    /// "25 Jun" — the year earns its place only when it isn't this year. Card meta lines
+    /// live on one line; full dates are date soup there.
+    public static func compactDay(_ date: Date, now: Date = .now) -> String {
+        let sameYear = Calendar.current.isDate(date, equalTo: now, toGranularity: .year)
+        return (sameYear ? thisYearFormatter : otherYearFormatter).string(from: date)
+    }
+    private static let thisYearFormatter: DateFormatter = {
+        let f = DateFormatter(); f.setLocalizedDateFormatFromTemplate("dMMM"); return f
+    }()
+    private static let otherYearFormatter: DateFormatter = {
+        let f = DateFormatter(); f.setLocalizedDateFormatFromTemplate("dMMMy"); return f
     }()
 
     /// Keep the owed-to-you nudges in sync with the open claims. One nudge per loan, 30 days

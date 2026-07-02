@@ -375,51 +375,51 @@ public struct SourcesView: View {
 
     // ── Loan card: color dot + person + amount owed + since date ─────────────
     // Tappable → the payback/forgive sheet (swipe left deletes, swipe right edits).
+    // Same skeleton as a source card — title row (dot + name … amount), then ONE muted
+    // full-width meta line: "since 25 Jun · 🔔 25 Jul" (the bell IS the word "nudge";
+    // the sheet spells the promise out in a sentence).
     @ViewBuilder
     private func loanCard(_ loan: LoanBalance) -> some View {
         Button { adjustLoan = loan } label: {
-            HStack {
-                HStack(spacing: 9) {
-                    Circle()
-                        .fill(GoldengoTheme.sourceColor(loan.colorIndex))
-                        .frame(width: 10, height: 10)
-                    VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: 0) {
+                HStack {
+                    HStack(spacing: 9) {
+                        Circle()
+                            .fill(GoldengoTheme.sourceColor(loan.colorIndex))
+                            .frame(width: 10, height: 10)
                         Text(loan.personName)
                             .font(.system(size: 15.5, weight: .semibold))
                             .foregroundStyle(GoldengoTheme.inkPrimary)
-                        // The promise, visible: the exact date the next nudge fires — or the
-                        // honest absence of one when notifications are off/denied.
-                        HStack(spacing: 4) {
-                            Text("since " + Self.sinceFormatter.string(from: loan.sinceDate))
-                            if let nudge = model.nextNudgeDateText(loan) {
-                                Image(systemName: "bell")
-                                    .font(.system(size: 10))
-                                Text("nudge " + nudge)
-                            } else {
-                                Text("· no nudge coming")
-                            }
-                        }
-                        .font(.system(size: 12))
-                        .foregroundStyle(GoldengoTheme.inkMuted)
+                    }
+                    Spacer()
+                    GoldengoAmountText(
+                        Money(amount: loan.remaining, currency: CurrencyCode(loan.currencyCode)).formatted(),
+                        role: .row
+                    )
+                }
+                .padding(.bottom, 9)
+
+                HStack(spacing: 4) {
+                    Text("since " + SourcesModel.compactDay(loan.sinceDate))
+                    if let nudge = model.nextNudgeDateText(loan) {
+                        Text("·")
+                        Image(systemName: "bell")
+                            .font(.system(size: 10))
+                        Text(nudge)
+                    } else {
+                        Text("· no nudge coming")
                     }
                 }
-                Spacer()
-                GoldengoAmountText(
-                    Money(amount: loan.remaining, currency: CurrencyCode(loan.currencyCode)).formatted(),
-                    role: .row
-                )
+                .font(.system(size: 12))
+                .foregroundStyle(GoldengoTheme.inkMuted)
+                .lineLimit(1)
             }
-            .padding(.horizontal, 18)
-            .padding(.vertical, 14)
-            .goldengoCard()
+            .padding(18)
+            .goldengoCard(padding: 0)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
     }
-
-    private static let sinceFormatter: DateFormatter = {
-        let f = DateFormatter(); f.dateStyle = .medium; f.timeStyle = .none; return f
-    }()
 
     private func walletLabel(_ code: String) -> String {
         if code == "ALL" { return "Lek (ALL)" }
