@@ -4,7 +4,10 @@ import XCTest
 final class EnumsTests: XCTestCase {
     func test_transactionKind_rawValues() {
         XCTAssertEqual(TransactionKind.expense.rawValue, "expense")
-        XCTAssertEqual(TransactionKind.allCases.count, 3)
+        // Raw values are PERSISTED in kindRaw — this pins them so a rename can't corrupt data.
+        XCTAssertEqual(TransactionKind.lent.rawValue, "lent")
+        XCTAssertEqual(TransactionKind.repayment.rawValue, "repayment")
+        XCTAssertEqual(TransactionKind.allCases.count, 5)
     }
 
     func test_expenseSource_rawValues() {
