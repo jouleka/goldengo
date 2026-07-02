@@ -61,7 +61,8 @@ public enum LocalNotificationScheduler {
     /// Distinct features use distinct prefixes ("sub-reminder:", "loan-reminder:") so one
     /// feature's re-sync can never clobber another's.
     public static func sync(_ requests: [SubscriptionReminderPlanner.ReminderRequest],
-                            prefix: String = "sub-reminder:") async {   // = Self.prefix (public default args can't cite internals)
+                            prefix: String = "sub-reminder:",   // = Self.prefix (public default args can't cite internals)
+                            categoryID: String? = nil) async {  // notification category (action buttons), registered by the app target
         #if canImport(UserNotifications)
         guard !isRunningTests else { return }
         let center = UNUserNotificationCenter.current()
@@ -71,6 +72,7 @@ public enum LocalNotificationScheduler {
         for r in requests {
             let content = UNMutableNotificationContent()
             content.title = r.title; content.body = r.body; content.sound = .default
+            if let categoryID { content.categoryIdentifier = categoryID }
             // Fire at 09:00 local on the planner-computed day. We take ONLY the day from fireDate and
             // pin a sane hour — the planner already did the "N days before" math on a day boundary.
             var comps = Calendar.current.dateComponents([.year, .month, .day], from: r.fireDate)

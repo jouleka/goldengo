@@ -48,7 +48,8 @@ public final class SourcesModel {
                                                 now: .now, calendar: .current)
             .map { SubscriptionReminderPlanner.ReminderRequest(id: $0.id, title: $0.title,
                                                                body: $0.body, fireDate: $0.fireDate) }
-        await LocalNotificationScheduler.sync(requests, prefix: "loan-reminder:")
+        await LocalNotificationScheduler.sync(requests, prefix: LoanNudge.notificationPrefix,
+                                              categoryID: LoanNudge.categoryID)
     }
 
     /// Lend money to a person (wallet-cash by default, or pinned to a source). The first lend

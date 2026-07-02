@@ -7,27 +7,29 @@ final class LoanReminderPlannerTests: XCTestCase {
         cal.date(from: DateComponents(year: y, month: m, day: d, hour: 12))!
     }
 
-    func test_plan_firesThirtyDaysAfterNewestEvent_reArmedByCaller() {
-        // WHY: the nudge exists because a lent debt silently forgotten is this feature's
-        // failure mode — and any new event (more lent, partial payback) restarts the clock.
+    func test_plan_schedulesNextThreeMonthlyNudges_freshLoan() {
+        // WHY three: ignoring a nudge must never end the nudging — the next ones are already
+        // queued even if the app isn't opened again for months.
         let loan = LoanReminderPlanner.LoanInput(id: "l1", personName: "Andi",
                                                  remainingText: "ALL 5,000",
-                                                 lastEventDate: day(2026, 6, 1))
+                                                 lastEventDate: day(2026, 6, 27))
         let reqs = LoanReminderPlanner.plan([loan], enabled: true, now: day(2026, 7, 2), calendar: cal)
-        XCTAssertEqual(reqs.count, 1)
-        XCTAssertEqual(reqs.first?.id, "l1")
-        XCTAssertEqual(reqs.first?.fireDate, day(2026, 7, 1))
+        XCTAssertEqual(reqs.map(\.fireDate), [day(2026, 7, 27), day(2026, 8, 26), day(2026, 9, 25)])
+        // Distinct ids per occurrence — the scheduler keys identifiers on them.
+        XCTAssertEqual(reqs.map(\.id), ["l1#1", "l1#2", "l1#3"])
         XCTAssertTrue(reqs.first?.title.contains("Andi") ?? false)
         XCTAssertTrue(reqs.first?.body.contains("ALL 5,000") ?? false)
     }
 
-    func test_plan_freshLoan_schedulesFutureNudge() {
-        // A 5-day-old loan pre-schedules its day-30 nudge — no polling needed later.
-        let loan = LoanReminderPlanner.LoanInput(id: "l2", personName: "Era",
-                                                 remainingText: "€ 50.00",
-                                                 lastEventDate: day(2026, 6, 27))
+    func test_plan_pastNudgesRollForward_neverSchedulesThePast() {
+        // WHY: a fired nudge is gone — re-syncing must queue the NEXT grid dates, not
+        // resurrect day-30 after it already showed.
+        let loan = LoanReminderPlanner.LoanInput(id: "l1", personName: "Andi",
+                                                 remainingText: "ALL 5,000",
+                                                 lastEventDate: day(2026, 6, 1))
         let reqs = LoanReminderPlanner.plan([loan], enabled: true, now: day(2026, 7, 2), calendar: cal)
-        XCTAssertEqual(reqs.first?.fireDate, day(2026, 7, 27))
+        XCTAssertEqual(reqs.map(\.fireDate), [day(2026, 7, 31), day(2026, 8, 30), day(2026, 9, 29)])
+        XCTAssertEqual(reqs.map(\.id), ["l1#2", "l1#3", "l1#4"])
     }
 
     func test_plan_disabled_returnsEmpty_soSyncClearsStaleNudges() {

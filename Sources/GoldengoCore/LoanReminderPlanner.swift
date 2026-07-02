@@ -29,18 +29,43 @@ public enum LoanReminderPlanner {
     }
 
     public static let nudgeAfterDays = 30
+    /// How many upcoming nudges to keep queued per loan. Ignoring one must never end the
+    /// nudging — the next ones are already scheduled even if the app isn't opened for months.
+    public static let scheduledOccurrences = 3
 
-    /// Disabled → [] (the caller's replace-sync then clears any stale nudges — self-healing).
+    /// The next `scheduledOccurrences` monthly nudges per loan, on the grid
+    /// lastEvent + 30·k days, future dates only (a fired nudge is gone; re-syncing queues
+    /// the NEXT dates). Disabled → [] (the caller's replace-sync clears stale nudges).
     public static func plan(_ loans: [LoanInput], enabled: Bool,
                             now: Date, calendar: Calendar) -> [Request] {
         guard enabled else { return [] }
-        return loans.compactMap { loan in
-            guard let fire = calendar.date(byAdding: .day, value: nudgeAfterDays,
-                                           to: loan.lastEventDate) else { return nil }
-            return Request(id: loan.id,
-                           title: "\(loan.personName) still owes you",
-                           body: "\(loan.remainingText) has been out for a month. Worth a nudge?",
-                           fireDate: fire)
+        return loans.flatMap { loan -> [Request] in
+            var requests: [Request] = []
+            var k = 1
+            while requests.count < scheduledOccurrences && k < 1000 {
+                defer { k += 1 }
+                guard let fire = calendar.date(byAdding: .day, value: nudgeAfterDays * k,
+                                               to: loan.lastEventDate) else { break }
+                guard fire > now else { continue }
+                let age = k == 1 ? "a month" : "\(k) months"
+                requests.append(Request(id: "\(loan.id)#\(k)",
+                                        title: "\(loan.personName) still owes you",
+                                        body: "\(loan.remainingText) has been out for \(age). Worth a nudge?",
+                                        fireDate: fire))
+            }
+            return requests
         }
     }
+}
+
+/// Identifiers shared between the package (which schedules loan nudges) and the app target
+/// (which registers the notification category + actions and handles the responses).
+public enum LoanNudge {
+    public static let notificationPrefix = "loan-reminder:"
+    public static let categoryID = "LOAN_NUDGE"
+    /// Queues one fresh nudge a month out, straight from the notification (no app open).
+    public static let remindAgainActionID = "LOAN_REMIND_AGAIN"
+    /// Foreground action: opens the app on the Wallet tab to log the payback honestly
+    /// (never fabricates a repayment from a button — the amount is the user's call).
+    public static let logPaybackActionID = "LOAN_LOG_PAYBACK"
 }
