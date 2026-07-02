@@ -293,7 +293,7 @@ extension IngestionStore {
         var pending: [PendingSubscriptionCharge] = []
         for sub in representative.values {
             let groupKey = "\(sub.normalizedMerchant)|\(sub.currencyCode)"
-            guard let merchantRows = grouped[groupKey] else { continue }
+            let merchantRows = grouped[groupKey] ?? []
             let evidence = merchantRows.filter {
                 !$0.isArchived
                     && SubscriptionSettlementPlanner.isBillingEvidence(amount: $0.amount,
@@ -301,20 +301,37 @@ extension IngestionStore {
             }
             // Anchor = freshest billing evidence; the earliest bounds the backward grid walk so
             // backfill can never invent dues from before the subscription's known history.
-            guard let anchor = evidence.max(by: { $0.date < $1.date }),
-                  let earliest = evidence.min(by: { $0.date < $1.date }) else { continue }
+            // A manual sub with NO evidence yet anchors on the user's declared schedule origin
+            // instead (dueCharges' `anchor <= now` guard keeps a still-future date silent).
+            let anchorDate: Date, notBefore: Date, anchorMerchant: String
+            if let freshest = evidence.max(by: { $0.date < $1.date }),
+               let earliest = evidence.min(by: { $0.date < $1.date }) {
+                anchorDate = freshest.date
+                notBefore = earliest.date
+                // The anchor's REAL merchant string (not displayName): logging the ghost with it
+                // keeps MerchantNormalizer equality with future statement rows so imports merge.
+                anchorMerchant = freshest.merchantName ?? sub.displayName
+            } else if sub.isManual {
+                // The declared date IS the first due — but dueCharges excludes the anchor's own
+                // date (an anchor is an observed charge, dues are the grid around it). Anchor one
+                // period BEFORE the declared date so the grid emits the declared date itself;
+                // `notBefore` pins the floor so nothing earlier is ever invented.
+                anchorDate = sub.cadence.advance(sub.manualAnchorDate, by: -1, calendar: cal)
+                notBefore = sub.manualAnchorDate
+                anchorMerchant = sub.displayName
+            } else {
+                continue
+            }
             let coverage = TimeInterval(SubscriptionSettlementPlanner.coverageWindowDays(for: sub.cadence)) * 86_400
             for dueDate in SubscriptionSettlementPlanner.dueCharges(
-                anchor: anchor.date, notBefore: earliest.date, cadence: sub.cadence, now: now, calendar: cal) {
+                anchor: anchorDate, notBefore: notBefore, cadence: sub.cadence, now: now, calendar: cal) {
                 let isCovered = merchantRows.contains {
                     abs($0.date.timeIntervalSince(dueDate)) <= coverage
                 }
                 guard !isCovered else { continue }
-                // The anchor's REAL merchant string (not displayName): logging the ghost with it
-                // keeps MerchantNormalizer equality with future statement rows so imports merge.
                 pending.append(PendingSubscriptionCharge(
                     matchKey: sub.matchKey, displayName: sub.displayName,
-                    merchantName: anchor.merchantName ?? sub.displayName,
+                    merchantName: anchorMerchant,
                     amount: sub.amount, currencyCode: sub.currencyCode, dueDate: dueDate))
             }
         }

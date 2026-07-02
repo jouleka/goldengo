@@ -39,6 +39,22 @@ final class ManualSubscriptionTests: XCTestCase {
         XCTAssertEqual(rows.first?.nextChargeDate, day(2026, 8, 20))
     }
 
+    func test_manualSub_ghostSurfacesOnlyOnceDue_neverBefore() async throws {
+        let store = try makeStore()
+        try await store.addManualSubscription(name: "Hetzner", amount: 9, currency: .eur,
+                                              cadence: .monthly, nextChargeDate: day(2026, 6, 20))
+        // WHY: predictions are surfaced as one-tap ghosts, never auto-logged, and never early —
+        // a future declared date must stay silent.
+        let before = try await store.pendingSubscriptionCharges(now: day(2026, 6, 15))
+        XCTAssertTrue(before.isEmpty, "Nothing due before the declared date")
+        let after = try await store.pendingSubscriptionCharges(now: day(2026, 6, 25))
+        XCTAssertEqual(after.count, 1)
+        XCTAssertEqual(after.first?.dueDate, day(2026, 6, 20))
+        XCTAssertEqual(after.first?.displayName, "Hetzner")
+        XCTAssertEqual(after.first?.merchantName, "Hetzner",
+                       "No evidence row yet — the display name is the merchant string a future import will merge on")
+    }
+
     func test_detectedSeries_convergesOntoManualRecord_keepsConfirmed() async throws {
         let store = try makeStore()
         try await store.addManualSubscription(name: "Claude", amount: 20, currency: .eur,
