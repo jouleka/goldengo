@@ -209,25 +209,6 @@ public struct RootView: View {
 
     @ViewBuilder
     public var body: some View {
-        // Temporary DEBUG-only look-check harness (Task 9 wires the real Home entry to the Spending
-        // screen; this env-var gate can be removed then). Never active in a release build.
-#if DEBUG
-        if ProcessInfo.processInfo.environment["SPENDING_PREVIEW"] == "1" {
-            // CategoryBreakdownView no longer owns a NavigationStack (it pushes from Home's ambient
-            // stack in real use) — this standalone preview entry supplies one itself.
-            NavigationStack {
-                CategoryBreakdownView(model: .preview)
-            }
-        } else {
-            rootContent
-        }
-#else
-        rootContent
-#endif
-    }
-
-    /// The app's real root content — unchanged by the DEBUG preview gate above.
-    private var rootContent: some View {
         ZStack(alignment: .bottom) {
             contentView
             // Hidden while History or Spending is pushed inside the Home tab — the custom bar is a

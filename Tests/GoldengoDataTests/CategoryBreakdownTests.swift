@@ -44,6 +44,19 @@ final class CategoryBreakdownTests: XCTestCase {
         XCTAssertEqual(b.rows.first(where: { $0.name == "Food" })?.level, .near)
     }
 
+    func test_cap_setWithDifferentCase_landsOnSameCategoryAsSpend() async throws {
+        // A cap set as "food" and spend logged as "Food" must resolve to ONE CategoryRecord
+        // (via findOrCreateCategory), so the cap can never orphan onto a cased duplicate.
+        let s = try store()
+        try await s.setMonthlyBudget(categoryNamed: "food", cap: 1000)              // lowercase
+        _ = try await s.logManual(amount: 900, currency: .all, merchant: nil, categoryName: "Food")  // capitalized
+        let b = try await s.categoryBreakdown(monthContaining: .now, displayCurrency: .all, rates: rates)
+        let foodRows = b.rows.filter { $0.name.caseInsensitiveCompare("food") == .orderedSame }
+        XCTAssertEqual(foodRows.count, 1, "cap and spend must land on one category, not a cased duplicate")
+        XCTAssertEqual(foodRows.first?.budget, 1000, "the cap must attach to the same record the spend grouped under")
+        XCTAssertNotEqual(foodRows.first?.level, .noBudget)   // 900/1000 → capped, not uncapped
+    }
+
     // MARK: - expenses(inCategoryNamed:monthContaining:)
 
     func test_expensesInCategory_otherBucketsNilAndOtherNamed_excludesNamedCategory() async throws {
