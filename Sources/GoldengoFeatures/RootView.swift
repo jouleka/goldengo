@@ -186,7 +186,23 @@ public struct RootView: View {
         .animation(GoldengoMotion.quick, value: selectedTab)   // ease the gold tint between Home/Wallet
     }
 
+    @ViewBuilder
     public var body: some View {
+        // Temporary DEBUG-only look-check harness (Task 9 wires the real Home entry to the Spending
+        // screen; this env-var gate can be removed then). Never active in a release build.
+#if DEBUG
+        if ProcessInfo.processInfo.environment["SPENDING_PREVIEW"] == "1" {
+            CategoryBreakdownView(model: .preview)
+        } else {
+            rootContent
+        }
+#else
+        rootContent
+#endif
+    }
+
+    /// The app's real root content — unchanged by the DEBUG preview gate above.
+    private var rootContent: some View {
         ZStack(alignment: .bottom) {
             contentView
             // Hidden while History is pushed inside the Home tab — the custom bar is a ZStack sibling

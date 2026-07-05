@@ -11,6 +11,14 @@ public struct CategoryBreakdownRow: Sendable, Equatable, Identifiable {
     public var share: Double
     public var level: BudgetLevel
     public var id: String { name }
+
+    // Explicit public init: the auto-synthesized memberwise init is only `internal`, which blocks
+    // constructing sample/preview rows from another module (e.g. GoldengoFeatures's DEBUG preview).
+    public init(name: String, icon: String, colorHex: String, spent: Decimal, budget: Decimal? = nil,
+                share: Double, level: BudgetLevel) {
+        self.name = name; self.icon = icon; self.colorHex = colorHex; self.spent = spent
+        self.budget = budget; self.share = share; self.level = level
+    }
 }
 
 public struct CategoryBreakdown: Sendable, Equatable {
@@ -19,6 +27,13 @@ public struct CategoryBreakdown: Sendable, Equatable {
     public var rows: [CategoryBreakdownRow]
     public var currencyCode: String
     public var ratesAsOf: Date?
+
+    // Explicit public init — see CategoryBreakdownRow's for why (internal-only synthesized init).
+    public init(monthStart: Date, total: Decimal, rows: [CategoryBreakdownRow], currencyCode: String,
+                ratesAsOf: Date? = nil) {
+        self.monthStart = monthStart; self.total = total; self.rows = rows
+        self.currencyCode = currencyCode; self.ratesAsOf = ratesAsOf
+    }
 }
 
 extension IngestionStore {
