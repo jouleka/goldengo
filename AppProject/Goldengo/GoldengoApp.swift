@@ -25,6 +25,13 @@ final class GoldengoNotificationDelegate: NSObject, UNUserNotificationCenterDele
                                 didReceive response: UNNotificationResponse,
                                 withCompletionHandler completionHandler: @escaping () -> Void) {
         let request = response.notification.request
+        if request.identifier.hasPrefix(OverspendNotifications.prefix) {
+            // No action buttons (see the category registration below) — a tap just routes to
+            // Home, the nearest thing to a "Spending screen" entry the pendingTab handoff exposes
+            // (the full breakdown is pushed from there, same as the on-screen "See all ›").
+            SharedSummary().setPendingTab(1)
+            completionHandler(); return
+        }
         guard request.identifier.hasPrefix(LoanNudge.notificationPrefix) else {
             completionHandler(); return
         }
@@ -65,6 +72,8 @@ struct GoldengoApp: App {
             UNNotificationCategory(identifier: LoanNudge.categoryID,
                                    actions: [logPayback, remindAgain],
                                    intentIdentifiers: []),
+            UNNotificationCategory(identifier: OverspendNotifications.prefix,
+                                   actions: [], intentIdentifiers: []),
         ])
 
         #if DEBUG

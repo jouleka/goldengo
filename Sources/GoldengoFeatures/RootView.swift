@@ -116,6 +116,21 @@ public struct RootView: View {
         if prompt != .none { ritualSheet = RitualSheet(kind: prompt) }
     }
 
+    /// Evaluate this month's capped categories and fire a notification for any that NEWLY escalated.
+    /// This is the ONLY place `evaluateBudgetAlerts` is called — it consumes the notify-once
+    /// token (mutates + persists), unlike the read-only `categoryBreakdown` the Spending card/screen
+    /// use. Safe to call from both cold launch and every foreground: the dedupe means a second call
+    /// before the month/level changes again just returns `[]`, so no duplicate notification.
+    private func checkOverspend() {
+        Task {
+            let rates = ExchangeRateCache().load() ?? SeedRates.table
+            let alerts = (try? await store.evaluateBudgetAlerts(asOf: .now,
+                                                                 displayCurrency: recentModel.currency,
+                                                                 rates: rates)) ?? []
+            if !alerts.isEmpty { await OverspendNotifications.fire(alerts) }
+        }
+    }
+
     // MARK: — Custom bottom bar (matches chrome.jsx TabBar exactly)
 
     @ViewBuilder
@@ -294,6 +309,7 @@ public struct RootView: View {
             checkRitual()             // then the daily check-in (Re-entry takes precedence)
             await recentModel.load()  // Home is the landing tab
             await subsModel.load()    // re-sync subscription reminders on cold launch (was tab-4 entry)
+            checkOverspend()          // evaluate + fire any newly-escalated budget alerts
             // Recompose the widget summaries so an update/install (or any pre-fix edit) never
             // leaves the lock screen asserting a stale or missing pocket claim (GOL-98 review).
             try? await store.refreshSharedSummaries()
@@ -315,6 +331,7 @@ public struct RootView: View {
                 Task { await recentModel.load() }
                 // Keep subscription reminders fresh on long-uptime foregrounds (was the tab-4 trigger).
                 Task { await subsModel.load() }
+                checkOverspend()   // re-evaluate on every foreground; the store's dedupe stops repeats
             case .background:
                 SharedSummary().setLastSeen()
             default:
