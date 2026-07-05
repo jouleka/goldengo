@@ -177,6 +177,7 @@ public struct CategoryDetailView: View {
                 Button("Save") { commitCap() }
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundStyle(GoldengoTheme.accent)
+                    .disabled(!canSaveCap)
             }
         }
         .onAppear {
@@ -189,12 +190,29 @@ public struct CategoryDetailView: View {
         withAnimation(reduceMotion ? nil : GoldengoMotion.quick) { editingCap = true }
     }
 
-    /// Parses the typed amount (empty clears the cap), saves, reloads, dismisses the keyboard via
-    /// clearing focus (never a keyboard toolbar), and fires the one-time permission ask on the
-    /// FIRST cap this category (or any) transitions to from no-cap.
+    /// Parsed amount, or nil when the field isn't a positive number — mirrors `EditExpenseView`'s
+    /// `parsedAmount`. Note: an EMPTY trimmed field also parses to nil here, but that case is
+    /// handled separately in `commitCap` (empty means "clear the cap", not "invalid").
+    private var parsedCap: Decimal? {
+        let trimmed = capText.trimmingCharacters(in: .whitespaces)
+        guard let value = Decimal(string: trimmed), value > 0 else { return nil }
+        return value
+    }
+
+    /// Save is only blocked when the field is non-empty but doesn't parse — an empty field is a
+    /// valid "clear the cap" action, unlike `EditExpenseView` where an empty amount is never valid.
+    private var canSaveCap: Bool {
+        capText.trimmingCharacters(in: .whitespaces).isEmpty || parsedCap != nil
+    }
+
+    /// Empty clears the cap; a non-empty value only commits if it parses to a positive `Decimal` —
+    /// otherwise the input is REJECTED (never silently wipes an existing cap on a typo). Saves,
+    /// reloads, dismisses the keyboard via clearing focus (never a keyboard toolbar), and fires the
+    /// one-time permission ask on the FIRST cap this category (or any) transitions to from no-cap.
     private func commitCap() {
         let trimmed = capText.trimmingCharacters(in: .whitespaces)
-        let parsed: Decimal? = trimmed.isEmpty ? nil : Decimal(string: trimmed)
+        guard trimmed.isEmpty || parsedCap != nil else { return }   // invalid, non-empty: reject
+        let parsed = parsedCap
         focusedField = nil
         withAnimation(reduceMotion ? nil : GoldengoMotion.quick) { editingCap = false }
         Task {

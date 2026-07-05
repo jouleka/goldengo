@@ -192,7 +192,8 @@ extension IngestionStore {
     /// Assigns (or creates, case-insensitively) a category to a single expense by its `dedupeKey` —
     /// how a row leaves "Other" from the detail screen's categorize affordance.
     public func assignCategory(named categoryName: String, toExpenseWithKey dedupeKey: String) throws {
-        var fd = FetchDescriptor<ExpenseRecord>(predicate: #Predicate { $0.dedupeKey == dedupeKey })
+        var fd = FetchDescriptor<ExpenseRecord>(
+            predicate: #Predicate { $0.dedupeKey == dedupeKey && $0.isArchived == false })
         fd.fetchLimit = 1
         guard let record = try modelContext.fetch(fd).first else { return }
         record.category = try findOrCreateCategory(named: categoryName)
