@@ -47,4 +47,35 @@ final class BudgetAlertTests: XCTestCase {
         let next = try await s.evaluateBudgetAlerts(asOf: nextMonth, displayCurrency: .all, rates: rates)
         XCTAssertEqual(next.map(\.level), [.over])
     }
+
+    func test_deEscalation_withinMonth_doesNotReFire_norLowerStoredLevel() async throws {
+        // Monotonic-within-month guarantee: once the "over" alert has fired, a mid-month dip below
+        // the cap (here via raising the cap; a refund would do the same) must NOT fire again, and must
+        // NOT reset the dedupe state — so dropping back over must stay silent (proves stored level held).
+        let s = try store()
+        try await s.setMonthlyBudget(categoryNamed: "Food", cap: 1000)
+        _ = try await s.logManual(amount: 1200, currency: .all, merchant: nil, categoryName: "Food")
+        let over = try await s.evaluateBudgetAlerts(asOf: .now, displayCurrency: .all, rates: rates)
+        XCTAssertEqual(over.map(\.level), [.over])                       // armed at over
+
+        try await s.setMonthlyBudget(categoryNamed: "Food", cap: 2000)   // 1200/2000 → ok (de-escalated)
+        let dip = try await s.evaluateBudgetAlerts(asOf: .now, displayCurrency: .all, rates: rates)
+        XCTAssertTrue(dip.isEmpty)                                       // de-escalation fires nothing
+
+        try await s.setMonthlyBudget(categoryNamed: "Food", cap: 1000)   // 1200/1000 → over again
+        let backOver = try await s.evaluateBudgetAlerts(asOf: .now, displayCurrency: .all, rates: rates)
+        XCTAssertTrue(backOver.isEmpty)                                  // stored level never lowered → no re-fire
+    }
+
+    func test_capWithZeroSpend_thenLaterEscalation_stillFires() async throws {
+        // A cap set with no spend yet must not fire, but must not "swallow" a later escalation either.
+        let s = try store()
+        try await s.setMonthlyBudget(categoryNamed: "Coffee", cap: 1000)
+        let none = try await s.evaluateBudgetAlerts(asOf: .now, displayCurrency: .all, rates: rates)
+        XCTAssertTrue(none.isEmpty)                                      // zero spend → nothing
+
+        _ = try await s.logManual(amount: 1100, currency: .all, merchant: nil, categoryName: "Coffee")
+        let over = try await s.evaluateBudgetAlerts(asOf: .now, displayCurrency: .all, rates: rates)
+        XCTAssertEqual(over.map(\.level), [.over])                       // baseline didn't swallow escalation
+    }
 }

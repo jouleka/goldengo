@@ -89,6 +89,10 @@ public struct BudgetAlert: Sendable, Equatable {
 }
 
 extension IngestionStore {
+    /// Evaluates this month's capped categories and returns the alerts that NEWLY escalated
+    /// (each level fires at most once per category per month). Side effect: this CONSUMES the
+    /// notify-once token — it persists the new level so that alert won't fire again. Call it only
+    /// where notifications are actually delivered; never from a read-only / status-display path.
     public func evaluateBudgetAlerts(asOf now: Date = .now,
                                      displayCurrency: CurrencyCode,
                                      rates: RateTable) throws -> [BudgetAlert] {
