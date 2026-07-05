@@ -3,8 +3,8 @@ import GoldengoCore
 import GoldengoData
 import GoldengoDesignSystem
 
-/// The "Spending" breakdown screen: a month stepper, the period total, and ranked category rows.
-/// Donut chart + budget progress bars land in later tasks — this is rows only.
+/// The "Spending" breakdown screen: a month stepper, a donut chart with the period total at its
+/// center, and ranked category rows with per-category budget progress bars.
 public struct CategoryBreakdownView: View {
     private let model: CategoryBreakdownModel
 
@@ -18,6 +18,10 @@ public struct CategoryBreakdownView: View {
     @ScaledMetric(relativeTo: .footnote) private var percentTextSize: CGFloat = 13
     @ScaledMetric(relativeTo: .body) private var emptyTitleSize: CGFloat = 15
     @ScaledMetric(relativeTo: .footnote) private var emptySubSize: CGFloat = 13
+    @ScaledMetric(relativeTo: .caption) private var budgetCaptionSize: CGFloat = 12
+    @ScaledMetric(relativeTo: .caption) private var otherAffordanceSize: CGFloat = 13
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     public init(model: CategoryBreakdownModel) {
         self.model = model
@@ -29,6 +33,7 @@ public struct CategoryBreakdownView: View {
                 title
                 monthStepper
                     .padding(.top, GoldengoTheme.Spacing.l)
+                donut
                 totalText
                     .padding(.top, GoldengoTheme.Spacing.s)
                 rowsCard
@@ -40,6 +45,18 @@ public struct CategoryBreakdownView: View {
         }
         .background(Color.goldengoBackground.ignoresSafeArea())
         .task { await model.load() }
+    }
+
+    // MARK: - Donut
+
+    @ViewBuilder
+    private var donut: some View {
+        if let breakdown = model.breakdown, !breakdown.rows.isEmpty {
+            SpendingDonut(rows: breakdown.rows, total: breakdown.total, currencyCode: breakdown.currencyCode)
+                .frame(width: 160, height: 160)
+                .frame(maxWidth: .infinity)
+                .padding(.top, GoldengoTheme.Spacing.l)
+        }
     }
 
     // MARK: - Title
@@ -125,31 +142,109 @@ public struct CategoryBreakdownView: View {
         let currency = CurrencyCode(model.breakdown?.currencyCode ?? model.currency.rawValue)
         let amountText = Money(amount: row.spent, currency: currency).amountText()
         let percentText = "\(Int((row.share * 100).rounded()))%"
-        return HStack(spacing: GoldengoTheme.Spacing.s) {
-            Circle()
-                .fill(Color(hex: row.colorHex))
-                .frame(width: 10, height: 10)
-            Text(row.name)
-                .font(.system(size: rowTextSize, weight: .medium))
-                .foregroundStyle(GoldengoTheme.inkPrimary)
-                .lineLimit(1)
-            Spacer(minLength: GoldengoTheme.Spacing.s)
-            Text(amountText)
-                .font(.system(size: rowTextSize, weight: .medium))
-                .monospacedDigit()
-                .foregroundStyle(GoldengoTheme.inkPrimary)
-            Text(percentText)
-                .font(.system(size: percentTextSize))
-                .monospacedDigit()
-                .foregroundStyle(GoldengoTheme.inkMuted)
-                .frame(minWidth: 34, alignment: .trailing)
+        let showsAffordance = row.name == "Other" || row.budget != nil
+        return VStack(alignment: .leading, spacing: showsAffordance ? GoldengoTheme.Spacing.xs : 0) {
+            HStack(spacing: GoldengoTheme.Spacing.s) {
+                Circle()
+                    .fill(Color(hex: row.colorHex))
+                    .frame(width: 10, height: 10)
+                Text(row.name)
+                    .font(.system(size: rowTextSize, weight: .medium))
+                    .foregroundStyle(GoldengoTheme.inkPrimary)
+                    .lineLimit(1)
+                Spacer(minLength: GoldengoTheme.Spacing.s)
+                Text(amountText)
+                    .font(.system(size: rowTextSize, weight: .medium))
+                    .monospacedDigit()
+                    .foregroundStyle(GoldengoTheme.inkPrimary)
+                Text(percentText)
+                    .font(.system(size: percentTextSize))
+                    .monospacedDigit()
+                    .foregroundStyle(GoldengoTheme.inkMuted)
+                    .frame(minWidth: 34, alignment: .trailing)
+            }
+            if showsAffordance {
+                budgetAffordance(for: row, currency: currency)
+                    .padding(.leading, 10 + GoldengoTheme.Spacing.s)   // align under the name, past the dot
+            }
         }
         .padding(.vertical, GoldengoTheme.Spacing.s + 2)
         .accessibilityElement(children: .combine)
         // Spoken form includes the currency (VoiceOver reads common ISO codes/symbols by name, e.g.
         // "ALL" / "€"), matching the one existing amount-in-a-label precedent (RecentExpensesView's
         // dueRow), rather than the plain-magnitude `amountText()` used for the visible row text.
-        .accessibilityLabel("\(row.name), \(Money(amount: row.spent, currency: currency).formatted()), \(Int((row.share * 100).rounded())) percent")
+        .accessibilityLabel(accessibilityLabel(for: row, currency: currency, percentText: percentText))
+    }
+
+    // MARK: - Budget affordance (progress bar / caption / "Other" categorize prompt)
+
+    @ViewBuilder
+    private func budgetAffordance(for row: CategoryBreakdownRow, currency: CurrencyCode) -> some View {
+        if row.name == "Other" {
+            Text("Tap to categorize this spend")
+                .font(.system(size: otherAffordanceSize, weight: .medium))
+                .foregroundStyle(GoldengoTheme.accent)
+        } else if let budget = row.budget {
+            budgetBar(for: row, budget: budget, currency: currency)
+        }
+        // budget == nil and name != "Other": no bar, unchanged.
+    }
+
+    private func budgetBar(for row: CategoryBreakdownRow, budget: Decimal, currency: CurrencyCode) -> some View {
+        let spentDouble = (row.spent as NSDecimalNumber).doubleValue
+        let budgetDouble = (budget as NSDecimalNumber).doubleValue
+        let fraction = budgetDouble > 0 ? min(1.0, spentDouble / budgetDouble) : 0
+        let tint = budgetLevelColor(row.level)
+        let caption: String = {
+            if row.level == .over {
+                let over = Money(amount: row.spent - budget, currency: currency).amountText()
+                return "over by \(over)"
+            } else {
+                let remaining = Money(amount: budget - row.spent, currency: currency).amountText()
+                return "\(remaining) left"
+            }
+        }()
+        return HStack(spacing: GoldengoTheme.Spacing.s) {
+            GeometryReader { geo in
+                ZStack(alignment: .leading) {
+                    RoundedRectangle(cornerRadius: 3, style: .continuous)
+                        .fill(Color.goldengoField)
+                    RoundedRectangle(cornerRadius: 3, style: .continuous)
+                        .fill(tint)
+                        .frame(width: geo.size.width * fraction)
+                        .animation(reduceMotion ? nil : GoldengoMotion.standard, value: fraction)
+                }
+            }
+            .frame(height: 6)
+            Text(caption)
+                .font(.system(size: budgetCaptionSize, weight: .medium))
+                .monospacedDigit()
+                .foregroundStyle(tint)
+                .lineLimit(1)
+                .fixedSize(horizontal: true, vertical: false)
+        }
+    }
+
+    private func budgetLevelColor(_ level: BudgetLevel) -> Color {
+        switch level {
+        case .ok: return GoldengoTheme.income
+        case .near: return GoldengoTheme.accent
+        case .over: return GoldengoTheme.danger
+        case .noBudget: return GoldengoTheme.inkMuted
+        }
+    }
+
+    private func accessibilityLabel(for row: CategoryBreakdownRow, currency: CurrencyCode, percentText: String) -> String {
+        let base = "\(row.name), \(Money(amount: row.spent, currency: currency).formatted()), \(Int((row.share * 100).rounded())) percent"
+        guard let budget = row.budget else { return base }
+        switch row.level {
+        case .over:
+            let over = Money(amount: row.spent - budget, currency: currency).formatted()
+            return "\(base), over by \(over)"
+        default:
+            let remaining = Money(amount: budget - row.spent, currency: currency).formatted()
+            return "\(base), \(remaining) left"
+        }
     }
 
     private var emptyCard: some View {
