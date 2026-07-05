@@ -34,8 +34,6 @@ public struct CategoryBreakdownView: View {
                 monthStepper
                     .padding(.top, GoldengoTheme.Spacing.l)
                 donut
-                totalText
-                    .padding(.top, GoldengoTheme.Spacing.s)
                 rowsCard
                     .padding(.top, GoldengoTheme.Spacing.l)
             }
@@ -99,23 +97,6 @@ public struct CategoryBreakdownView: View {
         .disabled(!enabled)
         .opacity(enabled ? 1 : 0.25)
         .accessibilityLabel(label)
-    }
-
-    // MARK: - Period total
-
-    private var totalText: some View {
-        Group {
-            if let breakdown = model.breakdown {
-                GoldengoAmountText(
-                    Money(amount: breakdown.total, currency: CurrencyCode(breakdown.currencyCode)).formatted(),
-                    role: .title
-                )
-            } else {
-                // No data yet (still loading, or the store threw) — an empty-but-stable placeholder,
-                // never a crash or a stale figure from another month.
-                GoldengoAmountText(Money(amount: 0, currency: model.currency).formatted(), role: .title)
-            }
-        }
     }
 
     // MARK: - Ranked rows
