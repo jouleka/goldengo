@@ -28,14 +28,22 @@ public final class RecentExpensesModel {
     public private(set) var fundingSources: [FundingSourceOption] = []
     /// Read-only per-currency wallet snapshot driving the "In your pocket" hero. Home never writes wallet.
     public private(set) var pocketLines: [PocketLine] = []
+    /// Top rows (already spent-desc) for the compact Spending card — at most 3, each with its
+    /// per-category budget bar when capped. Read-only; never touches `evaluateBudgetAlerts`.
+    public private(set) var spendingCardRows: [CategoryBreakdownRow] = []
+    /// True when any category this month is over its cap — drives the card's terracotta dot.
+    public private(set) var hasOverBudgetCategory = false
+    /// The currency the breakdown rows were computed in — always `currency` at load time, but kept
+    /// alongside the rows so a card render mid-currency-switch never mismatches amount vs. symbol.
+    public private(set) var spendingCardCurrency: CurrencyCode = .all
 
     public init(store: any RecentExpensesReading, currency: CurrencyCode = .all) {
         self.reader = store; self.currency = currency
     }
 
     public func load() async {
+        let rates = ExchangeRateCache().load() ?? SeedRates.table
         do {
-            let rates = ExchangeRateCache().load() ?? SeedRates.table
             let data = try await reader.homeData(in: currency, rates: rates, now: .now, topCategoryLimit: 4)
             rows = data.rows
             todayTotalText = Money(amount: data.todayTotal, currency: currency).formatted()
@@ -48,6 +56,18 @@ public final class RecentExpensesModel {
         } catch {
             // Keep any previously-loaded rows on screen; surface the failure so the user can retry.
             loadFailed = true
+        }
+        // A second, independent read for the Spending card. Kept out of the `do/catch` above so a
+        // breakdown failure never flips `loadFailed` (which drives the Recent list's error banner) —
+        // the card degrades to empty instead. Read-only: never call `evaluateBudgetAlerts` here, it
+        // consumes the notify-once token meant for actual notification delivery.
+        if let breakdown = try? await reader.categoryBreakdown(monthContaining: .now, displayCurrency: currency, rates: rates) {
+            spendingCardRows = Array(breakdown.rows.prefix(3))
+            hasOverBudgetCategory = breakdown.rows.contains { $0.level == .over }
+            spendingCardCurrency = currency
+        } else {
+            spendingCardRows = []
+            hasOverBudgetCategory = false
         }
     }
 

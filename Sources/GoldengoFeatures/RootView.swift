@@ -37,6 +37,7 @@ public struct RootView: View {
     @State private var showAdd = false            // center FAB → Add sheet (QuickAdd)
     @State private var showSubscriptions = false  // Home "Upcoming" → Subscriptions management sheet
     @State private var showHistory = false        // History pushed within the Home tab — hides the tab bar
+    @State private var showSpending = false       // Spending breakdown pushed from Home's compact card
     @State private var barHidden = false          // hide-on-scroll: the pill slides away while scrolling down Home
     @State private var importFile: ImportFile?            // a statement shared into the app (Share / Open in)
     @State private var reEntryPrompt: ReEntryPrompt?      // welcome-back soft-landing after a gap
@@ -50,6 +51,7 @@ public struct RootView: View {
     @State private var quickAddModel: QuickAddModel
     @State private var sourcesModel: SourcesModel
     @State private var historyModel: HistoryModel   // the "See all" period browser, pushed from Home
+    @State private var spendingModel: CategoryBreakdownModel   // the full breakdown, pushed from Home's Spending card
     public init(store: IngestionStore) {
         self.store = store
         let preferred = SharedSummary().readPreferredCurrency()
@@ -58,6 +60,7 @@ public struct RootView: View {
         _quickAddModel = State(initialValue: QuickAddModel(store: store, currency: preferred))
         _sourcesModel = State(initialValue: SourcesModel(store: store, currency: preferred))
         _historyModel = State(initialValue: HistoryModel(reader: store, currency: preferred))
+        _spendingModel = State(initialValue: CategoryBreakdownModel(store: store, currency: preferred))
     }
 
     /// Applies a legacy tab index (from deep links / widget / Siri `pendingTab`) under the
@@ -126,6 +129,8 @@ public struct RootView: View {
                 model: recentModel,
                 historyModel: historyModel,
                 showHistory: $showHistory,
+                spendingModel: spendingModel,
+                showSpending: $showSpending,
                 barHidden: $barHidden,
                 onOpenImport: { showImport = true },
                 onOpenSettings: { showSettings = true },
@@ -136,6 +141,7 @@ public struct RootView: View {
                     recentModel.currency = code
                     sourcesModel.currency = code   // keep the Wallet tab on the just-chosen display currency
                     historyModel.currency = code   // and the History browser on next open
+                    spendingModel.currency = code  // and the Spending breakdown on next open
                     Task { await recentModel.load() }
                     // Re-render the widget's cached today-total string in the new currency (it stores a
                     // pre-formatted, currency-bearing string), else the lock screen keeps the old one.
@@ -192,7 +198,11 @@ public struct RootView: View {
         // screen; this env-var gate can be removed then). Never active in a release build.
 #if DEBUG
         if ProcessInfo.processInfo.environment["SPENDING_PREVIEW"] == "1" {
-            CategoryBreakdownView(model: .preview)
+            // CategoryBreakdownView no longer owns a NavigationStack (it pushes from Home's ambient
+            // stack in real use) — this standalone preview entry supplies one itself.
+            NavigationStack {
+                CategoryBreakdownView(model: .preview)
+            }
         } else {
             rootContent
         }
@@ -205,10 +215,10 @@ public struct RootView: View {
     private var rootContent: some View {
         ZStack(alignment: .bottom) {
             contentView
-            // Hidden while History is pushed inside the Home tab — the custom bar is a ZStack sibling
-            // (not a real tab bar), so it would otherwise float over the pushed screen with live,
-            // misleading Home/Wallet/Add controls.
-            if !showHistory {
+            // Hidden while History or Spending is pushed inside the Home tab — the custom bar is a
+            // ZStack sibling (not a real tab bar), so it would otherwise float over the pushed screen
+            // with live, misleading Home/Wallet/Add controls.
+            if !showHistory && !showSpending {
                 goldengoTabBar
                     .offset(y: barHidden ? 120 : 0)                       // hide-on-scroll: slide the pill off the bottom
                     .scaleEffect(barHidden ? 0.94 : 1, anchor: .bottom)   // a gentle shrink (GPU-cheap; not blur)
@@ -218,6 +228,7 @@ public struct RootView: View {
             }
         }
         .animation(.snappy, value: showHistory)
+        .animation(.snappy, value: showSpending)
         .sheet(isPresented: $showAdd, onDismiss: {
             // A logged expense should appear on Home without a manual refresh.
             Task { await recentModel.load() }
@@ -240,6 +251,7 @@ public struct RootView: View {
             recentModel.currency = preferred
             sourcesModel.currency = preferred
             historyModel.currency = preferred
+            spendingModel.currency = preferred
             if changed {
                 Task { await recentModel.load() }
                 Task { await sourcesModel.load() }

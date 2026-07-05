@@ -24,6 +24,58 @@ final class RecentExpensesModelTests: XCTestCase {
         XCTAssertNil(m.summary)
     }
 
+    func test_load_populatesSpendingCard_top3Rows_andOverBudgetDot() async throws {
+        let store = IngestionStore(modelContainer: try .goldengoInMemory())
+        // Four categories so the card must truncate to 3 — proves the preview is capped, not "all rows".
+        try await store.logManual(amount: 500, currency: .all, merchant: nil, categoryName: "Food")
+        try await store.logManual(amount: 400, currency: .all, merchant: nil, categoryName: "Coffee")
+        try await store.logManual(amount: 300, currency: .all, merchant: nil, categoryName: "Transport")
+        try await store.logManual(amount: 200, currency: .all, merchant: nil, categoryName: "Fun")
+        try await store.setMonthlyBudget(categoryNamed: "Food", cap: 400)   // 500/400 -> over
+
+        let m = RecentExpensesModel(store: store, currency: .all)
+        await m.load()
+
+        XCTAssertEqual(m.spendingCardRows.count, 3, "card previews only the top 3 categories, not the full breakdown")
+        XCTAssertEqual(m.spendingCardRows.map(\.name), ["Food", "Coffee", "Transport"], "capped-3 keeps the store's spent-desc order")
+        XCTAssertTrue(m.hasOverBudgetCategory, "Food is over its cap this month, so the card's dot must show")
+    }
+
+    func test_load_noOverBudgetCategory_dotStaysOff() async throws {
+        let store = IngestionStore(modelContainer: try .goldengoInMemory())
+        try await store.logManual(amount: 100, currency: .all, merchant: nil, categoryName: "Food")
+        try await store.setMonthlyBudget(categoryNamed: "Food", cap: 1000)   // 10% -> ok, nowhere near over
+
+        let m = RecentExpensesModel(store: store, currency: .all)
+        await m.load()
+
+        XCTAssertFalse(m.hasOverBudgetCategory, "no category is over its cap, so the dot must not show")
+    }
+
+    /// Business-rule regression: the Spending card is READ-ONLY. `evaluateBudgetAlerts` persists a
+    /// notify-once token so a real push fires only once per category per escalation; if `load()` ever
+    /// called it (instead of `categoryBreakdown`), the card's every render would silently consume that
+    /// token and a genuine notification would never fire. Proven here: after the app's real notifier
+    /// path fires once for the over-budget escalation, several card loads must NOT change that outcome
+    /// — a second real evaluation right after still sees nothing NEW to alert on.
+    func test_load_neverConsumesTheNotifyOnceBudgetAlertToken() async throws {
+        let store = IngestionStore(modelContainer: try .goldengoInMemory())
+        try await store.logManual(amount: 500, currency: .all, merchant: nil, categoryName: "Food")
+        try await store.setMonthlyBudget(categoryNamed: "Food", cap: 400)   // over
+
+        let rates = RateTable(base: CurrencyCode("ALL"), rates: ["ALL": 1], asOf: Date(timeIntervalSince1970: 1_780_444_800))
+        let firstAlerts = try await store.evaluateBudgetAlerts(displayCurrency: .all, rates: rates)
+        XCTAssertEqual(firstAlerts.map(\.level), [.over], "the real notifier fires once for the escalation")
+
+        let m = RecentExpensesModel(store: store, currency: .all)
+        await m.load()
+        await m.load()
+        await m.load()   // several card renders/reloads between the two real notifier evaluations
+
+        let secondAlerts = try await store.evaluateBudgetAlerts(displayCurrency: .all, rates: rates)
+        XCTAssertTrue(secondAlerts.isEmpty, "the card's reads must not have re-armed the notify-once token")
+    }
+
     func test_doubleTappingADueGhost_logsExactlyOnce() async throws {
         let ghost = PendingSubscriptionCharge(matchKey: "NETFLIX|monthly|ALL", displayName: "Netflix",
                                               merchantName: "Netflix", amount: 1200, currencyCode: "ALL",
@@ -73,6 +125,9 @@ private actor CountingReader: RecentExpensesReading {
         logCount += 1
         return "auto:test-\(logCount)"
     }
+    func categoryBreakdown(monthContaining date: Date, displayCurrency: CurrencyCode, rates: RateTable) async throws -> CategoryBreakdown {
+        CategoryBreakdown(monthStart: date, total: 0, rows: [], currencyCode: displayCurrency.rawValue)
+    }
 }
 
 /// A reader whose calls always throw — used to exercise the error path that `try?` used to swallow.
@@ -89,4 +144,5 @@ private struct FailingReader: RecentExpensesReading {
     func homeData(in currency: CurrencyCode, rates: RateTable, now: Date, topCategoryLimit: Int) async throws -> HomeData { throw Boom() }
     func logAutomatic(amount: Decimal, currency: CurrencyCode, merchant: String?,
                       categoryName: String?, date: Date) async throws -> String { throw Boom() }
+    func categoryBreakdown(monthContaining date: Date, displayCurrency: CurrencyCode, rates: RateTable) async throws -> CategoryBreakdown { throw Boom() }
 }

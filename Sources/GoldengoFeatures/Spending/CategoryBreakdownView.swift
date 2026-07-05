@@ -23,9 +23,9 @@ public struct CategoryBreakdownView: View {
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    /// The category row tapped for drill-in — pushes `CategoryDetailView`. Self-contained navigation
-    /// (this view owns its own `NavigationStack`, matching `RecentExpensesView`/`HistoryView`) since
-    /// this screen is entered fresh rather than living inside an existing stack.
+    /// The category row tapped for drill-in — pushes `CategoryDetailView`. Uses the AMBIENT
+    /// `NavigationStack` (this view no longer owns one): it's entered by a push from Home's stack,
+    /// same as `HistoryView`. The DEBUG preview entry wraps a stack around this view itself.
     @State private var selectedRow: CategoryBreakdownRow?
 
     public init(model: CategoryBreakdownModel) {
@@ -33,37 +33,35 @@ public struct CategoryBreakdownView: View {
     }
 
     public var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 0) {
-                    title
-                    monthStepper
-                        .padding(.top, GoldengoTheme.Spacing.l)
-                    donut
-                    rowsCard
-                        .padding(.top, GoldengoTheme.Spacing.l)
-                }
-                .padding(.horizontal, GoldengoTheme.Spacing.m)
-                .padding(.top, 14)
-                .padding(.bottom, GoldengoTheme.Spacing.xl)
+        ScrollView {
+            VStack(alignment: .leading, spacing: 0) {
+                title
+                monthStepper
+                    .padding(.top, GoldengoTheme.Spacing.l)
+                donut
+                rowsCard
+                    .padding(.top, GoldengoTheme.Spacing.l)
             }
-            .background(Color.goldengoBackground.ignoresSafeArea())
-            .task { await model.load() }
+            .padding(.horizontal, GoldengoTheme.Spacing.m)
+            .padding(.top, 14)
+            .padding(.bottom, GoldengoTheme.Spacing.xl)
+        }
+        .background(Color.goldengoBackground.ignoresSafeArea())
+        .task { await model.load() }
 #if canImport(UIKit)
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar(.hidden, for: .navigationBar)
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar(.hidden, for: .navigationBar)
 #endif
-            .navigationDestination(item: $selectedRow) { row in
-                if let detailModel = model.detailModel(for: row) {
-                    CategoryDetailView(model: detailModel, currency: CurrencyCode(model.breakdown?.currencyCode ?? model.currency.rawValue),
-                                       onFirstCapSet: { Task { await BudgetNotificationPermission.askOnce() } })
-                }
+        .navigationDestination(item: $selectedRow) { row in
+            if let detailModel = model.detailModel(for: row) {
+                CategoryDetailView(model: detailModel, currency: CurrencyCode(model.breakdown?.currencyCode ?? model.currency.rawValue),
+                                   onFirstCapSet: { Task { await BudgetNotificationPermission.askOnce() } })
             }
-            // Popping back from a detail push may have changed a cap or reassigned an "Other" row —
-            // reload so the row's bar/amount reflect it without a manual pull-to-refresh.
-            .onChange(of: selectedRow) { _, newValue in
-                if newValue == nil { Task { await model.load() } }
-            }
+        }
+        // Popping back from a detail push may have changed a cap or reassigned an "Other" row —
+        // reload so the row's bar/amount reflect it without a manual pull-to-refresh.
+        .onChange(of: selectedRow) { _, newValue in
+            if newValue == nil { Task { await model.load() } }
         }
     }
 

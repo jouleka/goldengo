@@ -18,6 +18,9 @@ public protocol RecentExpensesReading: Sendable {
     @discardableResult
     func logAutomatic(amount: Decimal, currency: CurrencyCode, merchant: String?,
                       categoryName: String?, date: Date) async throws -> String
+    /// Read-only category totals + budget levels for the month containing `date` — backs Home's
+    /// compact Spending card (top rows + over-budget dot) and the full breakdown screen.
+    func categoryBreakdown(monthContaining date: Date, displayCurrency: CurrencyCode, rates: RateTable) async throws -> CategoryBreakdown
 }
 
 extension IngestionStore: RecentExpensesReading {}

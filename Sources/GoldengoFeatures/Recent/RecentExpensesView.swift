@@ -24,6 +24,11 @@ public struct RecentExpensesView: View {
     /// Bound to `RootView` so the custom tab bar can hide while History is pushed (it's a ZStack
     /// sibling of the content, not a real tab bar that a push would cover).
     @Binding private var showHistory: Bool
+    /// The full Spending breakdown pushed from the compact Spending card. Owned by `RootView`, same
+    /// reason as `historyModel`.
+    private let spendingModel: CategoryBreakdownModel
+    /// Bound to `RootView` — same purpose as `showHistory`, for the Spending push.
+    @Binding private var showSpending: Bool
     /// Bound to `RootView` — set true while scrolling down so the floating pill slides away.
     @Binding private var barHidden: Bool
     @State private var showCurrencyPicker = false
@@ -36,10 +41,14 @@ public struct RecentExpensesView: View {
     /// expanded). Keyed by date — not list index — so a fold survives the frequent `model.load()`
     /// reloads (tab return, foreground, after an add/edit/delete). Session-only; not persisted.
     @State private var collapsedDays: Set<Date> = []
+    /// Drives the Spending card's budget-bar fill animation (matches `CategoryBreakdownView`'s own).
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     public init(model: RecentExpensesModel,
                 historyModel: HistoryModel,
                 showHistory: Binding<Bool> = .constant(false),
+                spendingModel: CategoryBreakdownModel,
+                showSpending: Binding<Bool> = .constant(false),
                 barHidden: Binding<Bool> = .constant(false),
                 onOpenImport: @escaping () -> Void = {},
                 onOpenSettings: @escaping () -> Void = {},
@@ -48,6 +57,8 @@ public struct RecentExpensesView: View {
         self.model = model
         self.historyModel = historyModel
         self._showHistory = showHistory
+        self.spendingModel = spendingModel
+        self._showSpending = showSpending
         self._barHidden = barHidden
         self.onOpenImport = onOpenImport
         self.onOpenSettings = onOpenSettings
@@ -70,21 +81,26 @@ public struct RecentExpensesView: View {
                 // 2. Pocket hero card.
                 pocketHeroCard.goldengoCardRow()
 
-                // 3. Upcoming (pending subscription charges).
+                // 3. Spending — compact top-categories preview; taps through to the full breakdown.
+                spendingHeaderRow
+                    .goldengoCardRow(top: 22, bottom: GoldengoTheme.Spacing.xs)
+                spendingCard.goldengoCardRow()
+
+                // 4. Upcoming (pending subscription charges).
                 if !model.pendingCharges.isEmpty {
                     GoldengoSerifSectionHeader("Upcoming")
                         .goldengoCardRow(top: 22, bottom: GoldengoTheme.Spacing.xs)
                     ForEach(model.pendingCharges) { p in dueRow(p) }
                 }
 
-                // 4. Today's usuals (rhythm ghosts).
+                // 5. Today's usuals (rhythm ghosts).
                 if !model.ghosts.isEmpty {
                     GoldengoSerifSectionHeader("Today's usuals")
                         .goldengoCardRow(top: 22, bottom: GoldengoTheme.Spacing.xs)
                     ForEach(model.ghosts) { g in ghostRow(g) }
                 }
 
-                // 5. Recent — this month, grouped by day; "See all" opens the full History browser.
+                // 6. Recent — this month, grouped by day; "See all" opens the full History browser.
                 HStack(alignment: .firstTextBaseline) {
                     GoldengoSerifSectionHeader("Recent")
                     Spacer()
@@ -132,6 +148,12 @@ public struct RecentExpensesView: View {
             // Popping back from History fires no tab/sheet transition, so reload Home here — an edit or
             // delete made in History to a current-month row must show on Home without a manual refresh.
             .onChange(of: showHistory) { _, shown in
+                if !shown { barHidden = false; Task { await model.load() } }
+            }
+            .navigationDestination(isPresented: $showSpending) { CategoryBreakdownView(model: spendingModel) }
+            // Popping back from the full breakdown may have changed a cap — reload so the card's rows
+            // and over-budget dot reflect it without a manual refresh.
+            .onChange(of: showSpending) { _, shown in
                 if !shown { barHidden = false; Task { await model.load() } }
             }
             .onAppear { selectableCurrencies = CurrencyCatalog.selectable(from: ExchangeRateCache().load() ?? SeedRates.table) }
@@ -304,6 +326,140 @@ public struct RecentExpensesView: View {
             }
         }
         .goldengoCard(padding: 22)
+    }
+
+    // MARK: - Spending card
+
+    /// "Spending" title + an over-budget dot when any category this month is over its cap. No
+    /// trailing button here (unlike Recent's header) — the whole card below is the single tap target,
+    /// so a second tappable control in the header would compete with it.
+    private var spendingHeaderRow: some View {
+        HStack(alignment: .firstTextBaseline, spacing: GoldengoTheme.Spacing.s) {
+            GoldengoSerifSectionHeader("Spending")
+            if model.hasOverBudgetCategory {
+                Circle()
+                    .fill(GoldengoTheme.danger)
+                    .frame(width: 7, height: 7)
+                    .accessibilityHidden(true)   // conveyed in the card's own accessibility label instead
+            }
+            Spacer()
+        }
+    }
+
+    /// Compact preview of the top 3 categories this month; taps through to the full breakdown.
+    /// Empty state: a quiet line, matching Recent's `emptyRecentCard` tone (no icon here — this is a
+    /// secondary card, not the primary empty state).
+    private var spendingCard: some View {
+        Button {
+            showSpending = true
+        } label: {
+            VStack(alignment: .leading, spacing: 0) {
+                if model.spendingCardRows.isEmpty {
+                    Text("No spending yet this month")
+                        .font(.system(size: 14))
+                        .foregroundStyle(GoldengoTheme.inkMuted)
+                        .padding(.vertical, GoldengoTheme.Spacing.xs)
+                } else {
+                    ForEach(Array(model.spendingCardRows.enumerated()), id: \.element.id) { index, row in
+                        if index > 0 {
+                            Divider().overlay(GoldengoTheme.hairline)
+                        }
+                        spendingCardRow(row)
+                    }
+                }
+                Divider().overlay(GoldengoTheme.hairline)
+                    .padding(.top, GoldengoTheme.Spacing.xs)
+                HStack(spacing: 2) {
+                    Spacer()
+                    Text("See all").font(.system(size: 13, weight: .medium))
+                    Image(systemName: "chevron.right").font(.system(size: 11, weight: .semibold))
+                }
+                .foregroundStyle(GoldengoTheme.accent)
+                .padding(.top, GoldengoTheme.Spacing.s)
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .goldengoCard()
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(spendingCardAccessibilityLabel)
+        .accessibilityHint("Double tap to see all categories")
+    }
+
+    /// One compact row: color dot + name + amount, and — for capped categories — the same thin
+    /// budget bar used on the full breakdown screen (green ok / gold near / terracotta over).
+    private func spendingCardRow(_ row: CategoryBreakdownRow) -> some View {
+        let amountText = Money(amount: row.spent, currency: model.spendingCardCurrency).amountText()
+        return VStack(alignment: .leading, spacing: row.budget != nil ? GoldengoTheme.Spacing.xs : 0) {
+            HStack(spacing: GoldengoTheme.Spacing.s) {
+                Circle()
+                    .fill(Color(hex: row.colorHex))
+                    .frame(width: 10, height: 10)
+                Text(row.name)
+                    .font(.system(size: 15, weight: .medium))
+                    .foregroundStyle(GoldengoTheme.inkPrimary)
+                    .lineLimit(1)
+                Spacer(minLength: GoldengoTheme.Spacing.s)
+                Text(amountText)
+                    .font(.system(size: 15, weight: .medium))
+                    .monospacedDigit()
+                    .foregroundStyle(GoldengoTheme.inkPrimary)
+            }
+            if let budget = row.budget {
+                spendingCardBudgetBar(spent: row.spent, budget: budget, level: row.level)
+                    .padding(.leading, 10 + GoldengoTheme.Spacing.s)   // align under the name, past the dot
+            }
+        }
+        .padding(.vertical, GoldengoTheme.Spacing.s)
+    }
+
+    /// The same thin progress bar as `CategoryBreakdownView.budgetBar`, without its trailing caption
+    /// (the compact card has no room for "over by …" / "… left" text alongside three rows).
+    private func spendingCardBudgetBar(spent: Decimal, budget: Decimal, level: BudgetLevel) -> some View {
+        let spentDouble = (spent as NSDecimalNumber).doubleValue
+        let budgetDouble = (budget as NSDecimalNumber).doubleValue
+        let fraction = budgetDouble > 0 ? min(1.0, spentDouble / budgetDouble) : 0
+        let tint = spendingBudgetLevelColor(level)
+        return GeometryReader { geo in
+            ZStack(alignment: .leading) {
+                RoundedRectangle(cornerRadius: 3, style: .continuous)
+                    .fill(Color.goldengoField)
+                RoundedRectangle(cornerRadius: 3, style: .continuous)
+                    .fill(tint)
+                    .frame(width: geo.size.width * fraction)
+                    .animation(reduceMotion ? nil : GoldengoMotion.standard, value: fraction)
+            }
+        }
+        .frame(height: 6)
+    }
+
+    private func spendingBudgetLevelColor(_ level: BudgetLevel) -> Color {
+        switch level {
+        case .ok: return GoldengoTheme.income
+        case .near: return GoldengoTheme.accent
+        case .over: return GoldengoTheme.danger
+        case .noBudget: return GoldengoTheme.inkMuted
+        }
+    }
+
+    /// "Spending, tap to see all categories" plus a per-row readout, so VoiceOver users get the same
+    /// information sighted users see without landing on individual un-tappable sub-elements.
+    private var spendingCardAccessibilityLabel: String {
+        guard !model.spendingCardRows.isEmpty else { return "Spending, no spending yet this month" }
+        let rows = model.spendingCardRows.map { row -> String in
+            let amount = Money(amount: row.spent, currency: model.spendingCardCurrency).formatted()
+            guard let budget = row.budget else { return "\(row.name), \(amount)" }
+            switch row.level {
+            case .over:
+                let over = Money(amount: row.spent - budget, currency: model.spendingCardCurrency).formatted()
+                return "\(row.name), \(amount), over by \(over)"
+            default:
+                let remaining = Money(amount: budget - row.spent, currency: model.spendingCardCurrency).formatted()
+                return "\(row.name), \(amount), \(remaining) left"
+            }
+        }.joined(separator: "; ")
+        let overBudgetNote = model.hasOverBudgetCategory ? ", over budget" : ""
+        return "Spending\(overBudgetNote), tap to see all categories: \(rows)"
     }
 
     // MARK: - Currency helpers
