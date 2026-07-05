@@ -43,4 +43,34 @@ final class CategoryBreakdownTests: XCTestCase {
         let b = try await s.categoryBreakdown(monthContaining: .now, displayCurrency: .all, rates: rates)
         XCTAssertEqual(b.rows.first(where: { $0.name == "Food" })?.level, .near)
     }
+
+    // MARK: - expenses(inCategoryNamed:monthContaining:)
+
+    func test_expensesInCategory_otherBucketsNilAndOtherNamed_excludesNamedCategory() async throws {
+        let s = try store()
+        _ = try await s.logManual(amount: 500, currency: .all, merchant: "Kiosk", categoryName: nil)
+        _ = try await s.logManual(amount: 300, currency: .all, merchant: "Corner shop", categoryName: "Other")
+        _ = try await s.logManual(amount: 200, currency: .all, merchant: "Diner", categoryName: "Food")
+
+        let other = try await s.expenses(inCategoryNamed: "Other", monthContaining: .now)
+        XCTAssertEqual(Set(other.map(\.merchantName)), Set(["Kiosk", "Corner shop"]))
+
+        let food = try await s.expenses(inCategoryNamed: "Food", monthContaining: .now)
+        XCTAssertEqual(food.map(\.merchantName), ["Diner"])
+    }
+
+    // MARK: - assignCategory(named:toExpenseWithKey:)
+
+    func test_assignCategory_movesExpenseFromOtherToNamedCategory() async throws {
+        let s = try store()
+        let key = try await s.logManual(amount: 400, currency: .all, merchant: "Kiosk", categoryName: nil)
+
+        try await s.assignCategory(named: "Cigarettes", toExpenseWithKey: key)
+
+        let cigs = try await s.expenses(inCategoryNamed: "Cigarettes", monthContaining: .now)
+        XCTAssertEqual(cigs.map(\.dedupeKey), [key])
+
+        let other = try await s.expenses(inCategoryNamed: "Other", monthContaining: .now)
+        XCTAssertTrue(other.isEmpty)
+    }
 }

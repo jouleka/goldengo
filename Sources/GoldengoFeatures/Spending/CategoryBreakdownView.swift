@@ -23,26 +23,48 @@ public struct CategoryBreakdownView: View {
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
+    /// The category row tapped for drill-in — pushes `CategoryDetailView`. Self-contained navigation
+    /// (this view owns its own `NavigationStack`, matching `RecentExpensesView`/`HistoryView`) since
+    /// this screen is entered fresh rather than living inside an existing stack.
+    @State private var selectedRow: CategoryBreakdownRow?
+
     public init(model: CategoryBreakdownModel) {
         self.model = model
     }
 
     public var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 0) {
-                title
-                monthStepper
-                    .padding(.top, GoldengoTheme.Spacing.l)
-                donut
-                rowsCard
-                    .padding(.top, GoldengoTheme.Spacing.l)
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
+                    title
+                    monthStepper
+                        .padding(.top, GoldengoTheme.Spacing.l)
+                    donut
+                    rowsCard
+                        .padding(.top, GoldengoTheme.Spacing.l)
+                }
+                .padding(.horizontal, GoldengoTheme.Spacing.m)
+                .padding(.top, 14)
+                .padding(.bottom, GoldengoTheme.Spacing.xl)
             }
-            .padding(.horizontal, GoldengoTheme.Spacing.m)
-            .padding(.top, 14)
-            .padding(.bottom, GoldengoTheme.Spacing.xl)
+            .background(Color.goldengoBackground.ignoresSafeArea())
+            .task { await model.load() }
+#if canImport(UIKit)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar(.hidden, for: .navigationBar)
+#endif
+            .navigationDestination(item: $selectedRow) { row in
+                if let detailModel = model.detailModel(for: row) {
+                    CategoryDetailView(model: detailModel, currency: CurrencyCode(model.breakdown?.currencyCode ?? model.currency.rawValue),
+                                       onFirstCapSet: { Task { await BudgetNotificationPermission.askOnce() } })
+                }
+            }
+            // Popping back from a detail push may have changed a cap or reassigned an "Other" row —
+            // reload so the row's bar/amount reflect it without a manual pull-to-refresh.
+            .onChange(of: selectedRow) { _, newValue in
+                if newValue == nil { Task { await model.load() } }
+            }
         }
-        .background(Color.goldengoBackground.ignoresSafeArea())
-        .task { await model.load() }
     }
 
     // MARK: - Donut
@@ -124,37 +146,44 @@ public struct CategoryBreakdownView: View {
         let amountText = Money(amount: row.spent, currency: currency).amountText()
         let percentText = "\(Int((row.share * 100).rounded()))%"
         let showsAffordance = row.name == "Other" || row.budget != nil
-        return VStack(alignment: .leading, spacing: showsAffordance ? GoldengoTheme.Spacing.xs : 0) {
-            HStack(spacing: GoldengoTheme.Spacing.s) {
-                Circle()
-                    .fill(Color(hex: row.colorHex))
-                    .frame(width: 10, height: 10)
-                Text(row.name)
-                    .font(.system(size: rowTextSize, weight: .medium))
-                    .foregroundStyle(GoldengoTheme.inkPrimary)
-                    .lineLimit(1)
-                Spacer(minLength: GoldengoTheme.Spacing.s)
-                Text(amountText)
-                    .font(.system(size: rowTextSize, weight: .medium))
-                    .monospacedDigit()
-                    .foregroundStyle(GoldengoTheme.inkPrimary)
-                Text(percentText)
-                    .font(.system(size: percentTextSize))
-                    .monospacedDigit()
-                    .foregroundStyle(GoldengoTheme.inkMuted)
-                    .frame(minWidth: 34, alignment: .trailing)
+        return Button {
+            selectedRow = row
+        } label: {
+            VStack(alignment: .leading, spacing: showsAffordance ? GoldengoTheme.Spacing.xs : 0) {
+                HStack(spacing: GoldengoTheme.Spacing.s) {
+                    Circle()
+                        .fill(Color(hex: row.colorHex))
+                        .frame(width: 10, height: 10)
+                    Text(row.name)
+                        .font(.system(size: rowTextSize, weight: .medium))
+                        .foregroundStyle(GoldengoTheme.inkPrimary)
+                        .lineLimit(1)
+                    Spacer(minLength: GoldengoTheme.Spacing.s)
+                    Text(amountText)
+                        .font(.system(size: rowTextSize, weight: .medium))
+                        .monospacedDigit()
+                        .foregroundStyle(GoldengoTheme.inkPrimary)
+                    Text(percentText)
+                        .font(.system(size: percentTextSize))
+                        .monospacedDigit()
+                        .foregroundStyle(GoldengoTheme.inkMuted)
+                        .frame(minWidth: 34, alignment: .trailing)
+                }
+                if showsAffordance {
+                    budgetAffordance(for: row, currency: currency)
+                        .padding(.leading, 10 + GoldengoTheme.Spacing.s)   // align under the name, past the dot
+                }
             }
-            if showsAffordance {
-                budgetAffordance(for: row, currency: currency)
-                    .padding(.leading, 10 + GoldengoTheme.Spacing.s)   // align under the name, past the dot
-            }
+            .padding(.vertical, GoldengoTheme.Spacing.s + 2)
+            .contentShape(Rectangle())
         }
-        .padding(.vertical, GoldengoTheme.Spacing.s + 2)
+        .buttonStyle(.plain)
         .accessibilityElement(children: .combine)
         // Spoken form includes the currency (VoiceOver reads common ISO codes/symbols by name, e.g.
         // "ALL" / "€"), matching the one existing amount-in-a-label precedent (RecentExpensesView's
         // dueRow), rather than the plain-magnitude `amountText()` used for the visible row text.
         .accessibilityLabel(accessibilityLabel(for: row, currency: currency, percentText: percentText))
+        .accessibilityHint("Double tap to see this category's expenses")
     }
 
     // MARK: - Budget affordance (progress bar / caption / "Other" categorize prompt)

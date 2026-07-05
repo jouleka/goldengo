@@ -56,6 +56,13 @@ public final class CategoryBreakdownModel {
         Calendar.current.isDate(monthAnchor, equalTo: .now, toGranularity: .month)
     }
 
+    /// Builds the detail model for a tapped category row, carrying the same store/month/currency.
+    /// Nil in the preview instance (no store to back it) — the view simply doesn't push in that case.
+    public func detailModel(for row: CategoryBreakdownRow) -> CategoryDetailModel? {
+        guard let store else { return nil }
+        return CategoryDetailModel(store: store, categoryName: row.name, monthAnchor: monthAnchor, cap: row.budget)
+    }
+
     private static let monthTitleFormatter: DateFormatter = {
         let f = DateFormatter()
         f.setLocalizedDateFormatFromTemplate("MMMM yyyy")

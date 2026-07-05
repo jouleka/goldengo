@@ -32,6 +32,20 @@ public struct ExpenseSnapshot: Sendable, Equatable, Identifiable {
     /// The row's primary label: lead with the most specific thing the user gave — the free-text note
     /// ("what"), then the merchant ("who"), then the category, then a generic fallback.
     public var displayTitle: String { note ?? merchantName ?? categoryName ?? "Expense" }
+
+    // Explicit public init: the auto-synthesized memberwise init is only `internal`, which blocks
+    // constructing sample/preview snapshots from another module (e.g. GoldengoFeatures's DEBUG
+    // preview) — same reuse rule as CategoryBreakdownRow/CategoryBreakdown in this feature.
+    public init(dedupeKey: String, amount: Decimal, currencyCode: String, source: ExpenseSource,
+                categoryName: String? = nil, date: Date, merchantName: String? = nil, note: String? = nil,
+                kind: TransactionKind, subscriptionName: String? = nil, fundedBy: String? = nil,
+                fundedByColorIndex: Int? = nil, fundedBySourceID: String? = nil) {
+        self.dedupeKey = dedupeKey; self.amount = amount; self.currencyCode = currencyCode
+        self.source = source; self.categoryName = categoryName; self.date = date
+        self.merchantName = merchantName; self.note = note; self.kind = kind
+        self.subscriptionName = subscriptionName; self.fundedBy = fundedBy
+        self.fundedByColorIndex = fundedByColorIndex; self.fundedBySourceID = fundedBySourceID
+    }
 }
 
 @ModelActor

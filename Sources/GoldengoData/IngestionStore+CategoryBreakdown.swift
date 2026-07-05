@@ -2,7 +2,7 @@ import Foundation
 import SwiftData
 import GoldengoCore
 
-public struct CategoryBreakdownRow: Sendable, Equatable, Identifiable {
+public struct CategoryBreakdownRow: Sendable, Hashable, Identifiable {
     public var name: String
     public var icon: String
     public var colorHex: String
@@ -159,5 +159,43 @@ extension IngestionStore {
         }
         if mutated { try modelContext.save() }
         return alerts
+    }
+}
+
+extension IngestionStore {
+    /// This category's expenses for the given month, date-desc — backs the category detail screen.
+    /// Date-only `#Predicate` (never `Decimal`); kind/category/archived filtered in memory. For
+    /// `"Other"` this buckets BOTH nil-category and literally-"Other"-named records (mirrors
+    /// `categoryBreakdown`'s `category?.name ?? "Other"` grouping), so the detail list matches what
+    /// the breakdown row actually summed.
+    public func expenses(inCategoryNamed name: String, monthContaining date: Date) throws -> [ExpenseSnapshot] {
+        let cal = Calendar.current
+        let monthStart = cal.date(from: cal.dateComponents([.year, .month], from: date)) ?? date
+        let monthEnd = cal.date(byAdding: .month, value: 1, to: monthStart) ?? date
+
+        var fd = FetchDescriptor<ExpenseRecord>(
+            predicate: #Predicate { $0.isArchived == false && $0.date >= monthStart && $0.date < monthEnd },
+            sortBy: [SortDescriptor(\.date, order: .reverse)])
+        fd.relationshipKeyPathsForPrefetching = [\.category]
+        let records = try modelContext.fetch(fd)
+
+        let expenseRaw = TransactionKind.expense.rawValue
+        let matches: (ExpenseRecord) -> Bool = name == "Other"
+            ? { $0.category == nil || $0.category?.name == "Other" }
+            : { $0.category?.name == name }
+
+        return records
+            .filter { $0.kindRaw == expenseRaw && matches($0) }
+            .map { makeSnapshot($0) }
+    }
+
+    /// Assigns (or creates, case-insensitively) a category to a single expense by its `dedupeKey` —
+    /// how a row leaves "Other" from the detail screen's categorize affordance.
+    public func assignCategory(named categoryName: String, toExpenseWithKey dedupeKey: String) throws {
+        var fd = FetchDescriptor<ExpenseRecord>(predicate: #Predicate { $0.dedupeKey == dedupeKey })
+        fd.fetchLimit = 1
+        guard let record = try modelContext.fetch(fd).first else { return }
+        record.category = try findOrCreateCategory(named: categoryName)
+        try modelContext.save()
     }
 }
