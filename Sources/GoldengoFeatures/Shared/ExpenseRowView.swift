@@ -9,6 +9,7 @@ import GoldengoDesignSystem
 /// Reusable row layout matching home.jsx's Row: tile + title/sub column + right content.
 /// gap=14, padding 9×4, title 15.5/medium ink, sub 12.5 ink-muted.
 @ViewBuilder
+@MainActor
 func homeRow(
     icon: String,
     title: String,
@@ -56,13 +57,14 @@ func homeRow(
                 }
             }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         Spacer(minLength: 0)
         if accentRight {
             Image(systemName: "plus.circle")
                 .font(.system(size: 24))
                 .foregroundStyle(GoldengoTheme.accent)
         } else if let rv = rightContent {
-            rv
+            rv.fixedSize(horizontal: true, vertical: false)
         }
     }
     .padding(.vertical, 9)
@@ -75,6 +77,7 @@ func homeRow(
 /// that rotates to signal fold state on the right. Shared by Home's Recent list and the History
 /// browser so the two read identically. Wrap it in a Button (toggling collapse) at each call site.
 @ViewBuilder
+@MainActor
 func collapsibleGroupHeaderLabel(title: String, count: Int, collapsed: Bool) -> some View {
     HStack(spacing: 7) {
         Text(title)
@@ -96,11 +99,14 @@ func collapsibleGroupHeaderLabel(title: String, count: Int, collapsed: Bool) -> 
 
 /// A recent/history expense row: category icon, title, category (or "→ wallet"), and the signed,
 /// kind-coloured amount on the right.
+@MainActor
 func expenseHomeRow(_ r: ExpenseSnapshot) -> some View {
     let amountStr = Money(amount: r.amount, currency: CurrencyCode(r.currencyCode)).formatted()
     let amountView: AnyView
     switch r.kind {
     case .income:
+        amountView = AnyView(GoldengoAmountText("+" + amountStr, role: .row, color: GoldengoTheme.income))
+    case .refund:
         amountView = AnyView(GoldengoAmountText("+" + amountStr, role: .row, color: GoldengoTheme.income))
     // Muted like transfers: money that MOVED, not money spent or earned.
     case .transfer, .lent:
@@ -113,17 +119,23 @@ func expenseHomeRow(_ r: ExpenseSnapshot) -> some View {
 
     let subText: String
     switch r.kind {
+    case .refund:
+        let category = r.categoryName ?? "Other"
+        subText = "refund · \(category)"
     case .transfer:  subText = "→ wallet"
     case .lent:      subText = "lent · owed to you"
     case .repayment: subText = "paid back"
-    default:         subText = r.categoryName ?? "Other"
+    default:
+        let category = r.splits.isEmpty ? (r.categoryName ?? "Other") : "\(r.splits.count) categories"
+        subText = [category, r.contextName].compactMap { $0 }.joined(separator: " · ")
     }
 
     let icon: String
     switch r.kind {
+    case .refund:    icon = "arrow.uturn.left.circle.fill"
     case .lent:      icon = "person"
     case .repayment: icon = "arrow.uturn.left"
-    default:         icon = GoldengoCategoryIcon.symbol(for: r.categoryName)
+    default:         icon = r.splits.isEmpty ? GoldengoCategoryIcon.symbol(for: r.categoryName) : "rectangle.split.2x1"
     }
 
     return homeRow(

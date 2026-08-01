@@ -17,6 +17,10 @@ public final class HistoryModel {
     public private(set) var snapshot: HistorySnapshot?
     /// True when the last load threw — the view surfaces it rather than showing a misleading empty period.
     public private(set) var loadFailed = false
+    public var searchText = ""
+    public var searchFilters = TransactionSearchCriteria()
+    public private(set) var searchSnapshot: TransactionSearchSnapshot?
+    public private(set) var searchFailed = false
 
     public init(reader: any HistoryReading, currency: CurrencyCode = .all, now: Date = .now) {
         self.reader = reader; self.currency = currency; self.anchor = now
@@ -67,12 +71,53 @@ public final class HistoryModel {
     public var rows: [ExpenseSnapshot] { snapshot?.rows ?? [] }
     public var totalSpentText: String { Money(amount: snapshot?.totalSpent ?? 0, currency: currency).formatted() }
     public var expenseCount: Int { snapshot?.expenseCount ?? 0 }
+    public var isSearchMode: Bool {
+        !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || searchFilters.hasFilters
+    }
+    public var searchRows: [ExpenseSnapshot] { searchSnapshot?.rows ?? [] }
+    public var searchFacets: TransactionSearchFacets {
+        searchSnapshot?.facets ?? TransactionSearchFacets(categories: [], contexts: [], fundingNames: [])
+    }
+    public var activeFilterCount: Int {
+        var count = searchFilters.scope == .all ? 0 : 1
+        count += searchFilters.categoryName == nil ? 0 : 1
+        count += searchFilters.contextName == nil ? 0 : 1
+        count += searchFilters.fundingName == nil ? 0 : 1
+        count += (searchFilters.startDate == nil && searchFilters.endDate == nil) ? 0 : 1
+        count += (searchFilters.minimumAmount == nil && searchFilters.maximumAmount == nil) ? 0 : 1
+        return count
+    }
 
     /// Day-bucketed for day/week/month; month-bucketed for year — so a Year scrolls by month, not by
     /// hundreds of days.
     public var groups: [DayGroup] {
         scale == .year ? RecentExpensesModel.monthGroups(from: rows, now: .now)
                        : RecentExpensesModel.dayGroups(from: rows, now: .now)
+    }
+
+    public var searchGroups: [DayGroup] { RecentExpensesModel.dayGroups(from: searchRows, now: .now) }
+
+    public func search() async {
+        guard isSearchMode else { searchSnapshot = nil; searchFailed = false; return }
+        guard let searchable = reader as? any TransactionSearching else {
+            searchSnapshot = TransactionSearchSnapshot(rows: [], facets: searchFacets)
+            return
+        }
+        do {
+            var criteria = searchFilters; criteria.query = searchText
+            searchSnapshot = try await searchable.searchTransactions(criteria)
+            searchFailed = false
+        } catch { searchFailed = true }
+    }
+
+    public func prepareSearchFacets() async {
+        guard searchSnapshot == nil, let searchable = reader as? any TransactionSearching else { return }
+        do { searchSnapshot = try await searchable.searchTransactions(TransactionSearchCriteria()) }
+        catch { searchFailed = true }
+    }
+
+    public func clearSearch() {
+        searchText = ""; searchFilters = TransactionSearchCriteria(); searchSnapshot = nil; searchFailed = false
     }
 
     // MARK: - Mutations (mirror RecentExpensesModel so shared rows behave identically)
@@ -87,10 +132,16 @@ public final class HistoryModel {
     }
     public func update(_ snapshot: ExpenseSnapshot, amount: Decimal, currency: CurrencyCode? = nil,
                        merchant: String?, note: String? = nil, categoryName: String?, date: Date,
-                       fundedBySourceID: String?) async {
+                       fundedBySourceID: String?, contextName: String? = nil,
+                       splits: [TransactionSplit] = [], kind: TransactionKind? = nil) async {
         try? await reader.updateExpense(dedupeKey: snapshot.dedupeKey, amount: amount, currency: currency,
                                         merchant: merchant, note: note, categoryName: categoryName, date: date,
                                         fundedBySourceID: fundedBySourceID)
+        try? await reader.updateTransactionKind(dedupeKey: snapshot.dedupeKey,
+                                                kind: kind ?? snapshot.kind)
+        try? await reader.updateExpensePlanning(dedupeKey: snapshot.dedupeKey,
+                                                contextName: contextName,
+                                                splits: (kind ?? snapshot.kind) == .expense ? splits : [])
         await load()
     }
 }

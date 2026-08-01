@@ -25,6 +25,9 @@ public struct ExpenseSnapshot: Sendable, Equatable, Identifiable {
     public var fundedByColorIndex: Int? = nil
     /// The user-chosen funding source pin (GOL-89); nil = automatic FIFO. Preselects the edit sheet.
     public var fundedBySourceID: String? = nil
+    public var contextName: String? = nil
+    public var splits: [TransactionSplit] = []
+    public var investmentAccountID: String? = nil
 
     /// Stable identity for `.sheet(item:)` / `ForEach` — the dedupeKey uniquely identifies the row.
     public var id: String { dedupeKey }
@@ -45,6 +48,7 @@ public struct ExpenseSnapshot: Sendable, Equatable, Identifiable {
         self.merchantName = merchantName; self.note = note; self.kind = kind
         self.subscriptionName = subscriptionName; self.fundedBy = fundedBy
         self.fundedByColorIndex = fundedByColorIndex; self.fundedBySourceID = fundedBySourceID
+        self.contextName = nil; self.splits = []; self.investmentAccountID = nil
     }
 }
 
@@ -133,6 +137,7 @@ public actor IngestionStore {
                                 kind: tx.kind, source: source, dedupeKey: key)
         rec.category = try defaultCategory(forMerchant: tx.rawMerchant)
         modelContext.insert(rec)
+        try linkRefundToPurchase(rec)
         try linkToConfirmedSubscription(rec)
         try modelContext.save()
         return .inserted
@@ -165,8 +170,38 @@ public actor IngestionStore {
         if existing.category == nil {
             existing.category = try defaultCategory(forMerchant: tx.rawMerchant)
         }
+        try linkRefundToPurchase(existing)
         try linkToConfirmedSubscription(existing)
         try modelContext.save()
+    }
+
+    /// Best-effort link to the most recent matching purchase. This copies reporting/funding context
+    /// but never changes the refund amount or fabricates a match when the merchant is unavailable.
+    private func linkRefundToPurchase(_ refund: ExpenseRecord) throws {
+        guard refund.kind == .refund else { return }
+        let normalized = MerchantNormalizer.normalize(refund.merchantName)
+        guard !normalized.isEmpty else { return }
+        let currency = refund.currencyCode
+        let expenseRaw = TransactionKind.expense.rawValue
+        let refundDate = refund.date
+        let earliest = Calendar.current.date(byAdding: .month, value: -12, to: refundDate) ?? .distantPast
+        var fd = FetchDescriptor<ExpenseRecord>(predicate: #Predicate {
+            $0.isArchived == false && $0.kindRaw == expenseRaw && $0.currencyCode == currency
+                && $0.date <= refundDate && $0.date >= earliest
+        }, sortBy: [SortDescriptor(\.date, order: .reverse)])
+        fd.relationshipKeyPathsForPrefetching = [\.category]
+        let candidates = try modelContext.fetch(fd).filter {
+            MerchantNormalizer.normalize($0.merchantName) == normalized
+        }
+        guard let purchase = candidates.first(where: { $0.amount == refund.amount }) ?? candidates.first
+        else { return }
+        refund.refundedExpenseKey = purchase.dedupeKey
+        if refund.category == nil { refund.category = purchase.category }
+        if refund.fundedBySourceID == nil {
+            refund.fundedBySourceID = purchase.fundedBySourceID
+                ?? (purchase.source == .manual ? FundingPin.wallet : nil)
+        }
+        if refund.contextName == nil { refund.contextName = purchase.contextName }
     }
 
     /// Find a recent `.automatic` capture that is high-confidence the SAME purchase as an imported
@@ -255,16 +290,19 @@ public actor IngestionStore {
         }
     }
 
-    /// Sum of today's expense-kind amounts, each converted into `displayCurrency` via `rates`.
+    /// Sum of today's purchases net of refunds, converted into `displayCurrency` via `rates`.
     /// (`.all` is the ISO 4217 code for the Albanian lek — the user's primary currency.)
     public func todayTotal(in displayCurrency: CurrencyCode = .all, rates: RateTable) throws -> Decimal {
         let start = Calendar.current.startOfDay(for: .now)
         let expenseRaw = TransactionKind.expense.rawValue
-        let fd = FetchDescriptor<ExpenseRecord>(predicate: #Predicate {
-            $0.isArchived == false && $0.kindRaw == expenseRaw && $0.date >= start
+        let refundRaw = TransactionKind.refund.rawValue
+        var fd = FetchDescriptor<ExpenseRecord>(predicate: #Predicate {
+            $0.isArchived == false && ($0.kindRaw == expenseRaw || $0.kindRaw == refundRaw)
+                && $0.date >= start
         })
-        let monies = try modelContext.fetch(fd).map {
-            Money(amount: $0.amount, currency: CurrencyCode($0.currencyCode))
+        fd.relationshipKeyPathsForPrefetching = [\.category, \.splits]
+        let monies = try modelContext.fetch(fd).filter(\.affectsSpendingTotals).map {
+            Money(amount: $0.spendingEffect, currency: CurrencyCode($0.currencyCode))
         }
         return CurrencyConverter(table: rates).sum(monies, to: displayCurrency)
     }
@@ -294,6 +332,10 @@ public actor IngestionStore {
                                    date: r.date, merchantName: r.merchantName, note: r.note, kind: r.kind,
                                    subscriptionName: r.subscription?.displayName)
         snap.fundedBySourceID = r.fundedBySourceID
+        snap.contextName = r.contextName
+        snap.splits = (r.splits ?? []).map { TransactionSplit(id: $0.id, amount: $0.amount,
+                                                               categoryName: $0.categoryName) }
+        snap.investmentAccountID = r.investmentAccountID
         return snap
     }
 
@@ -314,10 +356,13 @@ public actor IngestionStore {
     @discardableResult
     public func logManual(amount: Decimal, currency: CurrencyCode,
                           merchant: String?, note: String? = nil, categoryName: String?,
-                          date: Date = .now, fundedBySourceID: String? = nil) throws -> String {
+                          date: Date = .now, fundedBySourceID: String? = nil,
+                          contextName: String? = nil, splits: [TransactionSplit] = [],
+                          investmentAccountID: String? = nil) throws -> String {
         try logEntry(amount: amount, currency: currency, merchant: merchant, note: note,
                      categoryName: categoryName, source: .manual, keyPrefix: "manual", date: date,
-                     fundedBySourceID: fundedBySourceID)
+                     fundedBySourceID: fundedBySourceID, contextName: contextName,
+                     splits: splits, investmentAccountID: investmentAccountID)
     }
 
     /// Logs a hands-free auto-captured payment (e.g. the Apple Pay Transaction automation) or a
@@ -339,19 +384,35 @@ public actor IngestionStore {
     @discardableResult
     func logEntry(amount: Decimal, currency: CurrencyCode, merchant: String?, note: String?,
                   categoryName: String?, source: ExpenseSource, keyPrefix: String,
-                  date: Date = .now, fundedBySourceID: String? = nil) throws -> String {
+                  date: Date = .now, fundedBySourceID: String? = nil,
+                  contextName: String? = nil, splits: [TransactionSplit] = [],
+                  investmentAccountID: String? = nil) throws -> String {
         let key = "\(keyPrefix):\(UUID().uuidString)"
         let cleanNote = note?.trimmingCharacters(in: .whitespacesAndNewlines)
         let rec = ExpenseRecord(amount: amount, currencyCode: currency.rawValue, date: date,
                                 merchantName: merchant, note: (cleanNote?.isEmpty ?? true) ? nil : cleanNote,
                                 kind: .expense, source: source, dedupeKey: key)
         rec.fundedBySourceID = fundedBySourceID   // GOL-90: pin the chosen source at add time (nil = automatic FIFO)
+        rec.contextName = contextName?.trimmingCharacters(in: .whitespacesAndNewlines)
+        rec.investmentAccountID = investmentAccountID
         if let categoryName, !categoryName.isEmpty {
             rec.category = try findOrCreateCategory(named: categoryName)
         } else {
             // No explicit category and no remembered one for this merchant → a real "Other" category
             // (so it's counted, shows in Top Categories, and is re-assignable) rather than nil.
             rec.category = try defaultCategory(forMerchant: merchant) ?? findOrCreateCategory(named: "Other")
+        }
+        if !splits.isEmpty {
+            let splitTotal = splits.reduce(Decimal.zero) { $0 + $1.amount }
+            guard splitTotal == amount, splits.allSatisfy({ $0.amount > 0 && !$0.categoryName.isEmpty }) else {
+                throw PlanningValidationError.invalidSplits
+            }
+            for part in splits {
+                let record = ExpenseSplitRecord(id: part.id, amount: part.amount,
+                                                categoryName: part.categoryName)
+                record.expense = rec
+                modelContext.insert(record)
+            }
         }
         modelContext.insert(rec)
         try linkToConfirmedSubscription(rec)
@@ -362,12 +423,17 @@ public actor IngestionStore {
 
     func findOrCreateCategory(named rawName: String) throws -> CategoryRecord {
         let name = rawName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let classification = SpendingCategoryCatalog.classify(name)
         // Case-insensitive reuse so free-text from Siri/Shortcuts doesn't spawn "Coffee"/"coffee".
         let all = try modelContext.fetch(FetchDescriptor<CategoryRecord>())
         if let existing = all.first(where: { $0.name.caseInsensitiveCompare(name) == .orderedSame }) {
+            // Repair the old all-blue/all-circle defaults opportunistically without overwriting a
+            // future user-selected presentation.
+            if existing.icon == "circle" { existing.icon = classification.icon }
+            if existing.colorHex == "#0A84FF" { existing.colorHex = classification.colorHex }
             return existing
         }
-        let c = CategoryRecord(name: name)
+        let c = CategoryRecord(name: name, icon: classification.icon, colorHex: classification.colorHex)
         modelContext.insert(c)
         return c
     }

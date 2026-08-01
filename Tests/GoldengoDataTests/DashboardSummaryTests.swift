@@ -47,6 +47,28 @@ final class DashboardSummaryTests: XCTestCase {
         XCTAssertEqual(s.monthTotal, 1500)
     }
 
+    func test_refundReducesSpend_andNeverCountsAsIncome() async throws {
+        let store = try makeStore()
+        let purchaseDate = day(2026, 6, 2)
+        let refundDate = day(2026, 6, 5)
+        _ = try await store.logManual(amount: 1_000, currency: .all, merchant: "Book shop",
+                                      categoryName: "Shopping", date: purchaseDate)
+        let credit = NormalizedTransaction(externalID: "credit", amount: 400, currency: .all,
+                                           date: refundDate, rawMerchant: "Book shop",
+                                           kind: .income, accountRef: "card")
+        _ = try await store.ingest(credit, source: .imported)
+        try await store.updateTransactionKind(dedupeKey: "ext:credit", kind: .refund)
+
+        let summary = try await store.dashboardSummary(in: .all, rates: rates,
+                                                       now: day(2026, 6, 15))
+        XCTAssertEqual(summary.monthTotal, 600)
+        XCTAssertEqual(summary.topCategories.first(where: { $0.name == "Shopping" })?.total, 600)
+        let refund = try await store.snapshot(dedupeKey: "ext:credit")
+        XCTAssertEqual(refund?.kind, .refund)
+        XCTAssertEqual(refund?.categoryName, "Shopping", "matching refund inherits purchase category")
+        XCTAssertEqual(refund?.fundedBySourceID, FundingPin.wallet)
+    }
+
     func test_topCategories_sortedDescending() async throws {
         let store = try makeStore()
         let now = day(2026, 6, 15)
@@ -58,6 +80,19 @@ final class DashboardSummaryTests: XCTestCase {
         // Sorted by total desc.
         XCTAssertEqual(s.topCategories, s.topCategories.sorted { $0.total >= $1.total })
         XCTAssertEqual(s.topCategories.reduce(Decimal(0)) { $0 + $1.total }, 1500)
+    }
+
+    func test_investmentDrainsMoneyButIsExcludedFromSpentSummary() async throws {
+        let store = try makeStore()
+        let now = day(2026, 6, 15)
+        try await store.logManual(amount: 500, currency: .all, merchant: nil,
+                                  categoryName: "Groceries", date: day(2026, 6, 10))
+        try await store.logManual(amount: 2_000, currency: .all, merchant: nil,
+                                  categoryName: "Stocks", date: day(2026, 6, 11))
+
+        let summary = try await store.dashboardSummary(rates: rates, now: now)
+        XCTAssertEqual(summary.monthTotal, 500)
+        XCTAssertFalse(summary.topCategories.contains { $0.name == "Stocks" })
     }
 
     func test_confirmedSubscriptionsMonthlyEquivalent() async throws {

@@ -7,7 +7,8 @@ final class EnumsTests: XCTestCase {
         // Raw values are PERSISTED in kindRaw — this pins them so a rename can't corrupt data.
         XCTAssertEqual(TransactionKind.lent.rawValue, "lent")
         XCTAssertEqual(TransactionKind.repayment.rawValue, "repayment")
-        XCTAssertEqual(TransactionKind.allCases.count, 5)
+        XCTAssertEqual(TransactionKind.refund.rawValue, "refund")
+        XCTAssertEqual(TransactionKind.allCases.count, 6)
     }
 
     func test_expenseSource_rawValues() {

@@ -15,6 +15,11 @@ public final class QuickAddModel {
     public var selectedCategory: String?
     public var merchant: String = ""
     public var note: String = ""
+    /// Optional second dimension: what was bought stays in `selectedCategory`; this says for whom
+    /// or why (Business, Household, a trip, a client project, and so on).
+    public var contextName: String?
+    /// Reporting allocations for a mixed purchase. The parent expense remains the wallet truth.
+    public var splits: [TransactionSplit] = []
     /// GOL-90: the source the user chose to pay from for THIS expense (nil = automatic FIFO).
     public var selectedSourceID: String?
     /// Named sources + remaining balances for the "Paid from" picker; empty hides the control.
@@ -26,7 +31,7 @@ public final class QuickAddModel {
     public var date: Date = .now
 
     /// Default chips until real usage exists; merged with most-recently-used on load.
-    public static let defaultCategories = ["Groceries", "Food", "Transport", "Coffee", "Bills", "Shopping", "Other"]
+    public static let defaultCategories = SpendingCategoryCatalog.quickChoices
     /// Most-used categories surfaced as one-tap chips — the user's own (MRU) first,
     /// topped up with the defaults, one chip per name, capped to stay scannable.
     public private(set) var quickCategories = QuickAddModel.defaultCategories
@@ -68,7 +73,15 @@ public final class QuickAddModel {
     }
 
     public var amountDecimal: Decimal { Decimal(string: amountString) ?? 0 }
-    public var canSave: Bool { amountDecimal > 0 }
+    public var canSave: Bool {
+        amountDecimal > 0 && (splits.isEmpty || splitsAreValid)
+    }
+
+    public var splitsAreValid: Bool {
+        !splits.isEmpty
+            && splits.allSatisfy { $0.amount > 0 && !$0.categoryName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+            && splits.reduce(Decimal.zero) { $0 + $1.amount } == amountDecimal
+    }
 
     /// Whether the keypad should offer a decimal point — only for currencies with a minor unit.
     /// For currencies like lek (no minor unit) the "." key does nothing, so it's hidden.
@@ -109,7 +122,9 @@ public final class QuickAddModel {
                                       note: note.isEmpty ? nil : note,
                                       categoryName: selectedCategory,
                                       date: date,
-                                      fundedBySourceID: selectedSourceID)
+                                      fundedBySourceID: selectedSourceID,
+                                      contextName: contextName,
+                                      splits: splits)
             savedCount += 1
             reset()
             await loadSources()      // refresh remaining balances after the spend drew from a source
@@ -129,5 +144,7 @@ public final class QuickAddModel {
         date = .now
         selectedCategory = nil
         selectedSourceID = nil   // back to Automatic, so one tagged expense never mis-attributes the next
+        contextName = nil
+        splits = []
     }
 }

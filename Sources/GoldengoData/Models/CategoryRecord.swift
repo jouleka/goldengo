@@ -1,13 +1,17 @@
 import Foundation
 import SwiftData
+import GoldengoCore
 
 @Model
 public final class CategoryRecord {
     public var name: String = ""
     public var icon: String = "circle"
     public var colorHex: String = "#0A84FF"
-    /// Recurring monthly cap in the user's display currency. nil = no cap.
+    /// Recurring monthly cap in `monthlyBudgetCurrencyCode`. nil = no cap.
     public var monthlyBudget: Decimal?
+    /// Currency the cap was entered in. Optional only for migration of pre-currency cap records;
+    /// the first breakdown read binds a legacy cap to the then-current display currency.
+    public var monthlyBudgetCurrencyCode: String?
     /// Notify-once dedupe: the highest level we've PUSHED for `budgetAlertMonth`.
     public var budgetAlertLevelRaw: String = "none"
     /// The start-of-month `budgetAlertLevelRaw` applies to. nil = never pushed.
@@ -20,6 +24,9 @@ public final class CategoryRecord {
     public var merchants: [MerchantRecord]? = []
 
     public init(name: String = "", icon: String = "circle", colorHex: String = "#0A84FF") {
-        self.name = name; self.icon = icon; self.colorHex = colorHex
+        let classification = SpendingCategoryCatalog.classify(name)
+        self.name = name
+        self.icon = icon == "circle" ? classification.icon : icon
+        self.colorHex = colorHex == "#0A84FF" ? classification.colorHex : colorHex
     }
 }

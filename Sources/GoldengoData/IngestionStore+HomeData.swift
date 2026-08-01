@@ -40,7 +40,7 @@ extension IngestionStore {
         var fd = FetchDescriptor<ExpenseRecord>(
             predicate: #Predicate { $0.isArchived == false },
             sortBy: [SortDescriptor(\.date, order: .reverse)])
-        fd.relationshipKeyPathsForPrefetching = [\.category, \.subscription, \.provenanceSource]
+        fd.relationshipKeyPathsForPrefetching = [\.category, \.subscription, \.provenanceSource, \.splits]
         let all = try modelContext.fetch(fd)
         let sources = try modelContext.fetch(FetchDescriptor<SourceRecord>(
             predicate: #Predicate { $0.isArchived == false }))
@@ -57,7 +57,7 @@ extension IngestionStore {
         let monthStart = cal.date(from: cal.dateComponents([.year, .month], from: now)) ?? cal.startOfDay(for: now)
         let rows: [ExpenseSnapshot] = all.filter { $0.date >= monthStart }.map { r in
             var snap = makeSnapshot(r)
-            if r.kindRaw == expenseRaw {
+            if r.kindRaw == expenseRaw || r.kindRaw == TransactionKind.refund.rawValue {
                 // GOL-95 v2: cash-funded spends drain the wallet, not a source pool — chip
                 // says so directly (the FIFO tags only cover bank-funded rows now).
                 let cashFunded = r.fundedBySourceID == FundingPin.wallet
@@ -75,18 +75,18 @@ extension IngestionStore {
         // Today total (displayCurrency).
         let startOfToday = Calendar.current.startOfDay(for: now)
         let todayMonies = all
-            .filter { $0.kindRaw == expenseRaw && $0.date >= startOfToday }
-            .map { Money(amount: $0.amount, currency: CurrencyCode($0.currencyCode)) }
+            .filter { $0.affectsSpendingTotals && $0.date >= startOfToday }
+            .map { Money(amount: $0.spendingEffect, currency: CurrencyCode($0.currencyCode)) }
         let todayTotal = CurrencyConverter(table: rates).sum(todayMonies, to: displayCurrency)
 
         // Month summary (displayCurrency) from a month-filtered slice of the same array (reusing
         // the `monthStart` computed above for the Recent rows).
-        let monthRecords = all.filter { $0.kindRaw == expenseRaw && $0.date >= monthStart }
+        let monthRecords = all.filter { $0.affectsSpendingTotals && $0.date >= monthStart }
         let summary = try makeDashboardSummary(monthRecords: monthRecords, in: displayCurrency,
                                                rates: rates, topCategoryLimit: topCategoryLimit)
 
         // Ghosts — best-effort so a rhythm failure never blanks the dashboard (matches load()'s try?).
-        let ghosts = (try? rhythmGhosts(from: all.filter { $0.kindRaw == expenseRaw }, now: now)) ?? []
+        let ghosts = (try? rhythmGhosts(from: all.filter(\.countsAsSpending), now: now)) ?? []
 
         // Pending subscription dues (GOL-92) — same best-effort stance. Self-contained fetch:
         // its tombstone-aware coverage needs archived rows, which `all` deliberately excludes.

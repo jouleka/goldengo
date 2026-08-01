@@ -92,6 +92,7 @@ public struct RaiffeisenAlbaniaParser: BankStatementParser {
                                         exclusions: StatementProfile.raiffeisenAlbania.atmExclusionKeywords) {
                 kind = .transfer   // ATM withdrawal feeds the wallet (GOL-95)
             }
+            kind = RefundClassifier.classify(kind, description: merchant)
             out.append(NormalizedTransaction(
                 externalID: nil, amount: magnitude, currency: currency, date: date,
                 rawMerchant: merchant, kind: kind, accountRef: "statement"))

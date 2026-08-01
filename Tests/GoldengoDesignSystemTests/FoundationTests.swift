@@ -12,11 +12,11 @@ final class FoundationTests: XCTestCase {
         XCTAssertEqual(GoldengoTheme.Hex.fieldDark, "#2B261D")
         XCTAssertEqual(GoldengoTheme.Hex.inkPrimaryLight, "#2A2620")
         XCTAssertEqual(GoldengoTheme.Hex.inkPrimaryDark, "#F3ECDD")
-        XCTAssertEqual(GoldengoTheme.Hex.inkMutedLight, "#8C8373")
+        XCTAssertEqual(GoldengoTheme.Hex.inkMutedLight, "#71695C")
         XCTAssertEqual(GoldengoTheme.Hex.inkMutedDark, "#A89E89")
         XCTAssertEqual(GoldengoTheme.Hex.hairlineLight, "#E7DECE")
         XCTAssertEqual(GoldengoTheme.Hex.hairlineDark, "#322C22")
-        XCTAssertEqual(GoldengoTheme.Hex.accentLight, "#B68A2E")
+        XCTAssertEqual(GoldengoTheme.Hex.accentLight, "#8A671A")
         XCTAssertEqual(GoldengoTheme.Hex.accentDark, "#E0AE4A")
         XCTAssertEqual(GoldengoTheme.Hex.onAccent, "#2A2620")
     }
@@ -57,9 +57,9 @@ final class FoundationTests: XCTestCase {
 #if canImport(AppKit)
     func test_accent_resolvesLightThenDark() {
         let light = resolvedSRGB(GoldengoTheme.accent, dark: false)
-        XCTAssertEqual(light.r, 0.714, accuracy: 0.01)  // #B68A2E
-        XCTAssertEqual(light.g, 0.541, accuracy: 0.01)
-        XCTAssertEqual(light.b, 0.180, accuracy: 0.01)
+        XCTAssertEqual(light.r, 0.541, accuracy: 0.01)  // #8A671A
+        XCTAssertEqual(light.g, 0.404, accuracy: 0.01)
+        XCTAssertEqual(light.b, 0.102, accuracy: 0.01)
         let dark = resolvedSRGB(GoldengoTheme.accent, dark: true)
         XCTAssertEqual(dark.r, 0.878, accuracy: 0.01)   // #E0AE4A
         XCTAssertEqual(dark.g, 0.682, accuracy: 0.01)

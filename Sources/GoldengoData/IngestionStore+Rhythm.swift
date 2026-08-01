@@ -16,8 +16,10 @@ extension IngestionStore {
     /// Today's pre-drafted "usuals": active daily patterns NOT yet logged today. Computed each call.
     public func rhythmGhosts(now: Date = .now) throws -> [RhythmGhost] {
         let expenseRaw = TransactionKind.expense.rawValue
-        let expenses = try modelContext.fetch(FetchDescriptor<ExpenseRecord>(
-            predicate: #Predicate { $0.isArchived == false && $0.kindRaw == expenseRaw }))
+        var fd = FetchDescriptor<ExpenseRecord>(
+            predicate: #Predicate { $0.isArchived == false && $0.kindRaw == expenseRaw })
+        fd.relationshipKeyPathsForPrefetching = [\.category]
+        let expenses = try modelContext.fetch(fd).filter(\.countsAsSpending)
         return try rhythmGhosts(from: expenses, now: now)
     }
 

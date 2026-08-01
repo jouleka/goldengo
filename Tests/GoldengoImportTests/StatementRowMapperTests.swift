@@ -21,6 +21,22 @@ final class StatementRowMapperTests: XCTestCase {
         XCTAssertEqual(tx.kind, .income)
         XCTAssertEqual(tx.amount, 2000)
     }
+    func test_explicitRefundCredit_isNotMisclassifiedAsIncome() throws {
+        let tx = try XCTUnwrap(StatementRowMapper.map(
+            row: ["01.05.2026", "2.000,00", "CARD PURCHASE REFUND", "tx-refund"],
+            using: mapping
+        ))
+        XCTAssertEqual(tx.kind, .refund)
+        XCTAssertEqual(tx.amount, 2000)
+    }
+
+    func test_ordinaryMerchantCredit_staysIncomeForUserReview() throws {
+        let tx = try XCTUnwrap(StatementRowMapper.map(
+            row: ["01.05.2026", "2.000,00", "SPAR TIRANA", "tx-credit"],
+            using: mapping
+        ))
+        XCTAssertEqual(tx.kind, .income)
+    }
     func test_returnsNil_forUnparseableDateOrAmount() {
         XCTAssertNil(StatementRowMapper.map(row: ["Date","Amount","Desc","ID"], using: mapping)) // header
         XCTAssertNil(StatementRowMapper.map(row: ["x","y","z","w"], using: mapping))

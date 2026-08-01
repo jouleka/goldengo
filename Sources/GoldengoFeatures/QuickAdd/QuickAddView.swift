@@ -7,9 +7,13 @@ import UIKit
 #endif
 
 public struct QuickAddView: View {
+    @Environment(\.dismiss) private var dismiss
     @State private var model: QuickAddModel
     @State private var showAdded = false
     @State private var showCurrencyPicker = false
+    @State private var showCategoryPicker = false
+    @State private var showSourcePicker = false
+    @State private var showDetailsSheet = false
     /// Selectable currencies, decoded once on appear (the currency Menu reads it in body).
     @State private var selectableCurrencies: [CurrencyCode] = []
 #if os(iOS)
@@ -18,19 +22,11 @@ public struct QuickAddView: View {
 #endif
     public init(model: QuickAddModel) { _model = State(initialValue: model) }
 
-    /// Which text field owns the soft keyboard (nil = none). One enum so a keypad tap can
-    /// dismiss whichever is open (tap-outside rule — never a keyboard Done toolbar).
-    private enum Field { case newCategory, merchant, note }
-    @FocusState private var focusedField: Field?
-    @State private var showDetails = false        // "Add details" → Where? / Note fields
-    @State private var newCategoryMode = false    // ＋New chip → inline category name field
-    @State private var newCategoryText = ""
-
     // gg-key height: matches quickadd.jsx `keyH` at density "regular" = 60
     private let keyHeight: CGFloat = 60
 
     private var keys: [String] {
-        ["1", "2", "3", "4", "5", "6", "7", "8", "9", model.allowsDecimal ? "." : "", "0", "⌫"]
+        ["1", "2", "3", "4", "5", "6", "7", "8", "9", model.allowsDecimal ? "." : "C", "0", "⌫"]
     }
 
     public var body: some View {
@@ -38,32 +34,15 @@ public struct QuickAddView: View {
         // The upper half scrolls if it must (scroll-off only when the rows outgrow the space —
         // details + category field open at once on a small screen); keypad and Add stay anchored.
         VStack(spacing: 0) {
+            sheetHeader
+
             ScrollView {
                 VStack(spacing: 0) {
                     amountBlock
-                        .padding(.top, 8)               // paddingTop: 8 on AmountBlock wrapper
+                        .padding(.top, 2)
 
-                    categoryChips
-                        .padding(.top, 22)              // marginTop: 22
-
-                    if newCategoryMode {
-                        newCategoryField
-                            .padding(.top, 10)
-                    }
-
-                    // Details toggle + date share one line (vertical budget is the whole game here).
-                    utilityRow
-                        .padding(.top, 14)
-
-                    if showDetails {
-                        detailsFields
-                            .padding(.top, 8)
-                    }
-
-                    if !model.sourceBalances.isEmpty {
-                        paidFromRow
-                            .padding(.top, 14)
-                    }
+                    transactionCard
+                        .padding(.top, 22)
                 }
             }
             .scrollBounceBehavior(.basedOnSize)   // feels static whenever everything fits
@@ -71,13 +50,8 @@ public struct QuickAddView: View {
             keypad
                 .padding(.top, 16)             // marginTop: 16
 
-#if os(iOS)
-            scanReceiptButton
-                .padding(.top, 10)             // marginTop: 10
-#endif
-
             addButton
-                .padding(.top, 8)              // marginTop: 8
+                .padding(.top, 12)
         }
         .padding(.top, 14)                      // outer container top: 14px
         .padding(.horizontal, GoldengoTheme.Spacing.m)   // app-wide 16pt content edge (matches the tabs)
@@ -96,6 +70,40 @@ public struct QuickAddView: View {
                     )
                 )
             }
+        }
+        .sheet(isPresented: $showCategoryPicker) {
+            SpendingCategoryPicker(selectedCategory: model.selectedCategory) { category in
+                withAnimation(.easeInOut(duration: 0.18)) {
+                    model.selectedCategory = category
+                }
+            }
+            .presentationDetents([.large])
+            .presentationDragIndicator(.visible)
+        }
+        .sheet(isPresented: $showSourcePicker) {
+            FundingSourcePicker(
+                sources: model.sourceBalances,
+                selectedSourceID: model.selectedSourceID
+            ) { sourceID in
+                withAnimation(.easeInOut(duration: 0.18)) {
+                    model.selectedSourceID = sourceID
+                }
+            }
+            .presentationDetents([.medium, .large])
+            .presentationDragIndicator(.visible)
+        }
+        .sheet(isPresented: $showDetailsSheet) {
+            ExpenseDetailsSheet(
+                merchant: $model.merchant,
+                note: $model.note,
+                date: $model.date,
+                contextName: $model.contextName,
+                splits: $model.splits,
+                total: model.amountDecimal,
+                currency: model.currency
+            )
+            .presentationDetents([.medium, .large])
+            .presentationDragIndicator(.visible)
         }
 #if os(iOS)
         .fullScreenCover(isPresented: $showScanner) {
@@ -147,27 +155,62 @@ public struct QuickAddView: View {
     //   serif "New expense" title at 19px/muted, then sym (30px/600/muted) + amount (hero, dynamic size)
 
     private var amountBlock: some View {
-        VStack(spacing: 0) {
-            Text("New expense")
-                .font(.custom("Georgia", size: 19).weight(.medium))   // gg-serif-title at 19px
-                .foregroundStyle(GoldengoTheme.inkMuted)
-                .padding(.bottom, 14)                                  // marginBottom: 14
-
-            HStack(alignment: .firstTextBaseline, spacing: 6) {
-                currencyMenu
-                heroAmount
-            }
-            .frame(maxWidth: .infinity, alignment: .center)
+        HStack(alignment: .firstTextBaseline, spacing: 10) {
+            heroAmount
+            currencyMenu
         }
+        .frame(maxWidth: .infinity, alignment: .center)
         .multilineTextAlignment(.center)
     }
 
-    // Dynamic size: base 50pt (JSX big=false), shrinks for strings longer than 7 chars
+    private var sheetHeader: some View {
+        ZStack {
+            Text("New expense")
+                .font(.custom("Georgia", size: 20).weight(.medium))
+                .foregroundStyle(GoldengoTheme.inkPrimary)
+
+            HStack {
+                headerLeadingAction
+                Spacer()
+                Button { dismiss() } label: {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 14, weight: .bold))
+                        .foregroundStyle(GoldengoTheme.inkPrimary)
+                        .frame(width: 36, height: 36)
+                        .background(Color.goldengoField)
+                        .clipShape(Circle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Close new expense")
+            }
+        }
+        .padding(.bottom, 8)
+    }
+
+    @ViewBuilder private var headerLeadingAction: some View {
+#if os(iOS)
+        if DocumentScannerView.isSupported {
+            Button { showScanner = true } label: {
+                Label("Scan", systemImage: "doc.viewfinder")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(GoldengoTheme.accent)
+                    .frame(minWidth: 64, minHeight: 36)
+            }
+            .buttonStyle(.plain)
+        } else {
+            Color.clear.frame(width: 64, height: 36)
+        }
+#else
+        Color.clear.frame(width: 64, height: 36)
+#endif
+    }
+
+    // The amount is the only hero on the screen; everything else reads as supporting metadata.
     private var heroFontSize: CGFloat {
-        let base: CGFloat = 50
+        let base: CGFloat = 58
         let len = displayAmountBody.count
         guard len > 7 else { return base }
-        return max(30, (base * 7 / CGFloat(len)).rounded())
+        return max(32, (base * 7 / CGFloat(len)).rounded())
     }
 
     // The formatted body (no symbol), matching JSX formatTyped
@@ -220,15 +263,18 @@ public struct QuickAddView: View {
                 Label("More currencies…", systemImage: "ellipsis.circle")
             }
         } label: {
-            HStack(alignment: .firstTextBaseline, spacing: 1) {
-                Text(model.currency.symbol)
-                    .font(.system(size: 30, weight: .semibold))
+            HStack(spacing: 5) {
+                Text(model.currency.rawValue)
+                    .font(.system(size: 14, weight: .bold))
                 Image(systemName: "chevron.down")
-                    .font(.system(size: 12, weight: .bold))
-                    .padding(.top, 6)              // marginTop: 6 on the chevron in JSX
+                    .font(.system(size: 9, weight: .bold))
             }
             .foregroundStyle(GoldengoTheme.inkMuted)
-            .contentShape(Rectangle())
+            .padding(.horizontal, 10)
+            .frame(minHeight: 32)
+            .background(Color.goldengoField)
+            .clipShape(Capsule())
+            .contentShape(Capsule())
         }
     }
 
@@ -248,190 +294,116 @@ public struct QuickAddView: View {
         return list
     }
 
-    // MARK: - Category chips
-    // Matches Chips in quickadd.jsx: horizontal scroll, gap: 9, SelectableChip (= .gg-chip)
+    // MARK: - Transaction summary
 
-    private var categoryChips: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 9) {
-                ForEach(model.quickCategories, id: \.self) { cat in
-                    SelectableChip(
-                        cat,
-                        systemImage: GoldengoCategoryIcon.symbol(for: cat),
-                        isSelected: !newCategoryMode && model.selectedCategory == cat
-                    ) {
-                        withAnimation(.easeInOut(duration: 0.18)) {
-                            model.selectedCategory = model.selectedCategory == cat ? nil : cat
-                            newCategoryMode = false
-                            newCategoryText = ""
-                        }
-                    }
-                }
-                // Creating a category is a first-class action (store find-or-creates on save).
-                SelectableChip("New", systemImage: "plus", isSelected: newCategoryMode) {
-                    withAnimation(.easeInOut(duration: 0.18)) {
-                        newCategoryMode.toggle()
-                        model.selectedCategory = nil
-                        if newCategoryMode { focusedField = .newCategory } else { newCategoryText = "" }
-                    }
-                }
-            }
-            .padding(.vertical, 2)              // padding: '2px 0'
+    private var transactionCard: some View {
+        VStack(spacing: 0) {
+            categoryRow
+            cardDivider
+            sourceRow
+            cardDivider
+            detailsRow
+        }
+        .background(Color.goldengoSurface)
+        .clipShape(RoundedRectangle(cornerRadius: GoldengoTheme.Radius.card, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: GoldengoTheme.Radius.card, style: .continuous)
+                .strokeBorder(GoldengoTheme.hairline, lineWidth: 1)
         }
     }
 
-    private var newCategoryField: some View {
-        TextField("Name a category — e.g. Vape", text: $newCategoryText)
-            .focused($focusedField, equals: .newCategory)
-            .submitLabel(.done)
-            .onSubmit { focusedField = nil }
-            .font(.system(size: 14.5, weight: .semibold))
-            .foregroundStyle(GoldengoTheme.inkPrimary)
+    private var categoryRow: some View {
+        let classification = SpendingCategoryCatalog.classify(model.selectedCategory)
+        let iconColor = model.selectedCategory == nil ? GoldengoTheme.inkMuted : Color(hex: classification.colorHex)
+        return transactionRow(
+            label: "Category",
+            value: model.selectedCategory ?? "Choose category",
+            icon: model.selectedCategory == nil ? "tag" : classification.icon,
+            iconColor: iconColor,
+            action: { showCategoryPicker = true }
+        )
+    }
+
+    private var sourceRow: some View {
+        let source = selectedSource
+        return transactionRow(
+            label: "Paid from",
+            value: source?.name ?? "Wallet — cash",
+            icon: source == nil ? "wallet.bifold.fill" : "circle.fill",
+            iconColor: source.map { GoldengoTheme.sourceColor($0.colorIndex) } ?? GoldengoTheme.accent,
+            action: { showSourcePicker = true }
+        )
+    }
+
+    private var detailsRow: some View {
+        transactionRow(
+            label: "Details",
+            value: detailsSummary,
+            icon: "slider.horizontal.3",
+            iconColor: GoldengoTheme.inkMuted,
+            action: { showDetailsSheet = true }
+        )
+    }
+
+    private func transactionRow(
+        label: String,
+        value: String,
+        icon: String,
+        iconColor: Color,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            HStack(spacing: 13) {
+                Image(systemName: icon)
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(iconColor)
+                    .frame(width: 34, height: 34)
+                    .background(iconColor.opacity(0.12))
+                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(label.uppercased())
+                        .font(.system(size: 10.5, weight: .bold))
+                        .tracking(0.5)
+                        .foregroundStyle(GoldengoTheme.inkMuted)
+                    Text(value)
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(GoldengoTheme.inkPrimary)
+                        .lineLimit(1)
+                }
+
+                Spacer()
+
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundStyle(GoldengoTheme.inkMuted.opacity(0.75))
+            }
             .padding(.horizontal, 14)
-            .padding(.vertical, 10)
-            .background(Color.goldengoField)
-            .clipShape(Capsule())
-            // Live-bind the typed name as the selected category, so Save files under it.
-            .onChange(of: newCategoryText) { _, text in
-                guard newCategoryMode else { return }
-                let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-                model.selectedCategory = trimmed.isEmpty ? nil : trimmed
-            }
+            .frame(maxWidth: .infinity, minHeight: 58, alignment: .leading)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 
-    // MARK: - Utility row: details toggle (left) + backdating date (right, bounded to today —
-    // future entries would corrupt the wallet's expected balance and today's totals).
-
-    private var utilityRow: some View {
-        HStack {
-            if showDetails {
-                // Explicit removal: clears what was typed AND collapses — no invisible data rides along.
-                Button {
-                    withAnimation(.easeInOut(duration: 0.18)) {
-                        showDetails = false
-                        model.merchant = ""
-                        model.note = ""
-                        focusedField = nil
-                    }
-                } label: {
-                    Label("Remove details", systemImage: "xmark.circle")
-                        .font(.system(size: 13, weight: .medium))
-                        .foregroundStyle(GoldengoTheme.inkMuted)
-                }
-                .buttonStyle(.plain)
-            } else {
-                Button {
-                    withAnimation(.easeInOut(duration: 0.18)) {
-                        showDetails = true
-                        focusedField = .merchant
-                    }
-                } label: {
-                    Label("Add details", systemImage: "plus.circle")
-                        .font(.system(size: 13, weight: .medium))
-                        .foregroundStyle(GoldengoTheme.inkMuted)
-                }
-                .buttonStyle(.plain)
-            }
-            Spacer()
-            DatePicker("", selection: $model.date, in: ...Date.now, displayedComponents: .date)
-                .labelsHidden()
-                .tint(GoldengoTheme.accent)
-        }
-    }
-
-    // Where? / Note share one compact row — collapsed by default so the 3-second log stays 3 seconds.
-    private var detailsFields: some View {
-        HStack(spacing: 8) {
-            TextField("Where?", text: $model.merchant)
-                .focused($focusedField, equals: .merchant)
-                .submitLabel(.done)
-                .onSubmit { focusedField = nil }
-                .font(.system(size: 14.5, weight: .semibold))
-                .foregroundStyle(GoldengoTheme.inkPrimary)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 10)
-                .background(Color.goldengoField)
-                .clipShape(Capsule())
-            TextField("Note", text: $model.note)
-                .focused($focusedField, equals: .note)
-                .submitLabel(.done)
-                .onSubmit { focusedField = nil }
-                .font(.system(size: 14.5, weight: .semibold))
-                .foregroundStyle(GoldengoTheme.inkPrimary)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 10)
-                .background(Color.goldengoField)
-                .clipShape(Capsule())
-        }
-    }
-
-    // MARK: - Paid from
-    // Matches PaidFrom in quickadd.jsx: gg-eyebrow label + pill menu on goldengoField
-
-    private var paidFromRow: some View {
-        HStack {
-            GoldengoSectionLabel("Paid from")   // .gg-eyebrow: 12px/600/uppercase/0.6 tracking/ink-muted
-            Spacer()
-            paidFromMenu
-        }
+    private var cardDivider: some View {
+        Divider()
+            .overlay(GoldengoTheme.hairline)
+            .padding(.leading, 61)
     }
 
     private var selectedSource: SourceBalance? {
         model.sourceBalances.first { $0.id == model.selectedSourceID }
     }
 
-    private var paidFromMenu: some View {
-        Menu {
-            Button { model.selectedSourceID = nil } label: {
-                if model.selectedSourceID == nil {
-                    Label("Wallet — cash", systemImage: "checkmark")
-                } else {
-                    Text("Wallet — cash")
-                }
-            }
-            ForEach(model.sourceBalances) { s in
-                Button { model.selectedSourceID = s.id } label: {
-                    let label = "\(s.name)  ·  \(sourceRemaining(s)) left"
-                    if model.selectedSourceID == s.id {
-                        Label(label, systemImage: "checkmark")
-                    } else {
-                        Text(label)
-                    }
-                }
-            }
-        } label: {
-            // pill: goldengoField bg, gap: 8, padding: '8px 14px', borderRadius: 9999
-            HStack(spacing: 8) {
-                if let s = selectedSource {
-                    Circle()
-                        .fill(GoldengoTheme.sourceColor(s.colorIndex))
-                        .frame(width: 9, height: 9)
-                    Text(s.name)
-                        .font(.system(size: 14.5, weight: .semibold))
-                        .foregroundStyle(GoldengoTheme.inkPrimary)
-                } else {
-                    Image(systemName: "wallet.bifold")
-                        .font(.system(size: 16))
-                        .foregroundStyle(GoldengoTheme.inkMuted)
-                    Text("Wallet — cash")
-                        .font(.system(size: 14.5, weight: .semibold))
-                        .foregroundStyle(GoldengoTheme.inkPrimary)
-                }
-                Image(systemName: "chevron.down")
-                    .font(.system(size: 12, weight: .bold))
-                    .foregroundStyle(GoldengoTheme.inkMuted)
-            }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 8)
-            .background(Color.goldengoField)
-            .clipShape(Capsule())
-            .contentShape(Capsule())
-        }
-        .animation(.snappy, value: model.selectedSourceID)
-    }
-
-    private func sourceRemaining(_ s: SourceBalance) -> String {
-        Money(amount: s.remaining, currency: CurrencyCode(s.currencyCode)).formatted()
+    private var detailsSummary: String {
+        let day = Calendar.current.isDateInToday(model.date)
+            ? "Today"
+            : model.date.formatted(date: .abbreviated, time: .omitted)
+        if !model.splits.isEmpty { return "\(model.splits.count) categories · \(day)" }
+        if let context = model.contextName { return "\(context) · \(day)" }
+        if !model.merchant.isEmpty { return "\(model.merchant) · \(day)" }
+        if !model.note.isEmpty { return "Note added · \(day)" }
+        return day
     }
 
     // MARK: - Keypad
@@ -444,53 +416,34 @@ public struct QuickAddView: View {
             spacing: 9
         ) {
             ForEach(Array(keys.enumerated()), id: \.offset) { _, k in
-                if k.isEmpty {
-                    Color.clear
-                        .frame(maxWidth: .infinity, minHeight: keyHeight)
-                } else {
-                    Button { tap(k) } label: {
-                        Group {
-                            if k == "⌫" {
-                                Image(systemName: "delete.left")
-                                    .font(.system(size: 26))
-                            } else {
-                                Text(k)
-                                    .font(.system(size: 26, weight: .medium))
-                            }
+                Button { tap(k) } label: {
+                    Group {
+                        if k == "⌫" {
+                            Image(systemName: "delete.left")
+                                .font(.system(size: 25))
+                        } else {
+                            Text(k)
+                                .font(.system(size: k == "C" ? 20 : 26, weight: k == "C" ? .semibold : .medium))
                         }
-                        .foregroundStyle(GoldengoTheme.inkPrimary)
-                        .frame(maxWidth: .infinity, minHeight: keyHeight)
-                        .background(Color.goldengoField)
-                        .clipShape(RoundedRectangle(cornerRadius: GoldengoTheme.Radius.control, style: .continuous))
                     }
-                    .buttonStyle(KeypadButtonStyle())
+                    .foregroundStyle(k == "C" ? GoldengoTheme.accent : GoldengoTheme.inkPrimary)
+                    .frame(maxWidth: .infinity, minHeight: keyHeight)
+                    .background(Color.goldengoField)
+                    .clipShape(RoundedRectangle(cornerRadius: GoldengoTheme.Radius.control, style: .continuous))
                 }
+                .buttonStyle(KeypadButtonStyle())
             }
         }
     }
 
     private func tap(_ k: String) {
-        focusedField = nil   // typing the amount ends text editing (tap-outside rule)
-        k == "⌫" ? model.backspace() : model.tap(k)
-    }
-
-    // MARK: - Scan receipt
-    // Matches ScanBtn in quickadd.jsx: accent color, "doc.viewfinder", 15px/600, minHeight: 40
-
-#if os(iOS)
-    @ViewBuilder private var scanReceiptButton: some View {
-        if DocumentScannerView.isSupported {
-            Button { showScanner = true } label: {
-                Label("Scan receipt", systemImage: "doc.viewfinder")
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(GoldengoTheme.accent)
-                    .frame(maxWidth: .infinity, minHeight: 40)
-                    .padding(.vertical, 6)          // padding: '6px 0'
-            }
-            .buttonStyle(.plain)
+        switch k {
+        case "⌫": model.backspace()
+        case "C":
+            while !model.amountString.isEmpty { model.backspace() }
+        default: model.tap(k)
         }
     }
-#endif
 
     // MARK: - Add button
     // Matches .gg-btn: GoldButton full-width, "Add expense"

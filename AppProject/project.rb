@@ -15,6 +15,11 @@ end
 privacy_ref = group.new_file('PrivacyInfo.xcprivacy')
 target.add_resources([privacy_ref])
 
+# App localization catalog. Keep this in the generator: the .xcodeproj is intentionally ignored.
+localization_ref = group.new_file('Localizable.xcstrings')
+target.add_resources([localization_ref])
+project.root_object.known_regions |= %w[en sq Base]
+
 # Build settings
 target.build_configurations.each do |config|
   config.build_settings['PRODUCT_BUNDLE_IDENTIFIER'] = 'com.goldengo.app'

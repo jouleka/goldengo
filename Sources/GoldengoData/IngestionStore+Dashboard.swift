@@ -35,9 +35,13 @@ extension IngestionStore {
         let cal = Calendar.current
         let monthStart = cal.date(from: cal.dateComponents([.year, .month], from: now)) ?? cal.startOfDay(for: now)
         let expenseRaw = TransactionKind.expense.rawValue
-        let monthRecords = try modelContext.fetch(FetchDescriptor<ExpenseRecord>(predicate: #Predicate {
-            $0.isArchived == false && $0.kindRaw == expenseRaw && $0.date >= monthStart
-        }))
+        let refundRaw = TransactionKind.refund.rawValue
+        var fd = FetchDescriptor<ExpenseRecord>(predicate: #Predicate {
+            $0.isArchived == false && ($0.kindRaw == expenseRaw || $0.kindRaw == refundRaw)
+                && $0.date >= monthStart
+        })
+        fd.relationshipKeyPathsForPrefetching = [\.category, \.splits]
+        let monthRecords = try modelContext.fetch(fd).filter(\.affectsSpendingTotals)
         return try makeDashboardSummary(monthRecords: monthRecords, in: displayCurrency,
                                         rates: rates, topCategoryLimit: topCategoryLimit)
     }
@@ -52,11 +56,19 @@ extension IngestionStore {
         var monthTotal = Decimal(0)
         var byCategory: [String: Decimal] = [:]
         var usedConversion = false
-        for r in monthRecords {
+        for r in monthRecords where r.affectsSpendingTotals {
             if r.currencyCode != display { usedConversion = true }
-            let v = (try? converter.convert(r.amount, from: CurrencyCode(r.currencyCode), to: displayCurrency)) ?? 0
-            monthTotal += v
-            byCategory[r.category?.name ?? "Other", default: 0] += v
+            let sign = r.kind == .refund ? Decimal(-1) : Decimal(1)
+            let allocations: [(String, Decimal)] = (r.splits ?? []).isEmpty
+                ? [(r.category?.name ?? "Other", r.amount)]
+                : (r.splits ?? []).map { ($0.categoryName, $0.amount) }
+            for (name, amount) in allocations
+            where SpendingCategoryCatalog.classify(name).purpose != .wealth {
+                let v = ((try? converter.convert(amount, from: CurrencyCode(r.currencyCode),
+                                                 to: displayCurrency)) ?? 0) * sign
+                monthTotal += v
+                byCategory[name, default: 0] += v
+            }
         }
         let topCategories = byCategory
             .map { CategoryTotal(name: $0.key, total: $0.value) }

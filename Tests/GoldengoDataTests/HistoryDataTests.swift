@@ -63,6 +63,19 @@ final class HistoryDataTests: XCTestCase {
         XCTAssertTrue(snap.rows.isEmpty)
     }
 
+    func test_investmentRowRemainsVisible_butIsNotCountedAsSpent() async throws {
+        let store = try makeStore()
+        try await store.logManual(amount: 2_000, currency: .all, merchant: "Broker",
+                                  categoryName: "Stocks", date: day(2026, 6, 10))
+
+        let snap = try await store.historyData(scale: .month, anchor: day(2026, 6, 15),
+                                               displayCurrency: .all, rates: rates,
+                                               now: day(2026, 6, 26), calendar: cal)
+        XCTAssertEqual(snap.totalSpent, 0)
+        XCTAssertEqual(snap.expenseCount, 0)
+        XCTAssertEqual(snap.rows.map(\.merchantName), ["Broker"])
+    }
+
     func test_rows_areNewestFirst() async throws {
         let store = try makeStore()
         try await ingest(store, "older", 10, day(2026, 6, 3))

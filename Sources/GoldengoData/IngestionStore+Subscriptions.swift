@@ -51,10 +51,11 @@ extension IngestionStore {
     @discardableResult
     public func refreshSubscriptions(now: Date = .now) throws -> Int {
         let expenseRaw = TransactionKind.expense.rawValue
-        let fd = FetchDescriptor<ExpenseRecord>(predicate: #Predicate {
+        var fd = FetchDescriptor<ExpenseRecord>(predicate: #Predicate {
             $0.isArchived == false && $0.kindRaw == expenseRaw
         })
-        let occurrences = try modelContext.fetch(fd).map { r in
+        fd.relationshipKeyPathsForPrefetching = [\.category]
+        let occurrences = try modelContext.fetch(fd).filter(\.countsAsSpending).map { r in
             TransactionOccurrence(id: r.dedupeKey, date: r.date, amount: abs(r.amount),
                                   currency: CurrencyCode(r.currencyCode), merchant: r.merchantName)
         }

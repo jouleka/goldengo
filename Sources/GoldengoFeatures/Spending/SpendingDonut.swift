@@ -11,20 +11,40 @@ struct SpendingDonut: View {
     let rows: [CategoryBreakdownRow]
     let total: Decimal
     let currencyCode: String
+    var showsCenterTotal = true
+
+    private struct Segment: Identifiable {
+        let name: String
+        let spent: Decimal
+        let colorHex: String
+        var id: String { name }
+    }
+
+    /// The chart shows parent categories, not every free-text leaf. This keeps adjacent slices
+    /// meaningfully different and prevents five legacy blue categories from looking identical.
+    private var segments: [Segment] {
+        Dictionary(grouping: rows, by: \.groupName)
+            .map { name, rows in
+                Segment(name: name,
+                        spent: rows.reduce(Decimal(0)) { $0 + $1.spent },
+                        colorHex: rows.first?.colorHex ?? "#81786C")
+            }
+            .sorted { $0.spent > $1.spent }
+    }
 
     var body: some View {
-        Chart(rows) { row in
+        Chart(segments) { segment in
             SectorMark(
-                angle: .value("spent", (row.spent as NSDecimalNumber).doubleValue),
+                angle: .value("spent", (segment.spent as NSDecimalNumber).doubleValue),
                 innerRadius: .ratio(0.62),
                 angularInset: 1.5
             )
-            .foregroundStyle(Color(hex: row.colorHex))
+            .foregroundStyle(Color(hex: segment.colorHex))
             .cornerRadius(3)
         }
         .chartLegend(.hidden)
         .chartBackground { _ in
-            centerTotal
+            if showsCenterTotal { centerTotal }
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(centerTotalAccessibilityLabel)
@@ -40,7 +60,7 @@ struct SpendingDonut: View {
             )
             .minimumScaleFactor(0.7)
             .lineLimit(1)
-            Text("spent")
+            Text("money out")
                 .font(.system(size: 11, weight: .medium))
                 .foregroundStyle(GoldengoTheme.inkMuted)
         }
@@ -48,6 +68,6 @@ struct SpendingDonut: View {
     }
 
     private var centerTotalAccessibilityLabel: String {
-        "Total spent, \(Money(amount: total, currency: CurrencyCode(currencyCode)).formatted())"
+        "Total money out, \(Money(amount: total, currency: CurrencyCode(currencyCode)).formatted())"
     }
 }

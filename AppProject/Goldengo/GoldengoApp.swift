@@ -100,7 +100,7 @@ struct GoldengoApp: App {
     }
     var body: some Scene {
         WindowGroup {
-            RootView(store: GoldengoStore.shared())
+            RootView(store: GoldengoStore.shared(), storageStatus: GoldengoStore.storageMode.title)
                 .task {
                     await GoldengoStore.refreshExchangeRates()
                     // Recompute the widget summaries AFTER rates land so a multi-currency today-total

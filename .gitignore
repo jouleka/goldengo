@@ -28,6 +28,7 @@ secrets/
 
 # Misc
 *.log
+node_modules/
 
 # Device build derived data
 AppProject/.build-device/

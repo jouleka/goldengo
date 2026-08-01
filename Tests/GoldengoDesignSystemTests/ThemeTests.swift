@@ -5,7 +5,7 @@ import SwiftUI
 final class ThemeTests: XCTestCase {
     func test_goldAccentHex_isStable() {
         // Light-mode gold is the back-compat single hex. Dark is asserted via Hex in FoundationTests.
-        XCTAssertEqual(GoldengoTheme.accentGoldHex, "#B68A2E")
+        XCTAssertEqual(GoldengoTheme.accentGoldHex, "#8A671A")
     }
     func test_spacingScale_isMonotonic() {
         XCTAssertLessThan(GoldengoTheme.Spacing.s, GoldengoTheme.Spacing.m)

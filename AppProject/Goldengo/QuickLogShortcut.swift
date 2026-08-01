@@ -7,7 +7,7 @@ import GoldengoIntents
 // iOS auto-registers App Shortcuts only when BOTH the `AppShortcutsProvider` and the intent it
 // references live in the app's main target — App Shortcut intents can't come from a framework / SPM
 // package (the shortcut just won't appear). So the intent + provider live here; the shared save
-// logic stays in `GoldengoIntents.ExpenseLogging` (unit-tested in the package).
+// logic stays in `GoldengoData.ExpenseLogging` (unit-tested in the package).
 
 /// The quick categories offered as a tap-list when logging from a gesture — mirrors the in-app chips,
 /// each with its category icon. (The App Intents metadata processor requires `caseDisplayRepresentations`

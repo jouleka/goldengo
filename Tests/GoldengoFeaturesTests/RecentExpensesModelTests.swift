@@ -31,7 +31,7 @@ final class RecentExpensesModelTests: XCTestCase {
         try await store.logManual(amount: 400, currency: .all, merchant: nil, categoryName: "Coffee")
         try await store.logManual(amount: 300, currency: .all, merchant: nil, categoryName: "Transport")
         try await store.logManual(amount: 200, currency: .all, merchant: nil, categoryName: "Fun")
-        try await store.setMonthlyBudget(categoryNamed: "Food", cap: 400)   // 500/400 -> over
+        try await store.setMonthlyBudget(categoryNamed: "Food", cap: 400, currency: .all)   // 500/400 -> over
 
         let m = RecentExpensesModel(store: store, currency: .all)
         await m.load()
@@ -44,7 +44,7 @@ final class RecentExpensesModelTests: XCTestCase {
     func test_load_noOverBudgetCategory_dotStaysOff() async throws {
         let store = IngestionStore(modelContainer: try .goldengoInMemory())
         try await store.logManual(amount: 100, currency: .all, merchant: nil, categoryName: "Food")
-        try await store.setMonthlyBudget(categoryNamed: "Food", cap: 1000)   // 10% -> ok, nowhere near over
+        try await store.setMonthlyBudget(categoryNamed: "Food", cap: 1000, currency: .all)   // 10% -> ok, nowhere near over
 
         let m = RecentExpensesModel(store: store, currency: .all)
         await m.load()
@@ -61,7 +61,7 @@ final class RecentExpensesModelTests: XCTestCase {
     func test_load_neverConsumesTheNotifyOnceBudgetAlertToken() async throws {
         let store = IngestionStore(modelContainer: try .goldengoInMemory())
         try await store.logManual(amount: 500, currency: .all, merchant: nil, categoryName: "Food")
-        try await store.setMonthlyBudget(categoryNamed: "Food", cap: 400)   // over
+        try await store.setMonthlyBudget(categoryNamed: "Food", cap: 400, currency: .all)   // over
 
         let rates = RateTable(base: CurrencyCode("ALL"), rates: ["ALL": 1], asOf: Date(timeIntervalSince1970: 1_780_444_800))
         let firstAlerts = try await store.evaluateBudgetAlerts(displayCurrency: .all, rates: rates)

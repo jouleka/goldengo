@@ -12,16 +12,20 @@ public struct EditExpenseView: View {
     private let snapshot: ExpenseSnapshot
     /// Named sources for the "Paid from" picker (GOL-89); empty hides the section.
     private let fundingSources: [FundingSourceOption]
-    private let onSave: (_ amount: Decimal, _ currency: CurrencyCode, _ merchant: String?, _ note: String?, _ category: String?, _ date: Date, _ fundedBySourceID: String?) -> Void
+    private let onSave: (_ amount: Decimal, _ currency: CurrencyCode, _ merchant: String?, _ note: String?, _ category: String?, _ date: Date, _ fundedBySourceID: String?, _ contextName: String?, _ splits: [TransactionSplit], _ kind: TransactionKind) -> Void
     private let onDelete: () -> Void
 
     @State private var amountText: String
+    @State private var kind: TransactionKind
     @State private var currency: CurrencyCode
     @State private var merchant: String
     @State private var note: String
     @State private var category: String?
     @State private var date: Date
     @State private var fundedBySourceID: String?
+    @State private var contextName: String?
+    @State private var splits: [TransactionSplit]
+    @State private var showSplitEditor = false
     @State private var showDeleteConfirm = false
     @State private var showCurrencyPicker = false
     /// Selectable currencies, decoded once on appear (the currency Menu reads it in body).
@@ -29,23 +33,26 @@ public struct EditExpenseView: View {
 
     /// Base quick categories, shared with QuickAdd; the snapshot's current category is appended
     /// (if not already present) so editing never silently drops an existing assignment.
-    private static let baseCategories = ["Groceries", "Food", "Transport", "Coffee", "Bills", "Shopping"]
+    private static let baseCategories = SpendingCategoryCatalog.quickChoices
 
     public init(snapshot: ExpenseSnapshot,
                 fundingSources: [FundingSourceOption] = [],
-                onSave: @escaping (_ amount: Decimal, _ currency: CurrencyCode, _ merchant: String?, _ note: String?, _ category: String?, _ date: Date, _ fundedBySourceID: String?) -> Void,
+                onSave: @escaping (_ amount: Decimal, _ currency: CurrencyCode, _ merchant: String?, _ note: String?, _ category: String?, _ date: Date, _ fundedBySourceID: String?, _ contextName: String?, _ splits: [TransactionSplit], _ kind: TransactionKind) -> Void,
                 onDelete: @escaping () -> Void) {
         self.snapshot = snapshot
         self.fundingSources = fundingSources
         self.onSave = onSave
         self.onDelete = onDelete
         _amountText = State(initialValue: NSDecimalNumber(decimal: snapshot.amount).stringValue)
+        _kind = State(initialValue: snapshot.kind)
         _currency = State(initialValue: CurrencyCode(snapshot.currencyCode))
         _merchant = State(initialValue: snapshot.merchantName ?? "")
         _note = State(initialValue: snapshot.note ?? "")
         _category = State(initialValue: snapshot.categoryName)
         _date = State(initialValue: snapshot.date)
         _fundedBySourceID = State(initialValue: snapshot.fundedBySourceID)
+        _contextName = State(initialValue: snapshot.contextName)
+        _splits = State(initialValue: snapshot.splits)
     }
 
     private var categories: [String] {
@@ -62,14 +69,24 @@ public struct EditExpenseView: View {
         return value
     }
 
+    private var planningIsValid: Bool {
+        guard !splits.isEmpty else { return true }
+        guard let amount = parsedAmount else { return false }
+        return splits.count >= 2
+            && splits.allSatisfy { $0.amount > 0 && !$0.categoryName.isEmpty }
+            && splits.reduce(Decimal.zero) { $0 + $1.amount } == amount
+    }
+
     public var body: some View {
         NavigationStack {
             Form {
                 amountSection
+                if kindIsEditable { transactionTypeSection }
                 merchantSection
                 noteSection
-                categorySection
-                if snapshot.kind == .expense && !fundingSources.isEmpty {
+                if kind == .expense || kind == .refund { categorySection }
+                if kind == .expense || kind == .refund { planningSection }
+                if (kind == .expense || kind == .refund) && !fundingSources.isEmpty {
                     paidFromSection
                 }
                 dateSection
@@ -77,7 +94,7 @@ public struct EditExpenseView: View {
             }
             .tint(GoldengoTheme.accent)
             .onAppear { selectableCurrencies = CurrencyCatalog.selectable(from: ExchangeRateCache().load() ?? SeedRates.table) }
-            .navigationTitle("Edit expense")
+            .navigationTitle("Edit transaction")
 #if canImport(UIKit)
             .navigationBarTitleDisplayMode(.inline)
 #endif
@@ -87,7 +104,7 @@ public struct EditExpenseView: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") { save() }
-                        .disabled(parsedAmount == nil)
+                        .disabled(parsedAmount == nil || !planningIsValid)
                 }
             }
             .alert("Delete this expense?", isPresented: $showDeleteConfirm) {
@@ -108,6 +125,13 @@ public struct EditExpenseView: View {
                     )
                 }
             }
+            .sheet(isPresented: $showSplitEditor) {
+                SplitEditorSheet(splits: $splits, total: parsedAmount ?? 0, currency: currency)
+                    .presentationDetents([.large])
+            }
+            .onChange(of: kind) { _, newKind in
+                if newKind != .expense { splits = [] }
+            }
         }
     }
 
@@ -122,6 +146,26 @@ public struct EditExpenseView: View {
                 .keyboardType(.decimalPad)
 #endif
         } } header: { GoldengoSerifSectionHeader("Amount") }
+    }
+
+    private var kindIsEditable: Bool {
+        snapshot.kind == .expense || snapshot.kind == .income || snapshot.kind == .refund
+    }
+
+    private var transactionTypeSection: some View {
+        Section {
+            Picker("Type", selection: $kind) {
+                Text("Purchase").tag(TransactionKind.expense)
+                Text("Income").tag(TransactionKind.income)
+                Text("Refund").tag(TransactionKind.refund)
+            }
+            .pickerStyle(.segmented)
+        } header: { GoldengoSerifSectionHeader("Transaction type") }
+          footer: {
+              if kind == .refund {
+                  Text("Refunds reduce spending in their category and never count as earned income.")
+              }
+          }
     }
 
     /// Tap the currency to change it — popular currencies inline, "More…" opens the full picker.
@@ -185,6 +229,7 @@ public struct EditExpenseView: View {
                             category = (category == cat) ? nil : cat
                         }
                     }
+                    SpendingCategoryMenu(selectedCategory: category) { category = $0 }
                 }
                 .padding(.vertical, 2)
             }
@@ -228,11 +273,15 @@ public struct EditExpenseView: View {
             .listRowInsets(EdgeInsets(top: GoldengoTheme.Spacing.s, leading: GoldengoTheme.Spacing.m,
                                       bottom: GoldengoTheme.Spacing.s, trailing: GoldengoTheme.Spacing.m))
         } header: {
-            GoldengoSerifSectionHeader("Paid from")
+            GoldengoSerifSectionHeader(kind == .refund ? "Returned to" : "Paid from")
         } footer: {
-            Text(isManualRow
-                 ? "Cash drains your wallet. Pick a source to mark this bank-paid instead."
-                 : "Automatic uses your oldest money first. Wallet marks it paid in cash.")
+            if kind == .refund {
+                Text("Choose where the returned money landed so your available balance stays accurate.")
+            } else {
+                Text(isManualRow
+                     ? "Cash drains your wallet. Pick a source to mark this bank-paid instead."
+                     : "Automatic uses your oldest money first. Wallet marks it paid in cash.")
+            }
         }
     }
 
@@ -259,12 +308,37 @@ public struct EditExpenseView: View {
         }
     }
 
+    private var planningSection: some View {
+        Section {
+            ContextPicker(selection: $contextName)
+                .padding(.vertical, 4)
+            if kind == .expense { Button { showSplitEditor = true } label: {
+                HStack {
+                    Label("Split purchase", systemImage: "rectangle.split.2x1")
+                    Spacer()
+                    Text(splits.isEmpty ? "Not split" : "\(splits.count) categories")
+                        .foregroundStyle(GoldengoTheme.inkMuted)
+                    Image(systemName: "chevron.right").font(.caption.weight(.bold))
+                        .foregroundStyle(GoldengoTheme.inkMuted)
+                }
+            }
+            .disabled(parsedAmount == nil)
+            }
+        } header: { GoldengoSerifSectionHeader("Reporting") }
+          footer: {
+              Text(planningIsValid
+                   ? "Context says who or why. A split changes reports, not the wallet payment."
+                   : "Update the split so its categories add up to the new amount.")
+                  .foregroundStyle(planningIsValid ? GoldengoTheme.inkMuted : GoldengoTheme.danger)
+          }
+    }
+
     private var deleteSection: some View {
         Section {
             Button(role: .destructive) {
                 showDeleteConfirm = true
             } label: {
-                Label("Delete expense", systemImage: "trash")
+                Label("Delete transaction", systemImage: "trash")
                     .frame(maxWidth: .infinity)
             }
         }
@@ -273,11 +347,12 @@ public struct EditExpenseView: View {
     // MARK: - Actions
 
     private func save() {
-        guard let amount = parsedAmount else { return }
+        guard let amount = parsedAmount, planningIsValid else { return }
         let trimmedMerchant = merchant.trimmingCharacters(in: .whitespacesAndNewlines)
         let trimmedNote = note.trimmingCharacters(in: .whitespacesAndNewlines)
         onSave(amount, currency, trimmedMerchant.isEmpty ? nil : trimmedMerchant,
-               trimmedNote.isEmpty ? nil : trimmedNote, category, date, fundedBySourceID)
+               trimmedNote.isEmpty ? nil : trimmedNote, category, date, fundedBySourceID,
+               contextName, kind == .expense ? splits : [], kind)
         dismiss()
     }
 }

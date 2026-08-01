@@ -36,6 +36,7 @@ public enum StatementRowMapper {
                                     exclusions: m.atmExclusionKeywords) {
             kindFinal = .transfer   // money moved to the wallet, not spend (GOL-95)
         }
+        kindFinal = RefundClassifier.classify(kindFinal, description: merchant)
         let ext = field(m.externalIDIndex)
         return NormalizedTransaction(
             externalID: (ext?.isEmpty == false) ? ext : nil,
@@ -60,5 +61,24 @@ public enum StatementRowMapper {
         t = t.replacingOccurrences(of: decimal, with: ".")
         t = t.replacingOccurrences(of: " ", with: "")
         return Decimal(string: t)
+    }
+}
+
+/// Conservative statement hinting. Most credits stay income; only explicit reversal language is
+/// promoted to a refund automatically. Ordinary merchant-name refunds remain reviewable in-app.
+enum RefundClassifier {
+    private static let markers = ["refund", "refunded", "reversal", "reversed", "chargeback",
+                                  "returned purchase", "purchase return", "cashback"]
+
+    static func classify(_ kind: TransactionKind, description: String?) -> TransactionKind {
+        guard kind == .income else { return kind }
+        let normalized = description?.folding(options: [.diacriticInsensitive, .caseInsensitive],
+                                               locale: .current).lowercased() ?? ""
+        // A reversed cash withdrawal is a balance correction, not a returned purchase. Keeping
+        // these credits as income avoids subtracting them from category spend with no purchase to
+        // match. The profile's ATM classifier handles the debit side separately.
+        let cashWithdrawalMarkers = ["atm", "bankomat", "withdrawal", "terheq"]
+        if cashWithdrawalMarkers.contains(where: normalized.contains) { return kind }
+        return markers.contains(where: normalized.contains) ? .refund : kind
     }
 }

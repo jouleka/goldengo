@@ -215,10 +215,16 @@ public final class RecentExpensesModel {
     /// from the row's current pin, so an untouched picker leaves the pin unchanged.
     public func update(_ snapshot: ExpenseSnapshot, amount: Decimal, currency: CurrencyCode? = nil,
                        merchant: String?, note: String? = nil, categoryName: String?, date: Date,
-                       fundedBySourceID: String?) async {
+                       fundedBySourceID: String?, contextName: String? = nil,
+                       splits: [TransactionSplit] = [], kind: TransactionKind? = nil) async {
         try? await reader.updateExpense(dedupeKey: snapshot.dedupeKey, amount: amount, currency: currency,
                                         merchant: merchant, note: note, categoryName: categoryName, date: date,
                                         fundedBySourceID: fundedBySourceID)
+        try? await reader.updateTransactionKind(dedupeKey: snapshot.dedupeKey,
+                                                kind: kind ?? snapshot.kind)
+        try? await reader.updateExpensePlanning(dedupeKey: snapshot.dedupeKey,
+                                                contextName: contextName,
+                                                splits: (kind ?? snapshot.kind) == .expense ? splits : [])
         await load()
     }
 

@@ -6,8 +6,12 @@ import GoldengoDesignSystem
 /// A category's month expenses, its monthly-cap editor, and — for "Other" — a way to assign a real
 /// category to each uncategorized expense. Pushed from `CategoryBreakdownView` when a row is tapped.
 public struct CategoryDetailView: View {
-    private let model: CategoryDetailModel
+    /// Keep the reference model in SwiftUI state. This destination is built from a selected row;
+    /// without state SwiftUI can rebuild the destination with a fresh, empty model after the first
+    /// instance finishes loading, making a populated category incorrectly show "Nothing here".
+    @State private var model: CategoryDetailModel
     private let currency: CurrencyCode
+    private let startsCategorizing: Bool
     /// Called when THIS category's cap just transitioned from no-cap to capped. The caller
     /// (`CategoryBreakdownView`, via `BudgetNotificationPermission.askOnce`) holds the actual
     /// app-wide once-ever gate, so this view doesn't need to know whether any other category was
@@ -26,16 +30,23 @@ public struct CategoryDetailView: View {
     @State private var editingCap = false
     @State private var capText = ""
     @State private var assigning: ExpenseSnapshot?
+    @State private var didAutoStartCategorizing = false
 
     @ScaledMetric(relativeTo: .title2) private var titleSize: CGFloat = 22
     @ScaledMetric(relativeTo: .caption) private var eyebrowSize: CGFloat = 12
     @ScaledMetric(relativeTo: .body) private var emptyTitleSize: CGFloat = 15
     @ScaledMetric(relativeTo: .footnote) private var emptySubSize: CGFloat = 13
 
-    public init(model: CategoryDetailModel, currency: CurrencyCode, onFirstCapSet: @escaping () -> Void = {}) {
-        self.model = model
+    public init(model: CategoryDetailModel, currency: CurrencyCode, startsCategorizing: Bool = false,
+                onFirstCapSet: @escaping () -> Void = {}) {
+        _model = State(initialValue: model)
         self.currency = currency
+        self.startsCategorizing = startsCategorizing
         self.onFirstCapSet = onFirstCapSet
+    }
+
+    private var classification: SpendingCategoryClassification {
+        SpendingCategoryCatalog.classify(model.categoryName)
     }
 
     public var body: some View {
@@ -59,12 +70,21 @@ public struct CategoryDetailView: View {
         .navigationBarBackButtonHidden(true)
         .toolbar(.hidden, for: .navigationBar)
 #endif
-        .task { await model.load() }
+        .task {
+            await model.load()
+            if startsCategorizing, !didAutoStartCategorizing {
+                didAutoStartCategorizing = true
+                assigning = model.expenses.first
+            }
+        }
         .sheet(item: $assigning) { snapshot in
             CategorizeExpenseView(
                 expense: snapshot,
                 existingCategoryNames: model.existingCategoryNames,
-                onAssign: { name in Task { await model.assignCategory(name, toExpenseWithKey: snapshot.dedupeKey) } }
+                onAssign: { name, remember in
+                    Task { await model.assignCategory(name, toExpenseWithKey: snapshot.dedupeKey,
+                                                      rememberMerchant: remember) }
+                }
             )
         }
     }
@@ -98,15 +118,26 @@ public struct CategoryDetailView: View {
 
     @ViewBuilder
     private var capCard: some View {
-        VStack(alignment: .leading, spacing: GoldengoTheme.Spacing.s) {
-            GoldengoSectionLabel("Monthly cap")
-            if editingCap {
-                capEditor
-            } else {
-                capSummaryRow
+        if classification.purpose == .wealth {
+            VStack(alignment: .leading, spacing: GoldengoTheme.Spacing.s) {
+                GoldengoSectionLabel("Investment")
+                Label("This money builds an asset. It reduces available cash, but is kept out of ordinary spending totals.",
+                      systemImage: MoneyPurpose.wealth.icon)
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundStyle(Color(hex: MoneyPurpose.wealth.colorHex))
             }
+            .goldengoCard()
+        } else {
+            VStack(alignment: .leading, spacing: GoldengoTheme.Spacing.s) {
+                GoldengoSectionLabel("Monthly cap")
+                if editingCap {
+                    capEditor
+                } else {
+                    capSummaryRow
+                }
+            }
+            .goldengoCard()
         }
-        .goldengoCard()
     }
 
     // Not `.accessibilityElement(children: .combine)`: this row contains a real interactive Button
@@ -225,7 +256,7 @@ public struct CategoryDetailView: View {
 
     private var expensesSection: some View {
         VStack(alignment: .leading, spacing: GoldengoTheme.Spacing.s) {
-            GoldengoSectionLabel("Expenses")
+            GoldengoSectionLabel(classification.purpose == .wealth ? "Investment contributions" : "Expenses")
             if model.expenses.isEmpty {
                 emptyCard
             } else {
@@ -269,7 +300,9 @@ public struct CategoryDetailView: View {
             Text("Nothing here")
                 .font(.system(size: emptyTitleSize, weight: .semibold))
                 .foregroundStyle(GoldengoTheme.inkPrimary)
-            Text("No spending in this category this month.")
+            Text(classification.purpose == .wealth
+                 ? "No investment contributions in this category this month."
+                 : "No spending in this category this month.")
                 .font(.system(size: emptySubSize))
                 .foregroundStyle(GoldengoTheme.inkMuted)
         }

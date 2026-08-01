@@ -11,7 +11,7 @@ final class BudgetAlertTests: XCTestCase {
 
     func test_escalatesOnce_nearThenOver_thenSilent() async throws {
         let s = try store()
-        try await s.setMonthlyBudget(categoryNamed: "Cigarettes", cap: 1000)
+        try await s.setMonthlyBudget(categoryNamed: "Cigarettes", cap: 1000, currency: .all)
 
         _ = try await s.logManual(amount: 900, currency: .all, merchant: nil, categoryName: "Cigarettes")
         let near = try await s.evaluateBudgetAlerts(asOf: .now, displayCurrency: .all, rates: rates)
@@ -37,7 +37,7 @@ final class BudgetAlertTests: XCTestCase {
 
     func test_newMonth_reArms() async throws {
         let s = try store()
-        try await s.setMonthlyBudget(categoryNamed: "Food", cap: 1000)
+        try await s.setMonthlyBudget(categoryNamed: "Food", cap: 1000, currency: .all)
         _ = try await s.logManual(amount: 1200, currency: .all, merchant: nil, categoryName: "Food")
         _ = try await s.evaluateBudgetAlerts(asOf: .now, displayCurrency: .all, rates: rates)   // fires over
         let cal = Calendar.current
@@ -53,16 +53,16 @@ final class BudgetAlertTests: XCTestCase {
         // the cap (here via raising the cap; a refund would do the same) must NOT fire again, and must
         // NOT reset the dedupe state — so dropping back over must stay silent (proves stored level held).
         let s = try store()
-        try await s.setMonthlyBudget(categoryNamed: "Food", cap: 1000)
+        try await s.setMonthlyBudget(categoryNamed: "Food", cap: 1000, currency: .all)
         _ = try await s.logManual(amount: 1200, currency: .all, merchant: nil, categoryName: "Food")
         let over = try await s.evaluateBudgetAlerts(asOf: .now, displayCurrency: .all, rates: rates)
         XCTAssertEqual(over.map(\.level), [.over])                       // armed at over
 
-        try await s.setMonthlyBudget(categoryNamed: "Food", cap: 2000)   // 1200/2000 → ok (de-escalated)
+        try await s.setMonthlyBudget(categoryNamed: "Food", cap: 2000, currency: .all)   // 1200/2000 → ok (de-escalated)
         let dip = try await s.evaluateBudgetAlerts(asOf: .now, displayCurrency: .all, rates: rates)
         XCTAssertTrue(dip.isEmpty)                                       // de-escalation fires nothing
 
-        try await s.setMonthlyBudget(categoryNamed: "Food", cap: 1000)   // 1200/1000 → over again
+        try await s.setMonthlyBudget(categoryNamed: "Food", cap: 1000, currency: .all)   // 1200/1000 → over again
         let backOver = try await s.evaluateBudgetAlerts(asOf: .now, displayCurrency: .all, rates: rates)
         XCTAssertTrue(backOver.isEmpty)                                  // stored level never lowered → no re-fire
     }
@@ -70,7 +70,7 @@ final class BudgetAlertTests: XCTestCase {
     func test_capWithZeroSpend_thenLaterEscalation_stillFires() async throws {
         // A cap set with no spend yet must not fire, but must not "swallow" a later escalation either.
         let s = try store()
-        try await s.setMonthlyBudget(categoryNamed: "Coffee", cap: 1000)
+        try await s.setMonthlyBudget(categoryNamed: "Coffee", cap: 1000, currency: .all)
         let none = try await s.evaluateBudgetAlerts(asOf: .now, displayCurrency: .all, rates: rates)
         XCTAssertTrue(none.isEmpty)                                      // zero spend → nothing
 

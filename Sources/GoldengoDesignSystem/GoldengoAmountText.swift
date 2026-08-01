@@ -9,12 +9,15 @@ public struct GoldengoAmountText: View {
     private let text: String
     private let role: Role
     private let color: Color?
+    @ScaledMetric private var scaledPointSize: CGFloat
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     public init(_ text: String, role: Role = .row, color: Color? = nil) {
         self.text = text
         self.role = role
         self.color = color
+        _scaledPointSize = ScaledMetric(wrappedValue: Self.pointSize(for: role),
+                                        relativeTo: Self.textStyle(for: role))
     }
 
     public nonisolated static func pointSize(for role: Role) -> CGFloat {
@@ -35,9 +38,18 @@ public struct GoldengoAmountText: View {
         }
     }
 
+    private nonisolated static func textStyle(for role: Role) -> Font.TextStyle {
+        switch role {
+        case .hero: return .largeTitle
+        case .title: return .title
+        case .row: return .body
+        case .micro: return .caption
+        }
+    }
+
     public var body: some View {
         Text(text)
-            .font(.system(size: Self.pointSize(for: role), weight: .semibold))
+            .font(.system(size: scaledPointSize, weight: .semibold))
             .monospacedDigit()
             .tracking(Self.tracking(for: role))
             .foregroundStyle(color ?? GoldengoTheme.inkPrimary)

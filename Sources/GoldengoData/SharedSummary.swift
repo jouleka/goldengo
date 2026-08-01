@@ -13,6 +13,8 @@ public struct SharedSummary {
     public static let reminderLeadDaysKey = "reminderLeadDays"
     public static let loanRemindersKey = "loanRemindersEnabled"
     public static let preferredCurrencyKey = "preferredCurrency"
+    public static let periodSetupDeferredKey = "periodSetupDeferred"
+    public static let appLockEnabledKey = "appLockEnabled"
     private static let totalKey = "todayTotalText"
     private static let totalDateKey = "todayTotalDate"
     private static let pendingTabKey = "pendingTab"

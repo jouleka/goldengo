@@ -9,7 +9,7 @@ public struct SourcesView: View {
     @State private var model: SourcesModel
     @State private var showAddIncome = false
     @State private var showCount = false
-    @State private var walletAutoAdjust = false   // GOL-98: widget tap lands ON the Adjust screen
+    @State private var walletAdjustCurrency: CurrencyCode?   // non-nil skips the list and opens this cash count
     @State private var adjustSource: SourceBalance?   // tapped source → edit name/amount sheet
     @State private var deleteCandidate: SourceBalance?   // swipe-Delete → confirm alert
     @State private var showDeleteConfirm = false
@@ -23,7 +23,7 @@ public struct SourcesView: View {
     private func consumePendingWalletAdjust() {
         guard model.pendingWalletAdjust else { return }
         model.pendingWalletAdjust = false
-        walletAutoAdjust = true
+        walletAdjustCurrency = walletAdjustTarget()
         showCount = true
     }
 
@@ -41,48 +41,21 @@ public struct SourcesView: View {
         // `.swipeActions` — the same trade RecentExpensesView made (a custom DragGesture fights
         // the scroll; the system List owns scrolling and swipe together).
         List {
-            Group {
-                headerRow
-                walletCard
-                Text("Cash spends drain this — not your sources. Reconcile by feel.")
-                    .font(.system(size: 12))
-                    .foregroundStyle(GoldengoTheme.inkMuted)
-                    .padding(.horizontal, GoldengoTheme.Spacing.m)
-                    .padding(.top, 8)
-            }
-            .plainRow()
+            headerRow
+                .plainRow()
 
-            // ── Owed to you: money that left but is still yours ──────────────────
-            if !model.loans.isEmpty {
-                GoldengoSerifSectionHeader("Owed to you")
-                    .padding(.horizontal, GoldengoTheme.Spacing.m)
-                    .padding(.top, 26)
-                    .padding(.bottom, 12)
-                    .plainRow()
-                ForEach(model.loans) { loan in
-                    loanCard(loan)
-                        .plainRow(top: 6, horizontal: GoldengoTheme.Spacing.m, bottom: 6)
-                        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                            Button(role: .destructive) {
-                                deleteLoanCandidate = loan
-                                showDeleteLoanConfirm = true
-                            } label: {
-                                Label("Delete", systemImage: "trash")
-                            }
-                        }
-                        .swipeActions(edge: .leading, allowsFullSwipe: true) {
-                            Button { adjustLoan = loan } label: {
-                                Label("Edit", systemImage: "pencil")
-                            }
-                            .tint(GoldengoTheme.accent)
-                        }
-                }
+            walletCard
+                .plainRow(horizontal: GoldengoTheme.Spacing.m)
+
+            quickActions
+                .plainRow(top: 12, horizontal: GoldengoTheme.Spacing.m)
+
+            if let unaccounted = model.unaccountedText() {
+                unaccountedCard(unaccounted)
+                    .plainRow(top: 12, horizontal: GoldengoTheme.Spacing.m)
             }
 
-            GoldengoSerifSectionHeader("Sources")
-                .padding(.horizontal, GoldengoTheme.Spacing.m)
-                .padding(.top, 26)
-                .padding(.bottom, 12)
+            sectionHeading("Money sources", subtitle: "What your non-cash money came from")
                 .plainRow()
 
             if model.loadFailed {
@@ -101,7 +74,7 @@ public struct SourcesView: View {
                 .padding(26)
                 .goldengoCard()
                 .plainRow(horizontal: GoldengoTheme.Spacing.m)
-            } else if (model.snapshot?.sources.isEmpty ?? true) && model.unaccountedText() == nil {
+            } else if model.snapshot?.sources.isEmpty ?? true {
                 VStack(spacing: 10) {
                     Image(systemName: "banknote")
                         .font(.system(size: 26))
@@ -109,7 +82,7 @@ public struct SourcesView: View {
                     Text("No sources yet")
                         .font(.system(size: 15, weight: .semibold))
                         .foregroundStyle(GoldengoTheme.inkPrimary)
-                    Text("Add where money came from — a remittance, a cash withdrawal, your pay.")
+                    Text("Add income to remember where money came from and what is still available.")
                         .font(.system(size: 13))
                         .foregroundStyle(GoldengoTheme.inkMuted)
                         .multilineTextAlignment(.center)
@@ -139,27 +112,33 @@ public struct SourcesView: View {
                         }
                 }
 
-                if let unaccounted = model.unaccountedText() {
-                    HStack {
-                        HStack(spacing: 8) {
-                            Image(systemName: "questionmark.circle")
-                                .font(.system(size: 14))
-                                .foregroundStyle(GoldengoTheme.inkMuted)
-                            Text("Unaccounted")
-                                .font(.subheadline)
-                                .foregroundStyle(GoldengoTheme.inkMuted)
+            }
+
+            // Money that left the wallet but is still an asset is visually separate from sources.
+            if !model.loans.isEmpty {
+                sectionHeading("Owed to you", subtitle: "Open claims and expected paybacks")
+                    .plainRow()
+                ForEach(model.loans) { loan in
+                    loanCard(loan)
+                        .plainRow(top: 6, horizontal: GoldengoTheme.Spacing.m, bottom: 6)
+                        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                            Button(role: .destructive) {
+                                deleteLoanCandidate = loan
+                                showDeleteLoanConfirm = true
+                            } label: {
+                                Label("Delete", systemImage: "trash")
+                            }
                         }
-                        Spacer()
-                        GoldengoAmountText(unaccounted, role: .row, color: GoldengoTheme.inkMuted)
-                    }
-                    .padding(.horizontal, 18)
-                    .padding(.vertical, 14)
-                    .goldengoCard()
-                    .plainRow(top: 6, horizontal: GoldengoTheme.Spacing.m, bottom: 6)
+                        .swipeActions(edge: .leading, allowsFullSwipe: true) {
+                            Button { adjustLoan = loan } label: {
+                                Label("Edit", systemImage: "pencil")
+                            }
+                            .tint(GoldengoTheme.accent)
+                        }
                 }
             }
 
-            Color.clear.frame(height: GoldengoTheme.Spacing.xl)
+            Color.clear.frame(height: 108)
                 .plainRow()
         }
         .listStyle(.plain)
@@ -201,135 +180,202 @@ public struct SourcesView: View {
             Text("The claim and its lend/payback history archive together.")
         }
         .sheet(isPresented: $showCount, onDismiss: {
-            walletAutoAdjust = false
+            walletAdjustCurrency = nil
             Task { await model.load() }
         }) {
-            WalletView(model: model, autoOpenAdjust: walletAutoAdjust ? walletAdjustTarget() : nil)
+            WalletView(model: model, autoOpenAdjust: walletAdjustCurrency)
         }
         .task { await model.load(); consumePendingWalletAdjust() }
         // A tap can arrive while this tab is already live (warm open) — observe the flag.
         .onChange(of: model.pendingWalletAdjust) { _, on in if on { consumePendingWalletAdjust() } }
     }
 
-    // ── serif "Wallet" title + Income pill (wallet.jsx line 18-27) ──────────
+    // MARK: - Header and cash overview
+
     private var headerRow: some View {
-        HStack(alignment: .center) {
+        VStack(alignment: .leading, spacing: 3) {
             Text("Wallet")
                 .font(.system(size: 32, design: .serif))
                 .foregroundStyle(GoldengoTheme.inkPrimary)
-            Spacer()
-            Button { showLend = true } label: {
-                HStack(spacing: 6) {
-                    Image(systemName: "arrow.up.right")
-                        .font(.system(size: 13, weight: .bold))
-                    Text("Lend")
-                        .font(.system(size: 14, weight: .semibold))
-                }
-                .foregroundStyle(GoldengoTheme.accent)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 8)
-                .background(GoldengoTheme.accentSoft)
-                .clipShape(Capsule())
-                .overlay(Capsule().strokeBorder(GoldengoTheme.accentLine, lineWidth: 1))
-            }
-            .buttonStyle(.plain)
-            Button { showAddIncome = true } label: {
-                HStack(spacing: 6) {
-                    Image(systemName: "plus")
-                        .font(.system(size: 13, weight: .bold))
-                    Text("Income")
-                        .font(.system(size: 14, weight: .semibold))
-                }
-                .foregroundStyle(GoldengoTheme.accent)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 8)
-                .background(GoldengoTheme.accentSoft)
-                .clipShape(Capsule())
-                .overlay(Capsule().strokeBorder(GoldengoTheme.accentLine, lineWidth: 1))
-            }
-            .buttonStyle(.plain)
-            .padding(.leading, 8)
+            Text("Cash, sources, and money owed to you")
+                .font(.system(size: 13, weight: .medium))
+                .foregroundStyle(GoldengoTheme.inkMuted)
         }
         .padding(.horizontal, GoldengoTheme.Spacing.m)
         .padding(.top, 18)
         .padding(.bottom, 14)
     }
 
-    // ── "In your wallet" card (wallet.jsx lines 30-59) ───────────────────
     private var walletCard: some View {
-        VStack(alignment: .leading, spacing: 0) {
+        VStack(alignment: .leading, spacing: 14) {
             HStack(spacing: 10) {
-                Image(systemName: "wallet.bifold")
-                    .font(.system(size: 15))
+                Image(systemName: "wallet.bifold.fill")
+                    .font(.system(size: 15, weight: .semibold))
                     .foregroundStyle(GoldengoTheme.accent)
-                Text("IN YOUR WALLET")
-                    .font(.system(size: 12, weight: .semibold))
-                    .tracking(0.6)
-                    .foregroundStyle(GoldengoTheme.inkMuted)
+                    .frame(width: 34, height: 34)
+                    .background(GoldengoTheme.accentSoft)
+                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("CASH ON HAND")
+                        .font(.system(size: 11, weight: .bold))
+                        .tracking(0.65)
+                        .foregroundStyle(GoldengoTheme.inkMuted)
+                    Text(model.wallet.isEmpty ? "Not tracked yet" : cashCaption)
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(GoldengoTheme.inkMuted)
+                }
+
+                Spacer()
+
+                Button("Manage") { openWalletManager() }
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(GoldengoTheme.accent)
             }
-            .padding(.horizontal, 16)
-            .padding(.top, 14)
-            .padding(.bottom, 10)
 
             if model.wallet.isEmpty {
-                Text("Your pocket, by currency. Tap below to set what you're actually holding.")
-                    .font(.system(size: 13.5))
+                Text("Set what you are physically carrying. Cash expenses will reduce it automatically.")
+                    .font(.system(size: 13.5, weight: .medium))
                     .foregroundStyle(GoldengoTheme.inkMuted)
-                    .padding(.horizontal, 16)
-                    .padding(.bottom, 16)
+                    .fixedSize(horizontal: false, vertical: true)
             } else {
-                ForEach(Array(model.wallet.enumerated()), id: \.element.id) { idx, w in
-                    Button { showCount = true } label: {
-                        HStack {
-                            Text(walletLabel(w.currencyCode))
-                                .font(.system(size: 15.5, weight: .semibold))
-                                .foregroundStyle(GoldengoTheme.inkPrimary)
-                            Spacer()
-                            HStack(spacing: 8) {
-                                GoldengoAmountText(
-                                    "~" + Money(amount: w.expectedNow,
-                                                currency: CurrencyCode(w.currencyCode)).formatted(),
-                                    role: .row
-                                )
-                                Image(systemName: "chevron.right")
-                                    .font(.system(size: 13, weight: .semibold))
-                                    .foregroundStyle(GoldengoTheme.inkMuted)
+                Text(Money(amount: model.walletTotal(), currency: model.currency).formatted())
+                    .font(.system(size: 31, weight: .semibold))
+                    .monospacedDigit()
+                    .foregroundStyle(GoldengoTheme.inkPrimary)
+                    .minimumScaleFactor(0.7)
+                    .lineLimit(1)
+
+                if model.wallet.count > 1 {
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 8) {
+                            ForEach(model.wallet) { line in
+                                Button { openCashCount(CurrencyCode(line.currencyCode)) } label: {
+                                    HStack(spacing: 6) {
+                                        Text(line.currencyCode)
+                                            .font(.system(size: 11, weight: .bold))
+                                            .foregroundStyle(GoldengoTheme.inkMuted)
+                                        Text(Money(amount: line.expectedNow,
+                                                   currency: CurrencyCode(line.currencyCode)).amountText())
+                                            .font(.system(size: 12.5, weight: .semibold))
+                                            .monospacedDigit()
+                                            .foregroundStyle(GoldengoTheme.inkPrimary)
+                                    }
+                                    .padding(.horizontal, 11)
+                                    .padding(.vertical, 8)
+                                    .background(Color.goldengoField)
+                                    .clipShape(Capsule())
+                                }
+                                .buttonStyle(.plain)
                             }
                         }
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 12)
-                    }
-                    .buttonStyle(.plain)
-                    .overlay(alignment: .top) {
-                        if idx > 0 {
-                            Rectangle()
-                                .fill(GoldengoTheme.hairline)
-                                .frame(height: 1)
-                        }
                     }
                 }
-            }
-
-            // "Track another currency" row
-            Button { showCount = true } label: {
-                HStack(spacing: 9) {
-                    Image(systemName: "plus.circle")
-                        .font(.system(size: 16))
-                    Text("Track another currency")
-                        .font(.system(size: 14.5, weight: .medium))
-                }
-                .foregroundStyle(GoldengoTheme.inkMuted)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, 16)
-                .padding(.vertical, 13)
-            }
-            .buttonStyle(.plain)
-            .overlay(alignment: .top) {
-                Rectangle().fill(GoldengoTheme.hairline).frame(height: 1)
             }
         }
-        .goldengoCard(padding: 0)
+        .padding(16)
+        .background(Color.goldengoSurface)
+        .clipShape(RoundedRectangle(cornerRadius: GoldengoTheme.Radius.card, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: GoldengoTheme.Radius.card, style: .continuous)
+                .strokeBorder(GoldengoTheme.hairline, lineWidth: 1)
+        }
+    }
+
+    private var cashCaption: String {
+        guard let newest = model.wallet.map(\.baselineDate).max() else { return "Live estimate" }
+        let count = model.wallet.count
+        let currencies = count == 1 ? walletLabel(model.wallet[0].currencyCode) : "\(count) currencies"
+        return "\(currencies) · counted \(SourcesModel.compactDay(newest))"
+    }
+
+    private var quickActions: some View {
+        HStack(spacing: 9) {
+            quickAction("Income", icon: "tray.and.arrow.down.fill") { showAddIncome = true }
+            quickAction("Count cash", icon: "banknote.fill") { openCashCount(walletAdjustTarget()) }
+            quickAction("Lend", icon: "arrow.up.right") { showLend = true }
+        }
+    }
+
+    private func quickAction(_ title: String, icon: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            VStack(spacing: 7) {
+                Image(systemName: icon)
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(GoldengoTheme.accent)
+                Text(title)
+                    .font(.system(size: 12.5, weight: .semibold))
+                    .foregroundStyle(GoldengoTheme.inkPrimary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.85)
+            }
+            .frame(maxWidth: .infinity, minHeight: 68)
+            .background(Color.goldengoSurface)
+            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .strokeBorder(GoldengoTheme.hairline, lineWidth: 1)
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func unaccountedCard(_ amount: String) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(GoldengoTheme.danger)
+                .frame(width: 36, height: 36)
+                .background(GoldengoTheme.danger.opacity(0.12))
+                .clipShape(RoundedRectangle(cornerRadius: 11, style: .continuous))
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Needs review")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(GoldengoTheme.inkPrimary)
+                Text("Money that could not be matched to a source")
+                    .font(.system(size: 11.5, weight: .medium))
+                    .foregroundStyle(GoldengoTheme.inkMuted)
+            }
+
+            Spacer(minLength: 8)
+            Text(amount)
+                .font(.system(size: 15, weight: .semibold))
+                .monospacedDigit()
+                .foregroundStyle(GoldengoTheme.danger)
+        }
+        .padding(14)
+        .background(GoldengoTheme.danger.opacity(0.07))
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .strokeBorder(GoldengoTheme.danger.opacity(0.24), lineWidth: 1)
+        }
+    }
+
+    private func sectionHeading(_ title: String, subtitle: String) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(title)
+                .font(.system(size: 23, design: .serif))
+                .foregroundStyle(GoldengoTheme.inkPrimary)
+            Text(subtitle)
+                .font(.system(size: 12.5, weight: .medium))
+                .foregroundStyle(GoldengoTheme.inkMuted)
+        }
         .padding(.horizontal, GoldengoTheme.Spacing.m)
+        .padding(.top, 26)
+        .padding(.bottom, 10)
+    }
+
+    private func openCashCount(_ currency: CurrencyCode?) {
+        walletAdjustCurrency = currency
+        showCount = true
+    }
+
+    private func openWalletManager() {
+        walletAdjustCurrency = nil
+        showCount = true
     }
 
     // ── Source card: color dot + name + remaining amount + draining bar ──────
@@ -345,31 +391,43 @@ public struct SourcesView: View {
 
     @ViewBuilder
     private func sourceCardBody(_ b: SourceBalance) -> some View {
-        VStack(alignment: .leading, spacing: 0) {
-            HStack {
-                HStack(spacing: 9) {
-                    Circle()
-                        .fill(model.color(b))
-                        .frame(width: 10, height: 10)
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(spacing: 12) {
+                Image(systemName: "banknote.fill")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(model.color(b))
+                    .frame(width: 40, height: 40)
+                    .background(model.color(b).opacity(0.14))
+                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+
+                VStack(alignment: .leading, spacing: 2) {
                     Text(b.name)
-                        .font(.system(size: 15.5, weight: .semibold))
+                        .font(.system(size: 16, weight: .semibold))
                         .foregroundStyle(GoldengoTheme.inkPrimary)
+                    Text("Money source · \(b.currencyCode)")
+                        .font(.system(size: 11.5, weight: .medium))
+                        .foregroundStyle(GoldengoTheme.inkMuted)
                 }
+
                 Spacer()
-                GoldengoAmountText(model.remainingText(b), role: .row)
+
+                VStack(alignment: .trailing, spacing: 3) {
+                    GoldengoAmountText(model.remainingText(b), role: .row)
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundStyle(GoldengoTheme.inkMuted)
+                }
             }
-            .padding(.bottom, 12)
 
             DrainingPoolBar(fraction: model.fraction(b), tint: model.color(b))
 
-            Text(model.remainingText(b) + " of " + Money(amount: b.totalInflow,
-                 currency: CurrencyCode(b.currencyCode)).formatted()
-                 + " left · " + "\(Int((model.fraction(b) * 100).rounded()))%")
+            Text("\(Int((model.fraction(b) * 100).rounded()))% left of "
+                 + Money(amount: b.totalInflow,
+                         currency: CurrencyCode(b.currencyCode)).formatted())
                 .font(.system(size: 12))
                 .foregroundStyle(GoldengoTheme.inkMuted)
-                .padding(.top, 9)
         }
-        .padding(18)
+        .padding(16)
         .goldengoCard(padding: 0)
     }
 
@@ -381,40 +439,52 @@ public struct SourcesView: View {
     @ViewBuilder
     private func loanCard(_ loan: LoanBalance) -> some View {
         Button { adjustLoan = loan } label: {
-            VStack(alignment: .leading, spacing: 0) {
-                HStack {
-                    HStack(spacing: 9) {
-                        Circle()
-                            .fill(GoldengoTheme.sourceColor(loan.colorIndex))
-                            .frame(width: 10, height: 10)
-                        Text(loan.personName)
-                            .font(.system(size: 15.5, weight: .semibold))
-                            .foregroundStyle(GoldengoTheme.inkPrimary)
+            HStack(spacing: 12) {
+                Image(systemName: "person.crop.circle.fill")
+                    .font(.system(size: 19, weight: .semibold))
+                    .foregroundStyle(GoldengoTheme.sourceColor(loan.colorIndex))
+                    .frame(width: 40, height: 40)
+                    .background(GoldengoTheme.sourceColor(loan.colorIndex).opacity(0.14))
+                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(loan.personName)
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(GoldengoTheme.inkPrimary)
+                    HStack(spacing: 4) {
+                        Text("Since " + SourcesModel.compactDay(loan.sinceDate))
+                        if let nudge = model.nextNudgeDateText(loan) {
+                            Text("·")
+                            Image(systemName: "bell.fill")
+                                .font(.system(size: 9))
+                            Text(nudge)
+                        } else {
+                            Text("· no reminder")
+                        }
                     }
-                    Spacer()
+                    .font(.system(size: 11.5, weight: .medium))
+                    .foregroundStyle(GoldengoTheme.inkMuted)
+                    .lineLimit(1)
+                }
+
+                Spacer(minLength: 8)
+
+                VStack(alignment: .trailing, spacing: 3) {
                     GoldengoAmountText(
                         Money(amount: loan.remaining, currency: CurrencyCode(loan.currencyCode)).formatted(),
                         role: .row
                     )
-                }
-                .padding(.bottom, 9)
-
-                HStack(spacing: 4) {
-                    Text("since " + SourcesModel.compactDay(loan.sinceDate))
-                    if let nudge = model.nextNudgeDateText(loan) {
-                        Text("·")
-                        Image(systemName: "bell")
-                            .font(.system(size: 10))
-                        Text(nudge)
-                    } else {
-                        Text("· no nudge coming")
+                    HStack(spacing: 4) {
+                        Text("Open")
+                            .font(.system(size: 11.5, weight: .medium))
+                            .foregroundStyle(GoldengoTheme.inkMuted)
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundStyle(GoldengoTheme.inkMuted)
                     }
                 }
-                .font(.system(size: 12))
-                .foregroundStyle(GoldengoTheme.inkMuted)
-                .lineLimit(1)
             }
-            .padding(18)
+            .padding(16)
             .goldengoCard(padding: 0)
             .contentShape(Rectangle())
         }

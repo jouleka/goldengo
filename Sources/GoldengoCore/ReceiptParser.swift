@@ -16,8 +16,21 @@ public struct ParsedReceipt: Sendable, Equatable {
     public let amount: Decimal?
     public let merchant: String?
     public let date: Date?
-    public init(amount: Decimal?, merchant: String?, date: Date?) {
-        self.amount = amount; self.merchant = merchant; self.date = date
+    /// Best-effort purchasable rows. These stay suggestions: the review screen lets the user
+    /// rename, recategorize, remove, or ignore them before any split reaches reporting.
+    public let items: [ParsedReceiptItem]
+    public init(amount: Decimal?, merchant: String?, date: Date?, items: [ParsedReceiptItem] = []) {
+        self.amount = amount; self.merchant = merchant; self.date = date; self.items = items
+    }
+}
+
+public struct ParsedReceiptItem: Sendable, Equatable, Identifiable {
+    public let id: String
+    public let name: String
+    public let amount: Decimal
+
+    public init(id: String = UUID().uuidString, name: String, amount: Decimal) {
+        self.id = id; self.name = name; self.amount = amount
     }
 }
 
@@ -25,9 +38,57 @@ public struct ParsedReceipt: Sendable, Equatable {
 /// every result is a *suggestion* the user reviews.
 public enum ReceiptParser {
     public static func parse(_ lines: [RecognizedLine], currency: CurrencyCode) -> ParsedReceipt {
-        ParsedReceipt(amount: extractAmount(lines, currency: currency),
-                      merchant: extractMerchant(lines),
-                      date: extractDate(lines))
+        let total = extractAmount(lines, currency: currency)
+        return ParsedReceipt(amount: total,
+                             merchant: extractMerchant(lines),
+                             date: extractDate(lines),
+                             items: extractItems(lines, currency: currency, total: total))
+    }
+
+    // MARK: Line items
+
+    /// Conservative trailing-price extraction for the common `ITEM NAME   1,250` receipt shape.
+    /// It intentionally ignores totals, tax/payment rows, dates, codes, and lines without a useful
+    /// text label. A partial result is still valuable: the review UI adds any unmatched remainder
+    /// as one editable row rather than pretending OCR found the whole basket.
+    static func extractItems(_ lines: [RecognizedLine], currency: CurrencyCode,
+                             total: Decimal?) -> [ParsedReceiptItem] {
+        let ignored = ["TOTAL", "TOTALI", "SUBTOTAL", "NENTOTAL", "NËNTOTAL", "TVSH", "TAX",
+                       "VAT", "CASH", "CARD", "VISA", "MASTERCARD", "CHANGE", "BALANCE",
+                       "SHUMA", "VLERA", "AMOUNT DUE", "THANK", "FALEMINDERIT"]
+        let merchant = extractMerchant(lines)?.folding(options: [.diacriticInsensitive, .caseInsensitive],
+                                                        locale: .current).uppercased()
+        var result: [ParsedReceiptItem] = []
+
+        for line in lines.sorted(by: { $0.boundingBox.midY > $1.boundingBox.midY }) {
+            let raw = line.text.trimmingCharacters(in: .whitespacesAndNewlines)
+            let normalized = raw.folding(options: [.diacriticInsensitive, .caseInsensitive],
+                                         locale: .current).uppercased()
+            guard !raw.isEmpty, normalized != merchant, dateString(in: raw) == nil,
+                  !ignored.contains(where: { normalized.contains($0) }) else { continue }
+            guard let match = trailingAmountMatch(in: raw),
+                  let amount = parseAmount(match.token, fractionDigits: currency.fractionDigits),
+                  amount > 0 else { continue }
+            let name = String(raw[..<match.range.lowerBound])
+                .trimmingCharacters(in: CharacterSet.whitespacesAndNewlines.union(.punctuationCharacters))
+            guard name.count >= 2, name.contains(where: \.isLetter) else { continue }
+            // A single line above the receipt total cannot exceed it; rejecting it removes most
+            // phone/id/quantity artifacts without blocking partial baskets.
+            if let total, amount > total { continue }
+            result.append(ParsedReceiptItem(name: name, amount: amount))
+        }
+        return result
+    }
+
+    private static func trailingAmountMatch(in text: String) -> (token: String, range: Range<String.Index>)? {
+        guard let regex = try? NSRegularExpression(pattern: #"(\d[\d.,]*\d|\d)\s*(?:ALL|LEK|L|EUR|€|USD|\$)?\s*$"#,
+                                                   options: [.caseInsensitive]) else { return nil }
+        let ns = text as NSString
+        guard let match = regex.firstMatch(in: text, range: NSRange(location: 0, length: ns.length)),
+              match.numberOfRanges > 1,
+              let tokenRange = Range(match.range(at: 1), in: text),
+              let fullRange = Range(match.range, in: text) else { return nil }
+        return (String(text[tokenRange]), fullRange)
     }
 
     // MARK: Amount

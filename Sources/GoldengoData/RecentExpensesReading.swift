@@ -4,7 +4,18 @@ import GoldengoCore
 /// The read surface the Recent screen depends on. Abstracting it (rather than depending on the
 /// concrete `IngestionStore`) lets the UI model be tested against a failing reader so the error
 /// path is exercised — `IngestionStore` satisfies it directly.
-public protocol RecentExpensesReading: Sendable {
+public protocol ExpensePlanningUpdating: Sendable {
+    func updateExpensePlanning(dedupeKey: String, contextName: String?, splits: [TransactionSplit]) async throws
+    func updateTransactionKind(dedupeKey: String, kind: TransactionKind) async throws
+}
+
+public extension ExpensePlanningUpdating {
+    /// Backwards-compatible default for lightweight test readers that only exercise classic edits.
+    func updateExpensePlanning(dedupeKey: String, contextName: String?, splits: [TransactionSplit]) async throws {}
+    func updateTransactionKind(dedupeKey: String, kind: TransactionKind) async throws {}
+}
+
+public protocol RecentExpensesReading: Sendable, ExpensePlanningUpdating {
     func recentExpenses(limit: Int) async throws -> [ExpenseSnapshot]
     func todayTotal(in currency: CurrencyCode, rates: RateTable) async throws -> Decimal
     func dashboardSummary(in currency: CurrencyCode, rates: RateTable, now: Date, topCategoryLimit: Int) async throws -> DashboardSummary

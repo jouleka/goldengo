@@ -30,7 +30,9 @@ public enum RootRoute: Equatable, Sendable {
 }
 
 public struct RootView: View {
+    private enum PeriodSetupNextAction { case addExpense, importStatement }
     private let store: IngestionStore
+    private let storageStatus: String
     @State private var selectedTab: Int = 1            // Home dashboard is the orienting landing screen.
     @State private var showSettings = false
     @State private var showImport = false
@@ -38,10 +40,20 @@ public struct RootView: View {
     @State private var showSubscriptions = false  // Home "Upcoming" → Subscriptions management sheet
     @State private var showHistory = false        // History pushed within the Home tab — hides the tab bar
     @State private var showSpending = false       // Spending breakdown pushed from Home's compact card
+    @State private var showPlan = false           // decision layer pushed from Home's forecast card
+    @State private var showPeriodSetup = false    // first-run explicit amount + end-date contract
+    @State private var periodSetupNextAction: PeriodSetupNextAction?
     @State private var barHidden = false          // hide-on-scroll: the pill slides away while scrolling down Home
     @State private var importFile: ImportFile?            // a statement shared into the app (Share / Open in)
     @State private var reEntryPrompt: ReEntryPrompt?      // welcome-back soft-landing after a gap
     @State private var ritualSheet: RitualSheet?          // daily check-in (GOL-85), opt-in
+    @AppStorage(SharedSummary.appLockEnabledKey,
+                store: UserDefaults(suiteName: SharedSummary.appGroupID))
+    private var appLockEnabled = false
+    @AppStorage(SharedSummary.periodSetupDeferredKey,
+                store: UserDefaults(suiteName: SharedSummary.appGroupID))
+    private var periodSetupDeferred = false
+    @State private var appUnlocked = false
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     // Owned here (not inline in the tab) so Home can be refreshed when the user returns to it or
@@ -52,8 +64,10 @@ public struct RootView: View {
     @State private var sourcesModel: SourcesModel
     @State private var historyModel: HistoryModel   // the "See all" period browser, pushed from Home
     @State private var spendingModel: CategoryBreakdownModel   // the full breakdown, pushed from Home's Spending card
-    public init(store: IngestionStore) {
+    @State private var planModel: MoneyPlanModel
+    public init(store: IngestionStore, storageStatus: String = "This device") {
         self.store = store
+        self.storageStatus = storageStatus
         let preferred = SharedSummary().readPreferredCurrency()
         _recentModel = State(initialValue: RecentExpensesModel(store: store, currency: preferred))
         _subsModel = State(initialValue: SubscriptionsModel(store: store))
@@ -61,6 +75,7 @@ public struct RootView: View {
         _sourcesModel = State(initialValue: SourcesModel(store: store, currency: preferred))
         _historyModel = State(initialValue: HistoryModel(reader: store, currency: preferred))
         _spendingModel = State(initialValue: CategoryBreakdownModel(store: store, currency: preferred))
+        _planModel = State(initialValue: MoneyPlanModel(store: store, currency: preferred))
     }
 
     /// Applies a legacy tab index (from deep links / widget / Siri `pendingTab`) under the
@@ -146,6 +161,8 @@ public struct RootView: View {
                 showHistory: $showHistory,
                 spendingModel: spendingModel,
                 showSpending: $showSpending,
+                planModel: planModel,
+                showPlan: $showPlan,
                 barHidden: $barHidden,
                 onOpenImport: { showImport = true },
                 onOpenSettings: { showSettings = true },
@@ -157,7 +174,9 @@ public struct RootView: View {
                     sourcesModel.currency = code   // keep the Wallet tab on the just-chosen display currency
                     historyModel.currency = code   // and the History browser on next open
                     spendingModel.currency = code  // and the Spending breakdown on next open
+                    planModel.currency = code
                     Task { await recentModel.load() }
+                    Task { await planModel.load() }
                     // Re-render the widget's cached today-total string in the new currency (it stores a
                     // pre-formatted, currency-bearing string), else the lock screen keeps the old one.
                     Task { try? await store.refreshSharedSummaries() }
@@ -171,9 +190,9 @@ public struct RootView: View {
         Button { selectedTab = tab } label: {
             VStack(spacing: 3) {
                 Image(systemName: icon)
-                    .font(.system(size: 22, weight: selectedTab == tab ? .semibold : .regular))
+                    .font(.title3.weight(selectedTab == tab ? .semibold : .regular))
                 Text(label)
-                    .font(.system(size: 10, weight: .semibold))
+                    .font(.caption2.weight(.semibold))
             }
             .foregroundStyle(selectedTab == tab ? GoldengoTheme.accent : GoldengoTheme.inkMuted)
             .frame(maxWidth: .infinity)
@@ -214,7 +233,7 @@ public struct RootView: View {
             // Hidden while History or Spending is pushed inside the Home tab — the custom bar is a
             // ZStack sibling (not a real tab bar), so it would otherwise float over the pushed screen
             // with live, misleading Home/Wallet/Add controls.
-            if !showHistory && !showSpending {
+            if !showHistory && !showSpending && !showPlan {
                 goldengoTabBar
                     .offset(y: barHidden ? 120 : 0)                       // hide-on-scroll: slide the pill off the bottom
                     .scaleEffect(barHidden ? 0.94 : 1, anchor: .bottom)   // a gentle shrink (GPU-cheap; not blur)
@@ -225,6 +244,7 @@ public struct RootView: View {
         }
         .animation(.snappy, value: showHistory)
         .animation(.snappy, value: showSpending)
+        .animation(.snappy, value: showPlan)
         .sheet(isPresented: $showAdd, onDismiss: {
             // A logged expense should appear on Home without a manual refresh.
             Task { await recentModel.load() }
@@ -248,6 +268,7 @@ public struct RootView: View {
             sourcesModel.currency = preferred
             historyModel.currency = preferred
             spendingModel.currency = preferred
+            planModel.currency = preferred
             if changed {
                 Task { await recentModel.load() }
                 Task { await sourcesModel.load() }
@@ -255,7 +276,29 @@ public struct RootView: View {
                 // currency-bearing; without this the lock screen keeps the old currency/symbol).
                 Task { try? await store.refreshSharedSummaries() }
             }
-        }) { SettingsView() }
+        }) {
+            SettingsView(store: store, storageStatus: storageStatus,
+                         onAuthenticated: { appUnlocked = true })
+        }
+        .sheet(isPresented: $showPeriodSetup, onDismiss: {
+            Task { await planModel.load(); await recentModel.load() }
+            if let action = periodSetupNextAction {
+                periodSetupNextAction = nil
+                switch action {
+                case .addExpense: showAdd = true
+                case .importStatement: showImport = true
+                }
+            }
+        }) {
+            SpendingPeriodSetupView(
+                model: planModel,
+                isOnboarding: true,
+                onComplete: { periodSetupDeferred = false },
+                onDefer: { periodSetupDeferred = true },
+                onAddExpense: { periodSetupNextAction = .addExpense },
+                onImportStatement: { periodSetupNextAction = .importStatement }
+            )
+        }
         .sheet(isPresented: $showImport, onDismiss: {
             // A statement import adds expenses AND may form new recurring patterns — refresh both.
             Task { await recentModel.load() }
@@ -289,6 +332,10 @@ public struct RootView: View {
             checkReEntry()            // cold-launch re-entry check (onChange(scenePhase) misses the initial .active)
             checkRitual()             // then the daily check-in (Re-entry takes precedence)
             await recentModel.load()  // Home is the landing tab
+            await planModel.load()    // safe-to-spend brief beside Home's current activity
+            if !planModel.isPeriodConfigured && !periodSetupDeferred {
+                showPeriodSetup = true
+            }
             await subsModel.load()    // re-sync subscription reminders on cold launch (was tab-4 entry)
             checkOverspend()          // evaluate + fire any newly-escalated budget alerts
             // Recompose the widget summaries so an update/install (or any pre-fix edit) never
@@ -298,7 +345,7 @@ public struct RootView: View {
         .onChange(of: selectedTab) { _, newTab in
             barHidden = false   // always reveal the pill when changing tabs
             // Reload the destination tab's data on entry so adds/imports show without a manual refresh.
-            if newTab == 1 { Task { await recentModel.load() } }
+            if newTab == 1 { Task { await recentModel.load(); await planModel.load() } }
             if newTab == 5 { Task { await sourcesModel.load() } }
         }
         .onChange(of: scenePhase) { _, newPhase in
@@ -310,11 +357,13 @@ public struct RootView: View {
                 // An expense may have been logged via the Quick-Log shortcut while we were
                 // backgrounded; reload so it appears on Home without a manual pull-to-refresh.
                 Task { await recentModel.load() }
+                Task { await planModel.load() }
                 // Keep subscription reminders fresh on long-uptime foregrounds (was the tab-4 trigger).
                 Task { await subsModel.load() }
                 checkOverspend()   // re-evaluate on every foreground; the store's dedupe stops repeats
             case .background:
                 SharedSummary().setLastSeen()
+                if appLockEnabled { appUnlocked = false }
             default:
                 break
             }
@@ -327,6 +376,13 @@ public struct RootView: View {
                 route(toTab: 5)
             } else if let tab = Self.tab(forDeepLink: url) {
                 route(toTab: tab)
+            }
+        }
+        .overlay {
+            if appLockEnabled && !appUnlocked {
+                AppPrivacyLockView { appUnlocked = true }
+                    .transition(.opacity)
+                    .zIndex(100)
             }
         }
     }

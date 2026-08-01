@@ -150,4 +150,29 @@ final class ReceiptParserTests: XCTestCase {
         XCTAssertEqual(ReceiptParser.parse(lines, currency: .all).amount, 12345678,
                        "A large labeled total must not be rejected as an over-long id.")
     }
+
+    // MARK: Line items
+
+    func test_items_extractTrailingPrices_andIgnoreReceiptMath() {
+        let lines = [
+            line("SPAR TIRANA", y: 0.95),
+            line("MILK 180", y: 0.72),
+            line("SHAMPOO 420", y: 0.65),
+            line("TVSH 100", y: 0.30),
+            line("TOTALI 600 L", y: 0.20),
+        ]
+        let parsed = ReceiptParser.parse(lines, currency: .all)
+        XCTAssertEqual(parsed.items.map(\.name), ["MILK", "SHAMPOO"])
+        XCTAssertEqual(parsed.items.map(\.amount), [180, 420])
+    }
+
+    func test_items_allowPartialBasket_butRejectPriceOverTotal() {
+        let lines = [
+            line("SHOP", y: 0.95),
+            line("BREAD 120", y: 0.70),
+            line("LOYALTY ID 999999", y: 0.50),
+            line("TOTAL 500", y: 0.20),
+        ]
+        XCTAssertEqual(ReceiptParser.parse(lines, currency: .all).items.map(\.name), ["BREAD"])
+    }
 }

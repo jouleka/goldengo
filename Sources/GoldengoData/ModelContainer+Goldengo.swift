@@ -10,7 +10,9 @@ public extension ModelContainer {
         Schema([
             ExpenseRecord.self, CategoryRecord.self, AccountRecord.self, MerchantRecord.self,
             ImportBatch.self, SubscriptionRecord.self, SourceRecord.self, WalletCount.self,
-            LoanRecord.self,
+            LoanRecord.self, ExpenseSplitRecord.self, GoalRecord.self,
+            ScheduledCommitmentRecord.self, InvestmentAccountRecord.self, InvestmentEntryRecord.self,
+            SpendingPeriodRecord.self,
         ])
     }
 

@@ -17,19 +17,21 @@ public enum GoldengoTheme {
         public static let fieldDark = "#2B261D"
         public static let inkPrimaryLight = "#2A2620"
         public static let inkPrimaryDark = "#F3ECDD"
-        public static let inkMutedLight = "#8C8373"
+        /// 4.89:1 on the light canvas: safe for normal-size supporting text.
+        public static let inkMutedLight = "#71695C"
         public static let inkMutedDark = "#A89E89"
         public static let hairlineLight = "#E7DECE"
         public static let hairlineDark = "#322C22"
-        public static let accentLight = "#B68A2E"
+        /// Darkened warm gold keeps the brand character while reaching 4.70:1 on the canvas.
+        public static let accentLight = "#8A671A"
         public static let accentDark = "#E0AE4A"
         /// Label/glyph color on a gold fill — colour-constant (same value in light and dark), so no `*Dark` pair.
         public static let onAccent = "#2A2620"
         /// Warm terracotta destructive (prototype --danger), not harsh system red.
-        public static let dangerLight = "#E0533D"
+        public static let dangerLight = "#B64331"
         public static let dangerDark = "#E8705C"
         /// Soft warm green for income inflow (prototype --income), not loud system green.
-        public static let incomeLight = "#4E8B5B"
+        public static let incomeLight = "#3A7547"
         public static let incomeDark = "#6FB47E"
     }
 
@@ -196,12 +198,30 @@ public extension View {
 public enum GoldengoCategoryIcon {
     public static func symbol(for category: String?) -> String {
         switch category {
-        case "Groceries": return "cart"
-        case "Food":      return "fork.knife"
-        case "Transport": return "car"
-        case "Coffee":    return "cup.and.saucer"
-        case "Bills":     return "doc.text"
-        case "Shopping":  return "bag"
+        case "Groceries": return "cart.fill"
+        case "Food", "Dining out": return "fork.knife"
+        case "Coffee": return "cup.and.saucer.fill"
+        case "Housing", "Rent & mortgage", "Household", "Home maintenance": return "house.fill"
+        case "Utilities": return "bolt.fill"
+        case "Transport", "Fuel", "Car maintenance", "Parking": return "car.fill"
+        case "Public transport": return "bus.fill"
+        case "Taxi & rideshare": return "car.side.fill"
+        case "Health", "Healthcare", "Pharmacy": return "cross.case.fill"
+        case "Fitness": return "figure.run"
+        case "Bills", "Phone & internet", "Insurance", "Taxes & fees": return "doc.text.fill"
+        case "Subscriptions": return "repeat.circle.fill"
+        case "Shopping": return "bag.fill"
+        case "Travel": return "airplane"
+        case "Entertainment", "Hobbies": return "sparkles"
+        case "Investments", "General investing", "Stocks & funds", "Retirement", "Business investment":
+            return "chart.line.uptrend.xyaxis"
+        case "Savings": return "banknote.fill"
+        case "Crypto": return "bitcoinsign.circle.fill"
+        case "Gambling", "Waste & risk", "General waste", "Impulse spending":
+            return "exclamationmark.triangle.fill"
+        case "Tobacco & vape": return "smoke.fill"
+        case "Fines & penalties": return "exclamationmark.octagon.fill"
+        case "Other": return "square.grid.2x2"
         default:          return "tag"
         }
     }
@@ -212,8 +232,11 @@ public struct GoldengoSectionLabel: View {
     private let text: String
     public init(_ text: String) { self.text = text }
     public var body: some View {
-        Text(text.uppercased())
+        Text(LocalizedStringKey(text.uppercased()))
             .font(.caption.weight(.semibold))
+            // Labels orient a card; they should grow, but not crowd the card's actual controls at
+            // the largest accessibility sizes.
+            .dynamicTypeSize(...DynamicTypeSize.accessibility2)
             .tracking(0.6)
             .foregroundStyle(.secondary)
     }

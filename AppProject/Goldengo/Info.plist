@@ -43,8 +43,10 @@
     </dict>
   </array>
   <key>LSSupportsOpeningDocumentsInPlace</key><true/>
-  <key>NSCameraUsageDescription</key>
-  <string>Scan a receipt to add the expense automatically.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Scan a receipt to add the expense automatically.</string>
+	<key>NSFaceIDUsageDescription</key>
+	<string>Unlock Goldengo and keep your financial information private.</string>
   <key>NSAppTransportSecurity</key>
   <dict>
     <key>NSAllowsArbitraryLoads</key><false/>

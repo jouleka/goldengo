@@ -31,4 +31,20 @@ final class SourcesModelTests: XCTestCase {
         await model.load()
         XCTAssertEqual(model.snapshot?.sources.count, 0)
     }
+
+    func test_walletTotal_convertsTrackedCurrenciesIntoDisplayCurrency() async throws {
+        let store = IngestionStore(modelContainer: try .goldengoInMemory())
+        _ = try await store.setWalletBalance(10_000, currency: .all, tally: nil)
+        _ = try await store.setWalletBalance(100, currency: .eur, tally: nil)
+        let model = SourcesModel(store: store, currency: .all)
+        await model.load()
+
+        let rates = RateTable(
+            base: CurrencyCode("USD"),
+            rates: ["USD": 1, "ALL": 100, "EUR": 1],
+            asOf: .now
+        )
+
+        XCTAssertEqual(model.walletTotal(using: rates), 20_000)
+    }
 }

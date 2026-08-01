@@ -11,6 +11,7 @@ import GoldengoData
 public final class CategoryDetailModel {
     private let store: IngestionStore?
     public let categoryName: String
+    public let currency: CurrencyCode
     public var monthAnchor: Date
     public private(set) var expenses: [ExpenseSnapshot] = []
     public private(set) var cap: Decimal?
@@ -20,11 +21,13 @@ public final class CategoryDetailModel {
 
     public var isOther: Bool { categoryName == "Other" }
 
-    public init(store: IngestionStore, categoryName: String, monthAnchor: Date, cap: Decimal?) {
+    public init(store: IngestionStore, categoryName: String, monthAnchor: Date, cap: Decimal?,
+                currency: CurrencyCode) {
         self.store = store
         self.categoryName = categoryName
         self.monthAnchor = monthAnchor
         self.cap = cap
+        self.currency = currency
     }
 
     private init(previewCategoryName: String, monthAnchor: Date, cap: Decimal?) {
@@ -32,6 +35,7 @@ public final class CategoryDetailModel {
         self.categoryName = previewCategoryName
         self.monthAnchor = monthAnchor
         self.cap = cap
+        self.currency = .all
     }
 
     public func load() async {
@@ -48,16 +52,19 @@ public final class CategoryDetailModel {
     public func setCap(_ newCap: Decimal?) async -> Bool {
         let wasFirstCap = cap == nil && newCap != nil
         guard let store else { cap = newCap; return wasFirstCap }
-        try? await store.setMonthlyBudget(categoryNamed: categoryName, cap: newCap)
+        _ = try? await store.setMonthlyBudget(categoryNamed: categoryName, cap: newCap,
+                                              currency: currency)
         cap = newCap
         return wasFirstCap
     }
 
     /// Assigns `name` to the expense at `dedupeKey`, then reloads — the row leaves "Other" on the
     /// next `load()` since it no longer matches the nil/"Other" bucket.
-    public func assignCategory(_ name: String, toExpenseWithKey dedupeKey: String) async {
+    public func assignCategory(_ name: String, toExpenseWithKey dedupeKey: String,
+                               rememberMerchant: Bool = false) async {
         guard let store else { return }
-        try? await store.assignCategory(named: name, toExpenseWithKey: dedupeKey)
+        try? await store.assignCategory(named: name, toExpenseWithKey: dedupeKey,
+                                        rememberMerchant: rememberMerchant)
         await load()
     }
 

@@ -194,6 +194,7 @@ extension IngestionStore {
         -> (inflows: [ProvenanceAllocator.Inflow], outflows: [ProvenanceAllocator.Outflow]) {
         let incomeRaw = TransactionKind.income.rawValue
         let expenseRaw = TransactionKind.expense.rawValue
+        let refundRaw = TransactionKind.refund.rawValue
         let transferRaw = TransactionKind.transfer.rawValue
         let manualRaw = ExpenseSource.manual.rawValue
         var inflows: [ProvenanceAllocator.Inflow] = []
@@ -201,6 +202,12 @@ extension IngestionStore {
         for r in records {
             if r.kindRaw == incomeRaw, r.fundedBySourceID != FundingPin.wallet,
                let sid = r.provenanceSource?.id {
+                inflows.append(.init(id: r.dedupeKey, sourceID: sid, amount: r.amount,
+                                     currency: CurrencyCode(r.currencyCode), date: r.date))
+            } else if r.kindRaw == refundRaw, let sid = r.fundedBySourceID,
+                      sid != FundingPin.wallet {
+                // A refund replenishes the source that funded the purchase; unlike earned income,
+                // it does not create a new named source or influence payday inference.
                 inflows.append(.init(id: r.dedupeKey, sourceID: sid, amount: r.amount,
                                      currency: CurrencyCode(r.currencyCode), date: r.date))
             } else if r.kindRaw == expenseRaw {

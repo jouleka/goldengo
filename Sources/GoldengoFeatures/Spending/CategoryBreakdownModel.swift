@@ -51,7 +51,8 @@ public final class CategoryBreakdownModel {
     /// Nil in the preview instance (no store to back it) — the view simply doesn't push in that case.
     public func detailModel(for row: CategoryBreakdownRow) -> CategoryDetailModel? {
         guard let store else { return nil }
-        return CategoryDetailModel(store: store, categoryName: row.name, monthAnchor: monthAnchor, cap: row.budget)
+        return CategoryDetailModel(store: store, categoryName: row.name, monthAnchor: monthAnchor,
+                                   cap: row.budget, currency: currency)
     }
 
     private static let monthTitleFormatter: DateFormatter = {

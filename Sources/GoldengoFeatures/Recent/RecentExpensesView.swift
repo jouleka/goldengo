@@ -29,6 +29,8 @@ public struct RecentExpensesView: View {
     private let spendingModel: CategoryBreakdownModel
     /// Bound to `RootView` — same purpose as `showHistory`, for the Spending push.
     @Binding private var showSpending: Bool
+    private let planModel: MoneyPlanModel
+    @Binding private var showPlan: Bool
     /// Bound to `RootView` — set true while scrolling down so the floating pill slides away.
     @Binding private var barHidden: Bool
     @State private var showCurrencyPicker = false
@@ -41,14 +43,13 @@ public struct RecentExpensesView: View {
     /// expanded). Keyed by date — not list index — so a fold survives the frequent `model.load()`
     /// reloads (tab return, foreground, after an add/edit/delete). Session-only; not persisted.
     @State private var collapsedDays: Set<Date> = []
-    /// Drives the Spending card's budget-bar fill animation (matches `CategoryBreakdownView`'s own).
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
     public init(model: RecentExpensesModel,
                 historyModel: HistoryModel,
                 showHistory: Binding<Bool> = .constant(false),
                 spendingModel: CategoryBreakdownModel,
                 showSpending: Binding<Bool> = .constant(false),
+                planModel: MoneyPlanModel,
+                showPlan: Binding<Bool> = .constant(false),
                 barHidden: Binding<Bool> = .constant(false),
                 onOpenImport: @escaping () -> Void = {},
                 onOpenSettings: @escaping () -> Void = {},
@@ -59,6 +60,8 @@ public struct RecentExpensesView: View {
         self._showHistory = showHistory
         self.spendingModel = spendingModel
         self._showSpending = showSpending
+        self.planModel = planModel
+        self._showPlan = showPlan
         self._barHidden = barHidden
         self.onOpenImport = onOpenImport
         self.onOpenSettings = onOpenSettings
@@ -73,34 +76,28 @@ public struct RecentExpensesView: View {
             // system's List owns scrolling and swipe together, so they never conflict. The dashboard
             // cards ride on clear, separator-less rows to keep their existing card look.
             List {
-                // 1. Header row — serif wordmark left, circular icon buttons right.
+                // 1. A quiet page header. Less common utilities live behind one menu; Settings stays
+                // visible because it is the action people are most likely to look for here.
                 headerRow.goldengoCardRow()
 
                 if model.loadFailed { errorBanner.goldengoCardRow() }
 
-                // 2. Pocket hero card.
-                pocketHeroCard.goldengoCardRow()
+                // 2. Home answers the most immediate question first: what happened today. Wallet
+                // and month totals remain visible as supporting context, not competing headlines.
+                todayHeroCard.goldengoCardRow()
 
-                // 3. Spending — compact top-categories preview; taps through to the full breakdown.
-                spendingHeaderRow
-                    .goldengoCardRow(top: 22, bottom: GoldengoTheme.Spacing.xs)
-                spendingCard.goldengoCardRow()
+                // 3. The one forward-looking decision Home needs. Reporting remains in the More
+                // menu; tapping this opens the focused planning layer.
+                planBriefCard.goldengoCardRow()
 
-                // 4. Upcoming (pending subscription charges).
-                if !model.pendingCharges.isEmpty {
-                    GoldengoSerifSectionHeader("Upcoming")
-                        .goldengoCardRow(top: 22, bottom: GoldengoTheme.Spacing.xs)
+                // 4. Everything that can be completed in one tap is collected in one place.
+                if !model.pendingCharges.isEmpty || !model.ghosts.isEmpty {
+                    quickLogHeader.goldengoCardRow(top: 22, bottom: GoldengoTheme.Spacing.xs)
                     ForEach(model.pendingCharges) { p in dueRow(p) }
-                }
-
-                // 5. Today's usuals (rhythm ghosts).
-                if !model.ghosts.isEmpty {
-                    GoldengoSerifSectionHeader("Today's usuals")
-                        .goldengoCardRow(top: 22, bottom: GoldengoTheme.Spacing.xs)
                     ForEach(model.ghosts) { g in ghostRow(g) }
                 }
 
-                // 6. Recent — this month, grouped by day; "See all" opens the full History browser.
+                // 5. Recent — this month, grouped by day; "See all" opens the full History browser.
                 HStack(alignment: .firstTextBaseline) {
                     GoldengoSerifSectionHeader("Recent")
                     Spacer()
@@ -156,6 +153,13 @@ public struct RecentExpensesView: View {
             .onChange(of: showSpending) { _, shown in
                 if !shown { barHidden = false; Task { await model.load() } }
             }
+            .navigationDestination(isPresented: $showPlan) { MoneyPlanView(model: planModel) }
+            .onChange(of: showPlan) { _, shown in
+                if !shown {
+                    barHidden = false
+                    Task { await planModel.load(); await model.load() }
+                }
+            }
             .onAppear { selectableCurrencies = CurrencyCatalog.selectable(from: ExchangeRateCache().load() ?? SeedRates.table) }
             .alert("Adjust amount", isPresented: Binding(get: { adjusting != nil },
                                                          set: { if !$0 { adjusting = nil } }),
@@ -177,9 +181,10 @@ public struct RecentExpensesView: View {
                 EditExpenseView(
                     snapshot: snap,
                     fundingSources: model.fundingSources,
-                    onSave: { amt, cur, m, n, c, d, pin in
+                    onSave: { amt, cur, m, n, c, d, pin, context, splits, kind in
                         Task { await model.update(snap, amount: amt, currency: cur, merchant: m, note: n,
-                                                  categoryName: c, date: d, fundedBySourceID: pin) }
+                                                  categoryName: c, date: d, fundedBySourceID: pin,
+                                                  contextName: context, splits: splits, kind: kind) }
                     },
                     onDelete: { deleteWithUndo(snap) }
                 )
@@ -215,20 +220,34 @@ public struct RecentExpensesView: View {
         }
     }
 
-    // MARK: - Header row
+    // MARK: - Header
 
-    /// Wordmark + two 36×36 plain circular icon buttons. Matches home.jsx's .gg-wordmark + iconBtn.
     private var headerRow: some View {
-        HStack(spacing: 0) {
-            Text("Goldengo")
-                .font(.system(size: 26, weight: .medium, design: .serif))
-                .foregroundStyle(GoldengoTheme.accent)
+        HStack(alignment: .center, spacing: GoldengoTheme.Spacing.m) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text("Today")
+                    .font(.largeTitle.weight(.medium))
+                    .fontDesign(.serif)
+                    .foregroundStyle(GoldengoTheme.inkPrimary)
+                Text(Date.now.formatted(.dateTime.weekday(.wide).day().month(.wide)))
+                    .font(.subheadline)
+                    .foregroundStyle(GoldengoTheme.inkMuted)
+            }
             Spacer()
             HStack(spacing: 6) {
-                // In-app entry to Subscriptions management (the redesign dropped the only button;
-                // it was otherwise reachable only via Siri/deeplink).
-                circleIconButton("repeat", label: "Subscriptions", action: onOpenSubscriptions)
-                circleIconButton("square.and.arrow.down", label: "Import statement", action: onOpenImport)
+                Menu {
+                    Button { showSpending = true } label: {
+                        Label("Spending breakdown", systemImage: "chart.pie.fill")
+                    }
+                    Button(action: onOpenSubscriptions) {
+                        Label("Subscriptions", systemImage: "repeat")
+                    }
+                    Button(action: onOpenImport) {
+                        Label("Import statement", systemImage: "square.and.arrow.down")
+                    }
+                } label: {
+                    circleIcon("ellipsis", label: "More")
+                }
                 circleIconButton("gearshape", label: "Settings", action: onOpenSettings)
             }
         }
@@ -238,144 +257,187 @@ public struct RecentExpensesView: View {
 
     private func circleIconButton(_ systemName: String, label: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            Image(systemName: systemName)
-                .font(.system(size: 21))
-                .foregroundStyle(GoldengoTheme.inkMuted)
-                .frame(width: 36, height: 36)
-                .background(Color.clear)
-                .clipShape(Circle())
+            circleIcon(systemName, label: label)
         }
         .buttonStyle(.plain)
         .accessibilityLabel(label)
     }
 
-    // MARK: - Pocket hero card
+    private func circleIcon(_ systemName: String, label: String) -> some View {
+        Image(systemName: systemName)
+            .font(.system(size: 19, weight: .medium))
+            .foregroundStyle(GoldengoTheme.inkMuted)
+            .frame(width: 40, height: 40)
+            .background(Color.goldengoField)
+            .clipShape(Circle())
+            .accessibilityLabel(label)
+    }
 
-    private var pocketHeroCard: some View {
+    // MARK: - Today hero
+
+    private var todayHeroCard: some View {
         VStack(alignment: .leading, spacing: 0) {
-            // Eyebrow: 12pt, semibold, tracking 0.6, uppercase, inkMuted — matches .gg-eyebrow
-            Text("IN YOUR POCKET")
-                .font(.system(size: 12, weight: .semibold))
-                .tracking(0.6)
-                .foregroundStyle(GoldengoTheme.inkMuted)
-
-            if model.hasWallet {
-                GoldengoAmountText(model.pocketHeroText, role: .hero)
-                    .padding(.top, 10)
-                    .padding(.bottom, 4)
-                let caption = model.pocketSecondaryText.isEmpty
-                    ? "cash you're carrying right now"
-                    : model.pocketSecondaryText
-                Text(caption)
-                    .font(.system(size: 12.5))
+            HStack(alignment: .center) {
+                Text("SPENT TODAY")
+                    .font(.caption.weight(.semibold))
+                    .tracking(0.6)
                     .foregroundStyle(GoldengoTheme.inkMuted)
-            } else {
-                Text("Set your wallet to begin.")
-                    .font(.system(size: 15))
-                    .foregroundStyle(GoldengoTheme.inkMuted)
-                    .padding(.top, 12)
+                Spacer()
+                currencyMenu
             }
 
-            // Hairline divider, margin 18 top/bottom — matches home.jsx hr { margin: '18px 0' }
+            GoldengoAmountText(model.todayTotalText, role: .hero)
+                .padding(.top, GoldengoTheme.Spacing.s)
+
             Divider()
                 .overlay(GoldengoTheme.hairline)
                 .padding(.vertical, 18)
 
-            // Bottom row: "This month" serif 16pt + amount cycler on the left;
-            //             "Today" caption 12.5 + row amount on the right.
-            HStack(alignment: .top, spacing: 0) {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("This month")
-                        .font(.system(size: 16, weight: .medium, design: .serif))
-                        .foregroundStyle(GoldengoTheme.inkPrimary)
-                    // Currency cycler: monthAmountText + chevron.down (mirrors home.jsx onCycleDisplay)
-                    Menu {
-                        ForEach(menuCurrencies, id: \.rawValue) { c in
-                            Button {
-                                onChangeCurrency(c)
-                            } label: {
-                                if c.rawValue == model.currency.rawValue {
-                                    Label(menuLabel(c), systemImage: "checkmark")
-                                } else {
-                                    Text(menuLabel(c))
-                                }
-                            }
-                        }
-                        Divider()
-                        Button { showCurrencyPicker = true } label: {
-                            Label("More currencies…", systemImage: "ellipsis.circle")
-                        }
-                    } label: {
-                        HStack(alignment: .firstTextBaseline, spacing: 6) {
-                            GoldengoAmountText(model.monthAmountText(), role: .title)
-                            Image(systemName: "chevron.down")
-                                .font(.system(size: 13, weight: .semibold))
-                                .foregroundStyle(GoldengoTheme.inkMuted)
-                                .padding(.top, 4)
-                        }
-                        .contentShape(Rectangle())
-                    }
-                }
-                Spacer()
-                VStack(alignment: .trailing, spacing: 6) {
-                    Text("Today")
-                        .font(.system(size: 12.5))
-                        .foregroundStyle(GoldengoTheme.inkMuted)
-                    GoldengoAmountText(model.todayTotalText, role: .row)
-                }
+            HStack(spacing: GoldengoTheme.Spacing.m) {
+                supportingMetric(title: "This month", value: model.monthTotalText())
+                Divider().overlay(GoldengoTheme.hairline).frame(height: 34)
+                supportingMetric(
+                    title: "In your pocket",
+                    value: model.hasWallet ? model.pocketHeroText : "Not set"
+                )
             }
         }
         .goldengoCard(padding: 22)
     }
 
-    // MARK: - Spending card
+    private func supportingMetric(title: String, value: String) -> some View {
+        VStack(alignment: .leading, spacing: 5) {
+            Text(title)
+                .font(.footnote)
+                .foregroundStyle(GoldengoTheme.inkMuted)
+            Text(value)
+                .font(.body.weight(.semibold))
+                .monospacedDigit()
+                .foregroundStyle(GoldengoTheme.inkPrimary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
 
-    /// "Spending" title + an over-budget dot when any category this month is over its cap. No
-    /// trailing button here (unlike Recent's header) — the whole card below is the single tap target,
-    /// so a second tappable control in the header would compete with it.
-    private var spendingHeaderRow: some View {
-        HStack(alignment: .firstTextBaseline, spacing: GoldengoTheme.Spacing.s) {
-            GoldengoSerifSectionHeader("Spending")
-            if model.hasOverBudgetCategory {
-                Circle()
-                    .fill(GoldengoTheme.danger)
-                    .frame(width: 7, height: 7)
-                    .accessibilityHidden(true)   // conveyed in the card's own accessibility label instead
+    // MARK: - Spending insight
+
+    private var planBriefCard: some View {
+        Button { showPlan = true } label: {
+            if planModel.isPeriodConfigured { configuredPlanBrief }
+            else { setupPlanBrief }
+        }
+        .buttonStyle(.plain)
+        .goldengoCard()
+        .accessibilityElement(children: .combine)
+        .accessibilityHint(planModel.isPeriodConfigured
+                           ? "Double tap to open your plan"
+                           : "Double tap to set your spending period")
+    }
+
+    private var configuredPlanBrief: some View {
+        VStack(alignment: .leading, spacing: 15) {
+            HStack(alignment: .top) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Label("SAFE TO SPEND", systemImage: "checkmark.shield.fill")
+                        .font(.caption.weight(.bold)).tracking(0.5)
+                        .foregroundStyle(GoldengoTheme.income)
+                    HStack(alignment: .firstTextBaseline, spacing: 7) {
+                        Text(planModel.safePerDayText)
+                            .font(.title.weight(.semibold)).monospacedDigit()
+                            .foregroundStyle(GoldengoTheme.inkPrimary)
+                        Text("/ day").font(.subheadline.weight(.semibold))
+                            .foregroundStyle(GoldengoTheme.inkMuted)
+                    }
+                }
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(.caption.weight(.bold)).foregroundStyle(GoldengoTheme.inkMuted)
+                    .padding(.top, 10)
             }
-            Spacer()
+            Text(planBriefCaption)
+                .font(.subheadline.weight(.medium)).foregroundStyle(GoldengoTheme.inkMuted)
+            Divider().overlay(GoldengoTheme.hairline)
+            HStack(spacing: 18) {
+                planBriefMetric(icon: "tray.full.fill", value: planModel.reviewCount,
+                                label: "to review", tint: planModel.reviewCount > 0 ? GoldengoTheme.accent : GoldengoTheme.income)
+                planBriefMetric(icon: "calendar", value: planModel.upcomingCount,
+                                label: "upcoming", tint: Color(hex: "#4D88C7"))
+                Spacer()
+                Text("Open plan").font(.subheadline.weight(.semibold)).foregroundStyle(GoldengoTheme.accent)
+            }
+        }
+        .contentShape(Rectangle())
+    }
+
+    private var setupPlanBrief: some View {
+        HStack(spacing: 14) {
+            Image(systemName: "calendar.badge.plus")
+                .font(.title3.weight(.semibold))
+                .foregroundStyle(GoldengoTheme.accent)
+                .frame(width: 46, height: 46)
+                .background(GoldengoTheme.accentSoft)
+                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+            VStack(alignment: .leading, spacing: 4) {
+                Text("SET YOUR SPENDING PERIOD")
+                    .font(.caption.weight(.bold)).tracking(0.5)
+                    .foregroundStyle(GoldengoTheme.accent)
+                Text("Give your daily allowance a real amount and end date")
+                    .font(.headline)
+                    .foregroundStyle(GoldengoTheme.inkPrimary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 4)
+            Image(systemName: "chevron.right")
+                .font(.caption.weight(.bold))
+                .foregroundStyle(GoldengoTheme.inkMuted)
+        }
+        .contentShape(Rectangle())
+    }
+
+    private var planBriefCaption: String {
+        guard let safe = planModel.snapshot?.safe else { return "Checking balances, goals, and what is coming next" }
+        return "through \(safe.horizonDate.formatted(.dateTime.day().month(.abbreviated))), after goals and planned payments"
+    }
+
+    private func planBriefMetric(icon: String, value: Int, label: String, tint: Color) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: icon).font(.system(size: 11, weight: .bold)).foregroundStyle(tint)
+            Text("\(value) \(label)").font(.caption.weight(.semibold)).foregroundStyle(GoldengoTheme.inkMuted)
         }
     }
 
-    /// Compact preview of the top 3 categories this month; taps through to the full breakdown.
-    /// Empty state: a quiet line, matching Recent's `emptyRecentCard` tone (no icon here — this is a
-    /// secondary card, not the primary empty state).
-    private var spendingCard: some View {
+    /// A single readable insight and a color strip replace the old three-row mini report. The whole
+    /// surface remains one tap, leading to the interactive Spending view.
+    private var spendingInsightCard: some View {
         Button {
             showSpending = true
         } label: {
-            VStack(alignment: .leading, spacing: 0) {
-                if model.spendingCardRows.isEmpty {
-                    Text("No spending yet this month")
-                        .font(.system(size: 14))
-                        .foregroundStyle(GoldengoTheme.inkMuted)
-                        .padding(.vertical, GoldengoTheme.Spacing.xs)
-                } else {
-                    ForEach(Array(model.spendingCardRows.enumerated()), id: \.element.id) { index, row in
-                        if index > 0 {
-                            Divider().overlay(GoldengoTheme.hairline)
-                        }
-                        spendingCardRow(row)
+            VStack(alignment: .leading, spacing: GoldengoTheme.Spacing.m) {
+                HStack(spacing: GoldengoTheme.Spacing.m) {
+                    Image(systemName: model.hasOverBudgetCategory ? "exclamationmark.triangle.fill" : "chart.pie.fill")
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundStyle(model.hasOverBudgetCategory ? GoldengoTheme.danger : GoldengoTheme.accent)
+                        .frame(width: 42, height: 42)
+                        .background((model.hasOverBudgetCategory ? GoldengoTheme.danger : GoldengoTheme.accent).opacity(0.12))
+                        .clipShape(RoundedRectangle(cornerRadius: 13, style: .continuous))
+
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(model.hasOverBudgetCategory ? "Spending needs attention" : "Where your money went")
+                            .font(.system(size: 15.5, weight: .semibold))
+                            .foregroundStyle(GoldengoTheme.inkPrimary)
+                        Text(spendingInsightText)
+                            .font(.system(size: 12.5))
+                            .foregroundStyle(GoldengoTheme.inkMuted)
+                            .lineLimit(1)
                     }
-                }
-                Divider().overlay(GoldengoTheme.hairline)
-                    .padding(.top, GoldengoTheme.Spacing.xs)
-                HStack(spacing: 2) {
                     Spacer()
-                    Text("See all").font(.system(size: 13, weight: .medium))
-                    Image(systemName: "chevron.right").font(.system(size: 11, weight: .semibold))
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(GoldengoTheme.inkMuted)
                 }
-                .foregroundStyle(GoldengoTheme.accent)
-                .padding(.top, GoldengoTheme.Spacing.s)
+
+                spendingColorStrip
             }
             .contentShape(Rectangle())
         }
@@ -383,69 +445,61 @@ public struct RecentExpensesView: View {
         .goldengoCard()
         .accessibilityElement(children: .combine)
         .accessibilityLabel(spendingCardAccessibilityLabel)
-        .accessibilityHint("Double tap to see all categories")
+        .accessibilityHint("Double tap to explore spending")
     }
 
-    /// One compact row: color dot + name + amount, and — for capped categories — the same thin
-    /// budget bar used on the full breakdown screen (green ok / gold near / terracotta over).
-    private func spendingCardRow(_ row: CategoryBreakdownRow) -> some View {
-        let amountText = Money(amount: row.spent, currency: model.spendingCardCurrency).amountText()
-        return VStack(alignment: .leading, spacing: row.budget != nil ? GoldengoTheme.Spacing.xs : 0) {
-            HStack(spacing: GoldengoTheme.Spacing.s) {
-                Circle()
-                    .fill(Color(hex: row.colorHex))
-                    .frame(width: 10, height: 10)
-                Text(row.name)
-                    .font(.system(size: 15, weight: .medium))
-                    .foregroundStyle(GoldengoTheme.inkPrimary)
-                    .lineLimit(1)
-                Spacer(minLength: GoldengoTheme.Spacing.s)
-                Text(amountText)
-                    .font(.system(size: 15, weight: .medium))
-                    .monospacedDigit()
-                    .foregroundStyle(GoldengoTheme.inkPrimary)
+    private var spendingInsightText: String {
+        guard let first = model.spendingCardRows.first else { return "No activity yet this month" }
+        let amount = Money(amount: first.spent, currency: model.spendingCardCurrency).formatted()
+        return "\(first.name) leads at \(amount)"
+    }
+
+    @ViewBuilder
+    private var spendingColorStrip: some View {
+        if model.spendingCardRows.isEmpty {
+            Capsule().fill(Color.goldengoField).frame(height: 6)
+        } else {
+            GeometryReader { geo in
+                let rows = model.spendingCardRows
+                let total = rows.reduce(Decimal.zero) { $0 + max($1.spent, 0) }
+                let available = max(0, geo.size.width - CGFloat(max(rows.count - 1, 0)) * 4)
+                HStack(spacing: 4) {
+                    ForEach(rows) { row in
+                        let share = total > 0
+                            ? (row.spent as NSDecimalNumber).doubleValue / (total as NSDecimalNumber).doubleValue
+                            : 0
+                        Capsule()
+                            .fill(Color(hex: row.colorHex))
+                            .frame(width: max(6, available * share))
+                    }
+                }
             }
-            if let budget = row.budget {
-                spendingCardBudgetBar(spent: row.spent, budget: budget, level: row.level)
-                    .padding(.leading, 10 + GoldengoTheme.Spacing.s)   // align under the name, past the dot
-            }
+            .frame(height: 6)
         }
-        .padding(.vertical, GoldengoTheme.Spacing.s)
     }
 
-    /// The same thin progress bar as `CategoryBreakdownView.budgetBar`, without its trailing caption
-    /// (the compact card has no room for "over by …" / "… left" text alongside three rows).
-    private func spendingCardBudgetBar(spent: Decimal, budget: Decimal, level: BudgetLevel) -> some View {
-        let spentDouble = (spent as NSDecimalNumber).doubleValue
-        let budgetDouble = (budget as NSDecimalNumber).doubleValue
-        let fraction = budgetDouble > 0 ? min(1.0, spentDouble / budgetDouble) : 0
-        let tint = spendingBudgetLevelColor(level)
-        return GeometryReader { geo in
-            ZStack(alignment: .leading) {
-                RoundedRectangle(cornerRadius: 3, style: .continuous)
-                    .fill(Color.goldengoField)
-                RoundedRectangle(cornerRadius: 3, style: .continuous)
-                    .fill(tint)
-                    .frame(width: geo.size.width * fraction)
-                    .animation(reduceMotion ? nil : GoldengoMotion.standard, value: fraction)
+    private var quickLogHeader: some View {
+        HStack(alignment: .firstTextBaseline) {
+            VStack(alignment: .leading, spacing: 3) {
+                GoldengoSerifSectionHeader("Quick log")
+                Text("Tap once to add")
+                    .font(.system(size: 12.5))
+                    .foregroundStyle(GoldengoTheme.inkMuted)
             }
-        }
-        .frame(height: 6)
-    }
-
-    private func spendingBudgetLevelColor(_ level: BudgetLevel) -> Color {
-        switch level {
-        case .ok: return GoldengoTheme.income
-        case .near: return GoldengoTheme.accent
-        case .over: return GoldengoTheme.danger
-        case .noBudget: return GoldengoTheme.inkMuted
+            Spacer()
+            Text("\(model.pendingCharges.count + model.ghosts.count)")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(GoldengoTheme.accent)
+                .frame(minWidth: 26, minHeight: 26)
+                .background(GoldengoTheme.accent.opacity(0.12))
+                .clipShape(Circle())
         }
     }
 
     /// "Spending, tap to see all categories" plus a per-row readout, so VoiceOver users get the same
     /// information sighted users see without landing on individual un-tappable sub-elements.
     private var spendingCardAccessibilityLabel: String {
-        guard !model.spendingCardRows.isEmpty else { return "Spending, no spending yet this month" }
+        guard !model.spendingCardRows.isEmpty else { return "Where your money went, no spending yet this month" }
         let rows = model.spendingCardRows.map { row -> String in
             let amount = Money(amount: row.spent, currency: model.spendingCardCurrency).formatted()
             guard let budget = row.budget else { return "\(row.name), \(amount)" }
@@ -463,6 +517,40 @@ public struct RecentExpensesView: View {
     }
 
     // MARK: - Currency helpers
+
+    private var currencyMenu: some View {
+        Menu {
+            ForEach(menuCurrencies, id: \.rawValue) { c in
+                Button {
+                    onChangeCurrency(c)
+                } label: {
+                    if c.rawValue == model.currency.rawValue {
+                        Label(menuLabel(c), systemImage: "checkmark")
+                    } else {
+                        Text(menuLabel(c))
+                    }
+                }
+            }
+            Divider()
+            Button { showCurrencyPicker = true } label: {
+                Label("More currencies…", systemImage: "ellipsis.circle")
+            }
+        } label: {
+            HStack(spacing: 5) {
+                Text(model.currency.rawValue)
+                    .font(.system(size: 12, weight: .semibold))
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 10, weight: .bold))
+            }
+            .foregroundStyle(GoldengoTheme.inkMuted)
+            .padding(.horizontal, 10)
+            .frame(height: 30)
+            .background(Color.goldengoField)
+            .clipShape(Capsule())
+            .contentShape(Capsule())
+        }
+        .accessibilityLabel("Display currency, \(model.currency.rawValue)")
+    }
 
     private func menuLabel(_ c: CurrencyCode) -> String {
         let name = Locale.current.localizedString(forCurrencyCode: c.rawValue) ?? c.rawValue
@@ -503,7 +591,7 @@ public struct RecentExpensesView: View {
 
     // MARK: - Due row (pending subscription charge)
 
-    /// Matches home.jsx: GoldengoIconTile("repeat") + name + sub + plus.circle accent. Draft opacity 0.72.
+    /// A clear one-tap action: icon + due amount/date + an explicit add affordance.
     private func dueRow(_ p: PendingSubscriptionCharge) -> some View {
         Button {
             GoldengoHaptics.spendLanded()
@@ -515,7 +603,7 @@ public struct RecentExpensesView: View {
                 sub: Money(amount: p.amount, currency: CurrencyCode(p.currencyCode)).formatted()
                     + " · " + p.dueDate.formatted(.dateTime.day().month(.abbreviated))
                     + " · tap to add",
-                isDraft: true,
+                isDraft: false,
                 accentRight: true
             )
         }
@@ -530,7 +618,8 @@ public struct RecentExpensesView: View {
 
     // MARK: - Ghost row (today's usual)
 
-    /// Matches home.jsx: GoldengoIconTile(category icon) + name + "~amount · tap to add" + plus.circle. Draft opacity 0.72.
+    /// A clear one-tap action for a learned daily usual; the context menu remains an optional
+    /// precision path for changing the suggested amount before logging it.
     private func ghostRow(_ g: RhythmGhost) -> some View {
         Button {
             GoldengoHaptics.spendLanded()
@@ -541,7 +630,7 @@ public struct RecentExpensesView: View {
                 title: g.displayName,
                 sub: "~" + Money(amount: g.amount, currency: CurrencyCode(g.currencyCode)).formatted()
                     + " · tap to add",
-                isDraft: true,
+                isDraft: false,
                 accentRight: true
             )
         }

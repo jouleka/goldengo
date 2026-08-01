@@ -8,7 +8,15 @@ public struct OpenQuickAddIntent: AppIntent {
     public static let openAppWhenRun: Bool = true
     public init() {}
     @MainActor public func perform() async throws -> some IntentResult {
-        SharedSummary().setPendingTab(0)
+        Self.stageQuickAdd()
         return .result()
+    }
+
+    /// The intent's whole effect, extracted sync so it stays testable: async tests cannot
+    /// run in an AppIntents-linked xctest process (the async bridge abandons them —
+    /// see ExpenseLogging's doc note), so the test covers this and perform() stays a
+    /// one-line wrapper.
+    @MainActor public static func stageQuickAdd() {
+        SharedSummary().setPendingTab(0)
     }
 }

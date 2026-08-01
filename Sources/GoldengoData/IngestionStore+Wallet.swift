@@ -151,6 +151,10 @@ extension IngestionStore {
                 return CashLedger.Flow(amount: abs(r.amount), isInflow: true)
             case TransactionKind.income.rawValue where r.fundedBySourceID == FundingPin.wallet:
                 return CashLedger.Flow(amount: abs(r.amount), isInflow: true)
+            case TransactionKind.refund.rawValue
+                    where r.fundedBySourceID == FundingPin.wallet
+                        || (r.fundedBySourceID == nil && r.sourceRaw == manualRaw):
+                return CashLedger.Flow(amount: abs(r.amount), isInflow: true)
             // Forgive entries are wallet-neutral: the pocket already drained at LEND time —
             // the forgiveness expense reclassifies that money, never re-drains it.
             case TransactionKind.expense.rawValue where !r.dedupeKey.hasPrefix(driftPrefix)

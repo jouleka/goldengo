@@ -161,6 +161,18 @@ public final class SourcesModel {
     public func remainingText(_ b: SourceBalance) -> String {
         Money(amount: b.remaining, currency: CurrencyCode(b.currencyCode)).formatted()
     }
+
+    /// One honest cash number for the overview, converted into the user's display currency.
+    /// Individual currency balances remain visible in the cash manager for counting.
+    public func walletTotal(using rates: RateTable? = nil) -> Decimal {
+        let table = rates ?? ExchangeRateCache().load() ?? SeedRates.table
+        let converter = CurrencyConverter(table: table)
+        return converter.sum(
+            wallet.map { Money(amount: $0.expectedNow, currency: CurrencyCode($0.currencyCode)) },
+            to: currency
+        )
+    }
+
     public func unaccountedText() -> String? {
         guard let s = snapshot, s.unaccounted > 0 else { return nil }
         return Money(amount: s.unaccounted, currency: CurrencyCode(s.displayCurrencyCode)).formatted()
