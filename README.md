@@ -1,43 +1,106 @@
 # Goldengo
 
-Native iOS personal expense tracker focused on frictionless capture. Logic lives in Swift packages (`swift test` runs the suite headlessly); the iOS app + widget live in `AppProject/`. See `docs/superpowers/specs/` and `docs/superpowers/plans/`.
+[![CI](https://github.com/jouleka/goldengo/actions/workflows/ci.yml/badge.svg)](https://github.com/jouleka/goldengo/actions/workflows/ci.yml)
+[![Secret scan](https://github.com/jouleka/goldengo/actions/workflows/secret-scan.yml/badge.svg)](https://github.com/jouleka/goldengo/actions/workflows/secret-scan.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-## Building
+Goldengo is a native, privacy-minded iOS personal-finance app for capturing expenses, understanding spending, and keeping a lightweight money plan. The business logic lives in Swift packages, while the iOS app, widget, App Shortcuts, and generated Xcode project live under `AppProject/`.
 
-- **Logic / tests:** `swift test` (runs headlessly on macOS).
-- **App:** the Xcode project is **generated** — run `ruby AppProject/project.rb` to create `AppProject/Goldengo.xcodeproj` (it's git-ignored; **`AppProject/project.rb` is the source of truth — edit that, never the `.pbxproj`**). Then open it in Xcode, or:
-  `xcodebuild -project AppProject/Goldengo.xcodeproj -scheme Goldengo -destination 'platform=iOS Simulator,name=iPhone 17' build`
+> Goldengo is under active development and is not currently distributed through the App Store. It is not financial advice and is not affiliated with Apple, Raiffeisen Bank, or any other financial institution.
 
-## iCloud / CloudKit
+## Highlights
 
-The data store is CloudKit-ready — `GoldengoStore` requests the private database and falls back to a **local-only** store when iCloud isn't provisioned (so unsigned/simulator builds just work). The SwiftData schema is CloudKit-valid (every relationship has an inverse). Turning on sync is a provisioning step, done as part of running on a real device (below).
+- Manual expenses, income, transfers, cash balances, budgets, goals, loans, and subscriptions
+- CSV and PDF statement import with duplicate detection and synthetic test fixtures
+- Search, category breakdowns, spending periods, recurring-charge detection, and multi-currency views
+- App Shortcuts and a widget for quick expense capture
+- Portable CSV backup and additive, idempotent restore
+- Optional private CloudKit sync, with a local-only fallback when iCloud is not provisioned
+- 500+ headless Swift tests covering the data, import, feature, and intent layers
 
-## Running on your iPhone (and turning on iCloud sync)
+## Privacy and network boundary
 
-These steps install the app on a real device and enable iCloud sync. They require a **paid Apple Developer Program** membership — CloudKit, App Groups, and push all need it. (A free Apple ID can't provision those; the app still runs local-only without them.)
+Financial records are stored on device. When a signed build has the included CloudKit entitlement and container provisioned, records can sync through the user's **private** iCloud database. Goldengo has no custom account service, analytics SDK, advertising SDK, or bank-login backend.
 
-1. **Generate + open the project:** `ruby AppProject/project.rb`, then `open AppProject/Goldengo.xcodeproj`.
-2. **Sign both targets.** For **Goldengo** *and* **GoldengoWidgetExtension** → **Signing & Capabilities**:
-   - Tick **Automatically manage signing** and pick your **Team**.
-   - The entitlements are already baked in by `project.rb` — iCloud + CloudKit container **`iCloud.com.goldengo.app`**, App Group **`group.com.goldengo.app`**, and push (`aps-environment`). Xcode registers the App IDs and builds the provisioning profiles. If the iCloud container shows as unregistered, click the refresh/＋ to create it (or create it at developer.apple.com → **Identifiers → iCloud Containers**).
-   - Bundle IDs: `com.goldengo.app` (app), `com.goldengo.app.widget` (widget).
-3. **Sign the iPhone into iCloud** (Settings → your name). The app uses your **private** CloudKit database, so your data stays in your own iCloud account.
-4. **Enable Developer Mode** (first time, iOS 16+): Settings → Privacy & Security → **Developer Mode** → on → reboot.
-5. **Run:** connect the iPhone (trust the Mac), select it as the run destination in Xcode, press **⌘R**. If prompted on the phone, trust the developer profile: Settings → General → **VPN & Device Management**.
-6. The app installs and launches. It starts empty (the demo seed only runs behind the `GOLDENGO_SEED_SAMPLE` env flag) — add an expense or import a statement.
+The app makes one keyless network request for current currency rates: `https://open.er-api.com/v6/latest/USD`. That request does not include transactions, account balances, imported statements, or other financial records. Statement parsing runs locally.
 
-**Verify sync:** add an expense, then check **CloudKit Dashboard** (icloud.developer.apple.com → `iCloud.com.goldengo.app` → **Private Database**, Development env) — records appear shortly. Or run on a second device on the same iCloud account; entries sync automatically (SwiftData ↔ CloudKit, no manual step). For **TestFlight/App Store**, deploy the schema once in CloudKit Dashboard (**Development → Deploy Schema Changes to Production**).
+Exports contain sensitive financial data. Goldengo writes them as protected temporary files, removes them after the share sheet closes, and neutralizes spreadsheet-formula prefixes. Treat exported CSV files as private documents.
 
-**Troubleshooting:** a "local-only store" warning in the DEBUG console means the iCloud/App Group entitlement isn't active — expected in the Simulator; on device it means signing didn't include the capability (re-check step 2 and that your team has a paid membership). If the widget doesn't share data, confirm the App Group is on **both** targets.
+## Requirements
+
+- macOS with an Xcode release that supports iOS 17 and Swift 6
+- Ruby and Bundler (for the generated Xcode project)
+- iOS 17 or later for the app
+
+## Quick start
+
+Run the package test suite:
+
+```sh
+swift test --quiet
+```
+
+Generate and open the iOS project:
+
+```sh
+bundle install
+bundle exec ruby AppProject/project.rb
+open AppProject/Goldengo.xcodeproj
+```
+
+`AppProject/Goldengo.xcodeproj` is intentionally ignored. [`AppProject/project.rb`](AppProject/project.rb) is the source of truth; edit the generator, not the generated `.pbxproj`.
+
+To build for a simulator from the command line:
+
+```sh
+xcodebuild \
+  -project AppProject/Goldengo.xcodeproj \
+  -scheme Goldengo \
+  -destination 'generic/platform=iOS Simulator' \
+  CODE_SIGNING_ALLOWED=NO \
+  build
+```
+
+## Run on a physical device
+
+A simulator build needs no signing team. For a device build, pass your Apple Developer Team ID while generating the project:
+
+```sh
+GOLDENGO_DEVELOPMENT_TEAM=YOUR_TEAM_ID bundle exec ruby AppProject/project.rb
+```
+
+Then open the project and select your team for both `Goldengo` and `GoldengoWidgetExtension`. Forks should also replace the bundle IDs, iCloud container, and App Group in `AppProject/project.rb` with identifiers owned by their Apple Developer account.
+
+The checked-in identifiers are:
+
+- App: `com.goldengo.app`
+- Widget: `com.goldengo.app.widget`
+- CloudKit: `iCloud.com.goldengo.app`
+- App Group: `group.com.goldengo.app`
+
+CloudKit, App Groups, and push-enabled device provisioning require a paid Apple Developer Program membership. Without that provisioning, Goldengo falls back to a local store. For TestFlight or App Store distribution, deploy the CloudKit schema to production before release.
 
 ## Quick capture
 
-Goldengo exposes a **Log Expense** App Shortcut (`AppShortcutsProvider`), so you can log an expense **without opening the app** from any trigger you like. When triggered it shows a **category list** (Groceries, Food, …) to pick from, then asks the **amount**, saves to your default currency, and shows a quick confirmation — the app never opens.
+Goldengo exposes a **Log Expense** App Shortcut. It can be invoked from Siri, Spotlight, the Shortcuts app, the Action Button, or a user-configured Back Tap shortcut. Goldengo does not configure physical-device triggers automatically.
 
-You pick the trigger (Goldengo hardcodes none):
+## Repository layout
 
-- **Action Button (iPhone 15 Pro and later):** Settings → **Action Button** → Shortcut → **Log Expense** (App Shortcuts bind here directly).
-- **Siri / Spotlight:** say or search *"Log an expense in Goldengo"*. Also appears in the **Shortcuts** app and as a **Home/Lock-Screen / Control Center** widget action.
-- **Back Tap** (and any device without an Action Button): Back Tap only lists shortcuts from the **Shortcuts app**, so wrap it once — Shortcuts → **＋** → add the **Log Expense** action → name it → then bind it under Settings → Accessibility → Touch → **Back Tap** → Double/Triple Tap.
+```text
+AppProject/                 iOS app, widget, entitlements, and Xcode generator
+Sources/GoldengoCore/       value types and domain logic
+Sources/GoldengoData/       SwiftData models, storage, export, and exchange rates
+Sources/GoldengoImport/     local CSV/PDF statement parsing
+Sources/GoldengoFeatures/   SwiftUI feature screens
+Sources/GoldengoIntents/    App Intents and shortcut support
+Tests/                      headless unit and integration tests
+docs/                       design notes and implementation plans
+```
 
-These are physical-device steps and cannot be verified in the simulator.
+## Contributing and security
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request. Please report vulnerabilities privately according to [SECURITY.md](SECURITY.md), especially anything involving financial-data exposure, imported documents, CloudKit boundaries, or formula injection.
+
+## License
+
+Goldengo is available under the [MIT License](LICENSE).

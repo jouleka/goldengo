@@ -1,13 +1,44 @@
 name: CI
+
 on:
   push:
   pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   test:
     runs-on: macos-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Show Swift version
         run: swift --version
+      - name: Validate Xcode project generator
+        run: ruby -c AppProject/project.rb
       - name: Run tests
-        run: swift test
+        run: swift test --quiet
+
+  app-build:
+    runs-on: macos-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Install generator dependencies
+        run: bundle install --jobs 4 --retry 3
+      - name: Generate Xcode project
+        run: bundle exec ruby AppProject/project.rb
+      - name: Build app for iOS Simulator
+        run: >-
+          xcodebuild
+          -project AppProject/Goldengo.xcodeproj
+          -scheme Goldengo
+          -destination 'generic/platform=iOS Simulator'
+          CODE_SIGNING_ALLOWED=NO
+          build

@@ -25,6 +25,22 @@ AppProject/Goldengo.xcodeproj/
 *.token
 secrets/
 *.xcconfig.local
+.env
+.env.*
+!.env.example
+*.p12
+*.pem
+*.key
+*.cer
+*.mobileprovision
+*.provisionprofile
+
+# Local databases and exports
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+*.db
+Goldengo-export-*.csv
 
 # Misc
 *.log

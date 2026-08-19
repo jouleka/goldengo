@@ -21,7 +21,12 @@ extension IngestionStore {
         let columns = Dictionary(uniqueKeysWithValues: header.enumerated().map { ($1, $0) })
         func value(_ row: [String], _ key: String) -> String {
             guard let index = columns[key], row.indices.contains(index) else { return "" }
-            return row[index]
+            let raw = row[index]
+            let formulaMarkers: Set<Character> = ["=", "+", "-", "@", "\t", "\r"]
+            if raw.first == "'", raw.dropFirst().first.map(formulaMarkers.contains) == true {
+                return String(raw.dropFirst())
+            }
+            return raw
         }
         func decimalValue(_ row: [String], _ key: String = "amount") -> Decimal? {
             Decimal(string: value(row, key))

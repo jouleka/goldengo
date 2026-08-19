@@ -37,6 +37,7 @@ public struct SettingsView: View {
     /// in body, so the computed form re-read UserDefaults + re-decoded on every Settings render).
     @State private var selectableCurrencies: [CurrencyCode] = []
     @State private var exportShare: FinancialExportShare?
+    @State private var exportedFileURL: URL?
     @State private var exporting = false
     @State private var showingRestorePicker = false
     @State private var restoring = false
@@ -213,7 +214,9 @@ public struct SettingsView: View {
             }
             .task { notificationsDenied = await LocalNotificationScheduler.authorizationDenied() }
             .onAppear { selectableCurrencies = CurrencyCatalog.selectable(from: ExchangeRateCache().load() ?? SeedRates.table) }
-            .sheet(item: $exportShare) { FinancialExportShareSheet(item: $0) }
+            .sheet(item: $exportShare, onDismiss: cleanupExportFile) {
+                FinancialExportShareSheet(item: $0)
+            }
             .fileImporter(isPresented: $showingRestorePicker,
                           allowedContentTypes: [.commaSeparatedText, .plainText]) { result in
                 restoreBackup(result, using: store)
@@ -248,16 +251,25 @@ public struct SettingsView: View {
         Task { @MainActor in
             defer { exporting = false }
             do {
+                cleanupExportFile()
                 let csv = try await store.exportFinancialDataCSV()
                 let stamp = Date.now.formatted(.iso8601.year().month().day().dateSeparator(.dash))
                 let url = FileManager.default.temporaryDirectory
-                    .appendingPathComponent("Goldengo-export-\(stamp).csv")
-                try csv.write(to: url, atomically: true, encoding: .utf8)
+                    .appendingPathComponent("Goldengo-export-\(stamp)-\(UUID().uuidString).csv")
+                try Data(csv.utf8).write(to: url, options: [.atomic, .completeFileProtection])
+                exportedFileURL = url
                 exportShare = FinancialExportShare(url: url)
             } catch {
+                cleanupExportFile()
                 settingsError = error.localizedDescription
             }
         }
+    }
+
+    private func cleanupExportFile() {
+        if let exportedFileURL { try? FileManager.default.removeItem(at: exportedFileURL) }
+        exportedFileURL = nil
+        exportShare = nil
     }
 
     private func restoreBackup(_ result: Result<URL, Error>, using store: IngestionStore?) {
@@ -274,6 +286,8 @@ public struct SettingsView: View {
                 let accessed = url.startAccessingSecurityScopedResource()
                 defer { if accessed { url.stopAccessingSecurityScopedResource() } }
                 do {
+                    let fileSize = try url.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? 0
+                    guard fileSize <= 25_000_000 else { throw FinancialRestoreError.backupTooLarge }
                     let csv = try String(contentsOf: url, encoding: .utf8)
                     let summary = try await store.restoreFinancialDataCSV(csv)
                     restoreNotice = "Restored \(summary.restored) records. Kept \(summary.skippedExisting) existing records"

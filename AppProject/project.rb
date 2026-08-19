@@ -1,6 +1,7 @@
 require 'xcodeproj'
 proj_path = File.join(__dir__, 'Goldengo.xcodeproj')
 project = Xcodeproj::Project.new(proj_path)
+development_team = ENV.fetch('GOLDENGO_DEVELOPMENT_TEAM', '').strip
 
 # ── App target ────────────────────────────────────────────────────────────────
 target = project.new_target(:application, 'Goldengo', :ios, '17.0')
@@ -27,7 +28,7 @@ target.build_configurations.each do |config|
   config.build_settings['INFOPLIST_FILE'] = 'Goldengo/Info.plist'
   config.build_settings['SWIFT_VERSION'] = '6.0'
   config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '17.0'
-  config.build_settings['DEVELOPMENT_TEAM'] = 'C7WHJ3RN5S'
+  config.build_settings['DEVELOPMENT_TEAM'] = development_team unless development_team.empty?
 end
 
 # Project-level settings (avoid a stale SWIFT_VERSION = 5.0 fallback)
@@ -66,7 +67,7 @@ widget_target.build_configurations.each do |config|
   config.build_settings['INFOPLIST_FILE'] = 'Widget/Info.plist'
   config.build_settings['SWIFT_VERSION'] = '6.0'
   config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '17.0'
-  config.build_settings['DEVELOPMENT_TEAM'] = 'C7WHJ3RN5S'
+  config.build_settings['DEVELOPMENT_TEAM'] = development_team unless development_team.empty?
 end
 
 # SPM dependencies for widget extension

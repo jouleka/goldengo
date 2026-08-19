@@ -118,6 +118,11 @@ extension IngestionStore {
 
     private func decimal(_ value: Decimal) -> String { NSDecimalNumber(decimal: value).stringValue }
     private func csvField(_ value: String) -> String {
-        "\"\(value.replacingOccurrences(of: "\"", with: "\"\""))\""
+        // Quoting alone does not stop spreadsheet apps from evaluating cells that begin with a
+        // formula marker. Prefix those values with an apostrophe; the restore path removes only
+        // the prefix that this exporter adds, so Goldengo round trips the original text.
+        let formulaMarkers: Set<Character> = ["=", "+", "-", "@", "\t", "\r"]
+        let safeValue = value.first.map(formulaMarkers.contains) == true ? "'\(value)" : value
+        return "\"\(safeValue.replacingOccurrences(of: "\"", with: "\"\""))\""
     }
 }

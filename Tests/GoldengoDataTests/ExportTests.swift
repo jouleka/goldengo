@@ -76,4 +76,25 @@ final class ExportTests: XCTestCase {
         XCTAssertEqual(transactionsAfterSecondRestore.count, 2)
         XCTAssertEqual(goalsAfterSecondRestore.count, 1)
     }
+
+    func test_exportNeutralizesSpreadsheetFormulasAndRestoreRecoversOriginalText() async throws {
+        let sourceContainer = try ModelContainer.goldengoInMemory()
+        let source = IngestionStore(modelContainer: sourceContainer)
+        let merchant = "=HYPERLINK(\"https://example.invalid\",\"open\")"
+        let note = "+SUM(1,1)"
+        _ = try await source.logManual(amount: 10, currency: .all, merchant: merchant,
+                                       note: note, categoryName: "Other")
+
+        let csv = try await source.exportFinancialDataCSV()
+        XCTAssertTrue(csv.contains("\"'=HYPERLINK("))
+        XCTAssertTrue(csv.contains("\"'+SUM(1,1)\""))
+
+        let destinationContainer = try ModelContainer.goldengoInMemory()
+        let destination = IngestionStore(modelContainer: destinationContainer)
+        _ = try await destination.restoreFinancialDataCSV(csv)
+        let restoredExpenses = try await destination.recentExpenses(limit: 1)
+        let restored = try XCTUnwrap(restoredExpenses.first)
+        XCTAssertEqual(restored.merchantName, merchant)
+        XCTAssertEqual(restored.note, note)
+    }
 }
