@@ -54,6 +54,8 @@ private database. Future model additions must be initialized and deployed before
 - User confirmed the signed development app opens on iPhone, adds an expense, and exports a CSV.
 - Real simulator screens visually inspected on iPhone and iPad.
 - Apple upload validation requires `CFBundleDisplayName` in the widget extension.
+- Siri metadata uses generic transaction-automation wording; the rejected wording was removed
+  and the replacement verified in the final archive's `Metadata.appintents/extract.actionsdata`.
 
 The focused category-budget regression covers a zero-spend foreign-currency budget and its
 conversion timestamp. The row-building loop avoids Swift 6 region-isolation errors.
@@ -74,6 +76,17 @@ Upload acceptance, build processing, and App Review submission are separate stag
 processed build is selected in the version and that the App Review page says Waiting for Review
 before reporting submission complete.
 
-On October 8, 2026, Apple accepted the upload of version `1.0 (1)` and began processing it.
-The signed archive is retained locally in Xcode's Archives folder. Review submission must be
-verified separately in App Store Connect.
+## Submitted release
+
+Version `1.0 (1)` was submitted on October 8, 2026 at 17:37 Europe/Tirane. Apple confirmed
+**Waiting for Review** for the submission and the app version. The release remains free and
+configured to publish automatically after approval.
+
+- Submission ID: `b7f93c02-c784-47d9-a596-3cd105bdc8ba`.
+- Processed build ID: `c82cca4a-95e7-4aad-bac5-04a5ebc2fdff`.
+- App source commit: `6654df0` on `release/app-store-v1`.
+- Review receipt: https://appstoreconnect.apple.com/apps/6820573440/distribution/reviewsubmissions/details/b7f93c02-c784-47d9-a596-3cd105bdc8ba
+- Submission screenshot: ignored `output/app-store/proof/submitted-review.png`.
+- Final signed archive: `Goldengo 1.0 Submission.xcarchive`, retained in Xcode's Archives folder.
+
+Apple's approval and public availability are subsequent stages and have not yet been confirmed.
