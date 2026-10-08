@@ -49,3 +49,6 @@ node_modules/
 # Device build derived data
 AppProject/.build-device/
 AppProject/.build-sim/
+
+# Local release artifacts and submission proof
+/output/

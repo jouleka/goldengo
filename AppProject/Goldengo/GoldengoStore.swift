@@ -26,15 +26,17 @@ public enum GoldengoStore {
         // 1) Preferred: App Group store synced via the CloudKit private database. Requires the
         //    iCloud entitlement + a provisioned container + the user signed into iCloud. If any
         //    of that is missing it throws here and we fall back — so an unprovisioned build runs.
-        let cloudConfig = ModelConfiguration(groupContainer: group,
-                                             cloudKitDatabase: .private(cloudContainerID))
-        if let c = try? ModelContainer(for: schema, configurations: cloudConfig) { return (c, .cloud) }
+        // ModelConfiguration traps before ModelContainer can throw if an explicitly named
+        // App Group is inaccessible. Check it first so the local fallback is reachable.
+        if FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: SharedSummary.appGroupID) != nil {
+            let cloudConfig = ModelConfiguration(groupContainer: group,
+                                                 cloudKitDatabase: .private(cloudContainerID))
+            if let c = try? ModelContainer(for: schema, configurations: cloudConfig) { return (c, .cloud) }
 
-        // 2) Local App Group store (shared with the widget), no CloudKit. Works on a provisioned
-        //    device; in an unprovisioned environment (notably the iOS Simulator) the App Group
-        //    entitlement is stripped from the build, so this is denied — fall through, don't crash.
-        let localGroupConfig = ModelConfiguration(groupContainer: group)
-        if let c = try? ModelContainer(for: schema, configurations: localGroupConfig) { return (c, .sharedLocal) }
+            // 2) Local App Group store (shared with the widget), explicitly without CloudKit.
+            let localGroupConfig = ModelConfiguration(groupContainer: group, cloudKitDatabase: .none)
+            if let c = try? ModelContainer(for: schema, configurations: localGroupConfig) { return (c, .sharedLocal) }
+        }
 
         // 3) Last resort: a plain local store in the app's own container (no App Group → the widget
         //    can't share this data). Keeps the app launchable everywhere. Reaching here on a real
@@ -44,7 +46,8 @@ public enum GoldengoStore {
         print("⚠️ Goldengo: App Group '\(SharedSummary.appGroupID)' unavailable — using a local-only store " +
               "(no widget data sharing). Expected in the Simulator; on device, check the App Group entitlement.")
         #endif
-        return (try! ModelContainer(for: schema), .deviceLocal)
+        let deviceConfig = ModelConfiguration(cloudKitDatabase: .none)
+        return (try! ModelContainer(for: schema, configurations: deviceConfig), .deviceLocal)
     }()
     public static var container: ModelContainer { setup.container }
     public static var storageMode: StorageMode { setup.mode }

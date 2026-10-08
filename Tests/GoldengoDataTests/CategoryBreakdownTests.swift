@@ -123,6 +123,18 @@ final class CategoryBreakdownTests: XCTestCase {
         XCTAssertEqual(groceries.level, .ok)
     }
 
+    func test_zeroSpendForeignCurrencyBudgetReportsConversionDate() async throws {
+        let s = try store()
+        try await s.setMonthlyBudget(categoryNamed: "Groceries", cap: 20_000, currency: .all)
+
+        let breakdown = try await s.categoryBreakdown(monthContaining: .now,
+                                                       displayCurrency: .eur, rates: rates)
+        XCTAssertEqual(breakdown.rows.first?.budget, 200)
+        XCTAssertEqual(breakdown.total, 0)
+        XCTAssertEqual(breakdown.ratesAsOf, rates.asOf,
+                       "an unspent budget still needs the date of its currency conversion")
+    }
+
     // MARK: - expenses(inCategoryNamed:monthContaining:)
 
     func test_expensesInCategory_otherBucketsNilAndOtherNamed_excludesNamedCategory() async throws {

@@ -73,7 +73,7 @@ struct LogExpenseIntent: AppIntent {
 @available(iOS 17.0, *)
 struct LogPaymentIntent: AppIntent {
     static let title: LocalizedStringResource = "Log Payment"
-    static let description = IntentDescription("Add a payment to Goldengo — wire this to an Apple Pay Transaction automation.")
+    static let description = IntentDescription("Record a payment in Goldengo using a transaction automation.")
 
     @Parameter(title: "Amount") var amount: Double
     @Parameter(title: "Merchant") var merchant: String?

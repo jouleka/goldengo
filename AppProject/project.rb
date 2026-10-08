@@ -19,6 +19,8 @@ target.add_resources([privacy_ref])
 # App localization catalog. Keep this in the generator: the .xcodeproj is intentionally ignored.
 localization_ref = group.new_file('Localizable.xcstrings')
 target.add_resources([localization_ref])
+assets_ref = group.new_file('Assets.xcassets')
+target.add_resources([assets_ref])
 project.root_object.known_regions |= %w[en sq Base]
 
 # Build settings
@@ -28,6 +30,7 @@ target.build_configurations.each do |config|
   config.build_settings['INFOPLIST_FILE'] = 'Goldengo/Info.plist'
   config.build_settings['SWIFT_VERSION'] = '6.0'
   config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '17.0'
+  config.build_settings['ASSETCATALOG_COMPILER_APPICON_NAME'] = 'AppIcon'
   config.build_settings['DEVELOPMENT_TEAM'] = development_team unless development_team.empty?
 end
 
