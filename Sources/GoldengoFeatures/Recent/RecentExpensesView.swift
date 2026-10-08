@@ -127,6 +127,7 @@ public struct RecentExpensesView: View {
                         .textCase(nil)   // SwiftUI uppercases plain-list headers by default; our labels are cased.
                     }
                 }
+                ExchangeRateAttribution().goldengoCardRow()
             }
             .listStyle(.plain)
             .scrollContentBackground(.hidden)

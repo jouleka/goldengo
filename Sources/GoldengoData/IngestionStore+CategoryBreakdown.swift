@@ -122,8 +122,9 @@ extension IngestionStore {
         }
 
         var spentByName: [String: Decimal] = [:]
-        var metaByName: [String: (icon: String, colorHex: String, budget: Decimal?,
-                                  groupName: String, subcategoryName: String?, purpose: MoneyPurpose)] = [:]
+        typealias CategoryMetadata = (icon: String, colorHex: String, budget: Decimal?,
+                                      groupName: String, subcategoryName: String?, purpose: MoneyPurpose)
+        var metaByName: [String: CategoryMetadata] = [:]
         var total = Decimal(0)
         for r in records where r.kindRaw == expenseRaw || r.kindRaw == refundRaw {
             if r.currencyCode != display { usedConversion = true }
@@ -167,26 +168,34 @@ extension IngestionStore {
         }
 
         let totalDouble = (total as NSDecimalNumber).doubleValue
-        let rows = rowNames.map { name -> CategoryBreakdownRow in
+        // Build rows synchronously on the store's actor. The budget helper updates migration and
+        // conversion flags; capturing it in map/?? autoclosures violates Swift 6 region isolation.
+        var rows: [CategoryBreakdownRow] = []
+        for name in rowNames {
             let spent = spentByName[name] ?? 0
             let classification = SpendingCategoryCatalog.classify(name)
             let storedCategory = categoryByName[name.lowercased()]
-            let m = metaByName[name] ?? (
+            let m: CategoryMetadata
+            if let existing = metaByName[name] {
+                m = existing
+            } else {
+                m = (
                 classification.isKnown || storedCategory?.icon == nil || storedCategory?.icon == "circle"
                     ? classification.icon : storedCategory!.icon,
                 classification.isKnown || storedCategory?.colorHex == nil || storedCategory?.colorHex == "#0A84FF"
                     ? classification.colorHex : storedCategory!.colorHex,
                 classification.purpose == .wealth ? nil : budgetInDisplayCurrency(for: storedCategory),
                 classification.groupName, classification.subcategoryName, classification.purpose
-            )
+                )
+            }
             let share = totalDouble > 0 ? (spent as NSDecimalNumber).doubleValue / totalDouble : 0
-            return CategoryBreakdownRow(name: name, groupName: m.groupName,
+            rows.append(CategoryBreakdownRow(name: name, groupName: m.groupName,
                                         subcategoryName: m.subcategoryName, purpose: m.purpose,
                                         icon: m.icon, colorHex: m.colorHex,
                                         spent: spent, budget: m.budget, share: share,
-                                        level: BudgetLevel.forSpend(spent, cap: m.budget))
+                                        level: BudgetLevel.forSpend(spent, cap: m.budget)))
         }
-        .sorted { $0.spent != $1.spent ? $0.spent > $1.spent : $0.name < $1.name }
+        rows.sort { $0.spent != $1.spent ? $0.spent > $1.spent : $0.name < $1.name }
 
         if boundLegacyBudgetCurrency { try modelContext.save() }
         return CategoryBreakdown(monthStart: monthStart, total: total, rows: rows,

@@ -26,6 +26,7 @@ public struct HistoryView: View {
         VStack(spacing: 0) {
             topBar
             searchBar
+            ExchangeRateAttribution()
             if model.isSearchMode {
                 searchSummary
                 searchList

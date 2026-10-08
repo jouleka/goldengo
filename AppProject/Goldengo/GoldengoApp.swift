@@ -76,39 +76,70 @@ struct GoldengoApp: App {
                                    actions: [], intentIdentifiers: []),
         ])
 
-        #if DEBUG
-        // QA affordance (DEBUG only, off by default): launch with the env var
-        // GOLDENGO_SEED_SAMPLE=1 to import the demo statement on startup, so the UI can be
-        // populated for screenshots / UI verification without driving the file picker.
-        if ProcessInfo.processInfo.environment["GOLDENGO_SEED_SAMPLE"] == "1" {
-            Task { @MainActor in
-                let store = GoldengoStore.shared()
-                await ImportModel(store: store).importCSV(text: SampleStatement.csv, fileName: "sample.csv")
-                // Confirm the detected subscription so the demo shows the full feature: a confirmed
-                // subscription plus its auto-linked charges (the "repeat" badge in Recent).
-                _ = try? await store.refreshSubscriptions()
-                if let sub = (try? await store.subscriptionCandidates())?.first {
-                    try? await store.confirmSubscription(matchKey: sub.id)
-                }
-                // The sample charges are dated Mar–May, so "this month" on Home would be 0.
-                // Log one current-dated expense so the dashboard's month total + categories
-                // are non-zero for screenshots.
-                _ = try? await store.logManual(amount: 850, currency: .all, merchant: "Demo Lunch", categoryName: "Food")
-            }
-        }
-        #endif
     }
+    #if DEBUG && targetEnvironment(simulator)
+    @State private var sampleReady = ProcessInfo.processInfo.environment["GOLDENGO_SEED_SAMPLE"] != "1"
+    #endif
     var body: some Scene {
         WindowGroup {
-            RootView(store: GoldengoStore.shared(), storageStatus: GoldengoStore.storageMode.title)
-                .task {
-                    await GoldengoStore.refreshExchangeRates()
-                    // Recompute the widget summaries AFTER rates land so a multi-currency today-total
-                    // isn't published at yesterday's rates. RootView's own launch refresh can race
-                    // ahead of the fetch; this one runs once the fresh rates are cached.
-                    try? await GoldengoStore.shared().refreshSharedSummaries()
+            Group {
+                #if DEBUG && targetEnvironment(simulator)
+                if !sampleReady {
+                    ProgressView().task {
+                        await seedScreenshotSample()
+                        sampleReady = true
+                    }
+                } else {
+                    appContent
                 }
+                #else
+                appContent
+                #endif
+            }
         }
         .modelContainer(GoldengoStore.container)
     }
+
+    private var appContent: some View {
+        RootView(store: GoldengoStore.shared(), storageStatus: GoldengoStore.storageMode.title)
+            .task {
+                await GoldengoStore.refreshExchangeRates()
+                try? await GoldengoStore.shared().refreshSharedSummaries()
+            }
+    }
+
+    #if DEBUG && targetEnvironment(simulator)
+    /// Synthetic simulator-only records. Never compiled into the distributed app.
+    @MainActor
+    private func seedScreenshotSample() async {
+        let defaults = UserDefaults(suiteName: SharedSummary.appGroupID) ?? .standard
+        SharedSummary().setPreferredCurrency(.eur)
+        defaults.set(true, forKey: SharedSummary.periodSetupDeferredKey)
+        if let tab = ProcessInfo.processInfo.environment["GOLDENGO_SCREENSHOT_TAB"].flatMap(Int.init) {
+            SharedSummary().setPendingTab(tab)
+        }
+        let store = GoldengoStore.shared()
+        // Keep relaunches stable without deleting records from the simulator.
+        guard !defaults.bool(forKey: "appStoreScreenshotSampleV1") else { return }
+        let calendar = Calendar.current
+        let start = calendar.date(from: calendar.dateComponents([.year, .month], from: .now))!
+        let end = calendar.date(byAdding: DateComponents(month: 1, day: -1), to: start)!
+        try? await store.setSpendingPeriod(startDate: start, endDate: end, fundingMode: .fixedAmount,
+                                          startingAmount: 1450, currency: .eur, cadence: .monthly)
+        try? await store.logIncome(amount: 1900, currency: .eur, sourceName: "Monthly pay", date: start)
+        for (amount, merchant, category, days) in [(Decimal(42), "Weekly groceries", "Food", 1),
+            (18, "Coffee with friends", "Food", 0), (29, "Train tickets", "Transport", 2),
+            (65, "New trainers", "Shopping", 3)] {
+            _ = try? await store.logManual(amount: amount, currency: .eur, merchant: merchant,
+                    categoryName: category, date: calendar.date(byAdding: .day, value: -days, to: .now)!)
+        }
+        _ = try? await store.setMonthlyBudget(categoryNamed: "Food", cap: 300, currency: .eur)
+        _ = try? await store.setMonthlyBudget(categoryNamed: "Transport", cap: 100, currency: .eur)
+        try? await store.addGoal(name: "Weekend away", targetAmount: 450, savedAmount: 120,
+                                 currency: .eur, dueDate: nil)
+        try? await store.addManualSubscription(name: "Music", amount: 9.99, currency: .eur,
+                  cadence: .monthly, nextChargeDate: calendar.date(byAdding: .day, value: 4, to: .now)!)
+        defaults.set(true, forKey: "appStoreScreenshotSampleV1")
+    }
+    #endif
 }

@@ -33,6 +33,7 @@ public struct CategoryBreakdownView: View {
     public var body: some View {
         VStack(spacing: 0) {
             screenHeader
+            ExchangeRateAttribution()
             monthStepper
                 .padding(.top, 10)
 

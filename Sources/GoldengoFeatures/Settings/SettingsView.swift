@@ -167,6 +167,18 @@ public struct SettingsView: View {
                     }
                 } header: { GoldengoSerifSectionHeader("Reminders") }
                 footer: { Text("Quiet, local reminders. Turn on only what helps.") }
+                Section {
+                    ExchangeRateAttribution()
+                    Link(destination: URL(string: "https://jouleka.github.io/goldengo/privacy/")!) {
+                        Label("Privacy policy", systemImage: "hand.raised")
+                    }
+                    Link(destination: URL(string: "https://jouleka.github.io/goldengo/support/")!) {
+                        Label("Help & support", systemImage: "questionmark.circle")
+                    }
+                } header: { GoldengoSerifSectionHeader("About Goldengo") }
+                footer: {
+                    Text("A personal record of your money. Goldengo does not move funds or provide financial advice.")
+                }
             }
             .tint(GoldengoTheme.accent)
             .navigationTitle("Settings")

@@ -6,15 +6,17 @@ public extension ModelContainer {
     // older Swift flags a non-Sendable stored static (`Schema` isn't `Sendable` there — the CI
     // failure), while newer Swift treats `Schema` as `Sendable`. No stored static = no shared
     // mutable state to police. Rebuilding the schema is cheap (only at container creation).
-    static var goldengoSchema: Schema {
-        Schema([
+    static var goldengoModelTypes: [any PersistentModel.Type] {
+        [
             ExpenseRecord.self, CategoryRecord.self, AccountRecord.self, MerchantRecord.self,
             ImportBatch.self, SubscriptionRecord.self, SourceRecord.self, WalletCount.self,
             LoanRecord.self, ExpenseSplitRecord.self, GoalRecord.self,
             ScheduledCommitmentRecord.self, InvestmentAccountRecord.self, InvestmentEntryRecord.self,
             SpendingPeriodRecord.self,
-        ])
+        ]
     }
+
+    static var goldengoSchema: Schema { Schema(goldengoModelTypes) }
 
     /// In-memory container for tests and previews (no CloudKit, no disk).
     static func goldengoInMemory() throws -> ModelContainer {

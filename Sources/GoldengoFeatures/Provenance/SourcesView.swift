@@ -44,6 +44,8 @@ public struct SourcesView: View {
             headerRow
                 .plainRow()
 
+            ExchangeRateAttribution().plainRow()
+
             walletCard
                 .plainRow(horizontal: GoldengoTheme.Spacing.m)
 
